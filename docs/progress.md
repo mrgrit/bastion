@@ -43,16 +43,26 @@
 - 예산 체크: max_tokens, max_calls 한도 강제
 - `pi_adapter/runtime/client.py`에 통합: 매 LLM 호출 시 자동 추적
 
-## 미완료
+### 6단계: permission_engine (✅ 완료)
+- OpsClaw 경로: `packages/permission_engine/`
+- 파일 3개: `__init__.py`, `decision.py`
+- 기존 rbac_service + policy_engine + approval_engine 위에 통합 결정 레이어
+- 5단계 체크: API Key → RBAC → Policy → Approval → Risk Auto
+- 읽기전용 도구 즉시 허용 (tool_validator 연동)
+- Denial tracking: 연속 거부 3회 → 자동 에스컬레이션
+- 검증: read_file(critical)=allow, run_command(critical)=ask, prod+high=ask
 
-### 6단계: permission_engine
-- 설계만 완료 (docs/analysis/permission-model.md)
-- rbac_service + policy_engine + approval_engine 통합 필요
-- 난이도 높음
-
-### 7단계: memory 고도화
-- 설계만 완료 (docs/analysis/memory-system.md)
-- LRU 용량 관리, 시맨틱 검색, 자동 메모리 추출
+### 7단계: memory_manager (✅ 완료)
+- OpsClaw 경로: `packages/memory_manager/`
+- 파일 5개: `__init__.py`, `types.py`, `extractor.py`, `capacity.py`
+- 메모리 유형 5종: incident, runbook, failure, configuration, optimization
+- "저장하지 않을 것" 규칙 (DO_NOT_SAVE 목록)
+- 자동 추출: 프로젝트 완료 시 evidence/report에서 패턴 감지
+  - exit_code!=0 → failure 메모리
+  - systemctl/restart 등 → configuration 메모리
+  - 전체 성공 → runbook 메모리
+  - incident 키워드 → incident 메모리
+- LRU 용량 관리: task_memories(200), experiences(100), local_knowledge(30)
 
 ## OpsClaw 변경 파일 전체 목록
 
@@ -78,10 +88,16 @@ packages/tool_validator/schema.py
 packages/tool_validator/validator.py
 packages/cost_tracker/__init__.py
 packages/cost_tracker/tracker.py
+packages/permission_engine/__init__.py
+packages/permission_engine/decision.py
+packages/memory_manager/__init__.py
+packages/memory_manager/types.py
+packages/memory_manager/extractor.py
+packages/memory_manager/capacity.py
 ```
 
 ### 수정
 ```
 packages/pi_adapter/runtime/client.py  (prompt_engine + cost_tracker 통합)
-CLAUDE.md                              (Bastion 개선 패치 문서 추가)
+CLAUDE.md                              (Bastion 개선 패치 전체 문서)
 ```
