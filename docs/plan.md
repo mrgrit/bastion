@@ -12,6 +12,8 @@
 
 **산출물**: `packages/prompt_engine/` 패키지 설계 → OpsClaw에 적용
 
+**상태**: ✅ 완료 — 7개 섹션 모듈 + compose + pi_adapter 통합
+
 **상세**: [proposals/01-prompt-engine.md](proposals/01-prompt-engine.md)
 
 ---
@@ -23,6 +25,8 @@
 **Claude Code 패턴**: 역할/제약/도구 섹션 분리, "이렇게 하라" 중심, JSON 출력 예시 포함, 안전 행동 구체화.
 
 **산출물**: 개선된 프롬프트 텍스트 → OpsClaw `pi_adapter`, `subagent-runtime`, `portal_routes`에 적용
+
+**상태**: ✅ 완료 — 6개 패턴이 prompt_engine 섹션에 반영
 
 **상세**: [proposals/02-prompt-engineering.md](proposals/02-prompt-engineering.md)
 
