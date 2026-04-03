@@ -359,11 +359,12 @@ from fastapi.responses import FileResponse
 
 _ui_dist = pathlib.Path(__file__).parent.parent.parent / "bastion-ui" / "dist"
 if _ui_dist.exists():
-    app.mount("/app", StaticFiles(directory=str(_ui_dist), html=True), name="ui")
-
-    @app.get("/{path:path}")
+    @app.get("/app/{path:path}")
     def spa_fallback(path: str):
-        idx = _ui_dist / "index.html"
-        if idx.exists():
-            return FileResponse(str(idx))
-        raise HTTPException(404)
+        # SPA: 실제 파일이 있으면 서빙, 없으면 index.html
+        fpath = _ui_dist / path
+        if fpath.is_file():
+            return FileResponse(str(fpath))
+        return FileResponse(str(_ui_dist / "index.html"))
+
+    app.mount("/app", StaticFiles(directory=str(_ui_dist), html=True), name="ui")
