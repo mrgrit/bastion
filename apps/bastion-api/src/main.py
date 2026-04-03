@@ -145,7 +145,7 @@ def create_asset(body: AssetCreate):
     asset_id = str(uuid.uuid4())[:8]
     subagent_url = f"http://{body.ip}:{body.subagent_port}"
     with _conn() as conn:
-        with conn.cursor() as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 """INSERT INTO assets (id, name, ip, os_type, role, ssh_user, ssh_port, subagent_port, subagent_url, metadata)
                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *""",
@@ -153,8 +153,8 @@ def create_asset(body: AssetCreate):
                  body.ssh_user, body.ssh_port, body.subagent_port, subagent_url,
                  psycopg2.extras.Json(body.metadata)),
             )
-            conn.commit()
             row = cur.fetchone()
+            conn.commit()
     return {"asset": dict(row) if row else {"id": asset_id}}
 
 @app.get("/assets", dependencies=[Depends(verify_api_key)])
@@ -198,8 +198,8 @@ def update_asset(asset_id: str, body: AssetUpdate):
     with _conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(f"UPDATE assets SET {','.join(sets)} WHERE id=%s RETURNING *", params)
-            conn.commit()
             row = cur.fetchone()
+            conn.commit()
     if not row:
         raise HTTPException(404, "Asset not found")
     return {"asset": dict(row)}
