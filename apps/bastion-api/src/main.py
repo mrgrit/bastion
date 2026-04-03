@@ -352,6 +352,92 @@ def register_with_central(body: CentralRegisterRequest):
         "instance_name": body.instance_name,
     }
 
+# ── AI Agent ───────────────────────────────────────
+@app.post("/agent/task", dependencies=[Depends(verify_api_key)])
+def ai_task(body: TaskRequest):
+    """AI 작업 요청: 자연어 → LLM 계획 → SubAgent 실행 → PoW"""
+    from packages.agent_orchestrator import run as orchestrate, asdict, OrchestratorResult
+
+    # 자산 목록 가져오기
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM assets")
+            assets = [dict(r) for r in cur.fetchall()]
+
+    subagent = body.subagent_url
+    if not subagent and assets:
+        # 첫 번째 healthy 자산의 SubAgent 사용
+        for a in assets:
+            if a.get("status") == "healthy":
+                subagent = a["subagent_url"]
+                break
+        if not subagent:
+            subagent = assets[0].get("subagent_url", "http://localhost:8002")
+
+    result = orchestrate(
+        instruction=body.instruction,
+        subagent_url=subagent or "http://localhost:8002",
+        assets=assets,
+        agent_id=subagent or "bastion-agent",
+        db_conn_func=_conn,
+    )
+
+    # 작업 기록
+    import uuid as _uuid
+    op_id = str(_uuid.uuid4())[:8]
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO operations (id, instruction, risk_level, status, result)
+                   VALUES (%s, %s, %s, %s, %s)""",
+                (op_id, body.instruction, body.risk_level,
+                 "completed" if not result.error else "failed",
+                 psycopg2.extras.Json({
+                     "plan": [{"order": t.order, "command": t.command, "description": t.description, "risk_level": t.risk_level} for t in result.plan],
+                     "results": [{"order": r.order, "command": r.command, "exit_code": r.exit_code, "stdout": r.stdout[:500], "stderr": r.stderr[:500], "success": r.success} for r in result.results],
+                     "block_hash": result.block_hash,
+                     "error": result.error,
+                 })),
+            )
+            conn.commit()
+
+    return {
+        "operation_id": op_id,
+        "instruction": result.instruction,
+        "plan": [{"order": t.order, "command": t.command, "description": t.description, "risk_level": t.risk_level} for t in result.plan],
+        "results": [{"order": r.order, "command": r.command, "exit_code": r.exit_code, "stdout": r.stdout[:1000], "stderr": r.stderr[:500], "success": r.success} for r in result.results],
+        "block_hash": result.block_hash,
+        "error": result.error,
+    }
+
+@app.post("/agent/analyze", dependencies=[Depends(verify_api_key)])
+def ai_analyze(body: TaskRequest):
+    """시스템 분석 요청 (실행 없이 계획만)"""
+    from packages.agent_orchestrator import plan as make_plan
+
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM assets")
+            assets = [dict(r) for r in cur.fetchall()]
+
+    try:
+        tasks = make_plan(body.instruction, assets)
+        return {
+            "instruction": body.instruction,
+            "plan": [{"order": t.order, "command": t.command, "description": t.description, "risk_level": t.risk_level} for t in tasks],
+            "note": "분석 결과입니다. 실행하려면 /agent/task를 사용하세요.",
+        }
+    except Exception as e:
+        return {"error": str(e), "instruction": body.instruction}
+
+@app.get("/agent/operations", dependencies=[Depends(verify_api_key)])
+def list_operations(limit: int = 20):
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM operations ORDER BY created_at DESC LIMIT %s", (limit,))
+            rows = cur.fetchall()
+    return {"operations": [dict(r) for r in rows]}
+
 # ── Static files (bastion-ui) ─────────────────────
 import pathlib
 from fastapi.staticfiles import StaticFiles
