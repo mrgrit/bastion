@@ -17,8 +17,22 @@ from typing import Any
 
 import httpx
 
-OLLAMA_URL = os.getenv("OLLAMA_BASE_URL", "http://192.168.0.105:11434")
-MODEL = os.getenv("BASTION_LLM_MODEL", "gpt-oss:120b")
+def _get_ollama_url():
+    try:
+        from packages.opsclaw_common.config_client import get_config
+        return get_config("llm.ollama.url", fallback=os.getenv("OLLAMA_BASE_URL", "http://192.168.0.105:11434"))
+    except Exception:
+        return os.getenv("OLLAMA_BASE_URL", "http://192.168.0.105:11434")
+
+def _get_model():
+    try:
+        from packages.opsclaw_common.config_client import get_config
+        return get_config("llm.default_model", fallback=os.getenv("BASTION_LLM_MODEL", "gpt-oss:120b"))
+    except Exception:
+        return os.getenv("BASTION_LLM_MODEL", "gpt-oss:120b")
+
+OLLAMA_URL = _get_ollama_url()
+MODEL = _get_model()
 
 SYSTEM_PROMPT = """너는 Bastion AI 에이전트다. IT 인프라 운영/보안 작업을 자동화한다.
 

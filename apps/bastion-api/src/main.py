@@ -10,9 +10,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-# ── DB ─────────────────────────────────────────────
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://bastion:bastion@127.0.0.1:5432/bastion")
-API_KEY = os.getenv("BASTION_API_KEY", "bastion-api-key-2026")
+# ── Config (Central 우선, 환경변수 폴백) ──────────
+def _cfg(key: str, fallback: str) -> str:
+    try:
+        from packages.opsclaw_common.config_client import get_config
+        return get_config(key, fallback=os.getenv(key.upper().replace(".", "_"), fallback))
+    except Exception:
+        return os.getenv(key.upper().replace(".", "_"), fallback)
+
+DATABASE_URL = os.getenv("DATABASE_URL", _cfg("db.bastion.url", "postgresql://opsclaw:opsclaw@127.0.0.1:5432/bastion"))
+API_KEY = os.getenv("BASTION_API_KEY", _cfg("auth.bastion.api_key", "bastion-api-key-2026"))
 
 # ── Pydantic Models ────────────────────────────────
 class AssetCreate(BaseModel):
