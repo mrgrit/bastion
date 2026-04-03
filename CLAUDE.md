@@ -1,62 +1,49 @@
-# Bastion — AI Agent 작업 가이드
+# Bastion — 실무 운영/보안 AI 에이전트 시스템
 
-이 프로젝트는 Claude Code 소스코드(`src/`)를 분석하여 OpsClaw 개선 방향을 도출하고, 구체적인 설계 산출물을 만드는 프로젝트다.
+자산 등록 → SubAgent 자동 설치 → AI 기반 시스템 운영/보안 자동화.
 
-## 핵심 원칙
+## 아키텍처
 
-1. `src/`는 읽기 전용 레퍼런스다. 수정하지 않는다.
-2. 분석 결과는 `docs/analysis/`에, 적용 제안은 `docs/proposals/`에 작성한다.
-3. OpsClaw에 실제 적용할 코드는 이 레포가 아닌 OpsClaw 레포(`~/opsclaw/opsclaw/`)에 작성한다.
-4. 모든 커뮤니케이션은 한국어로 한다.
+| 컴포넌트 | 경로 | 포트 | 역할 |
+|----------|------|------|------|
+| bastion-api | apps/bastion-api/ | :9000 | 메인 API (자산/운영/블록체인) |
+| bastion-ui | apps/bastion-ui/ | - | React 관리 대시보드 |
+| bastion-cli | apps/cli/ | - | CLI 도구 |
 
-## 분석 방법
+## 패키지
 
-`src/` 탐색 시:
-- `src/constants/prompts.ts` — 시스템 프롬프트 조합 로직 (최우선 분석)
-- `src/Tool.ts` — 도구 인터페이스 정의
-- `src/tools/` — 60+ 도구 구현체
-- `src/hooks/` — Hook 이벤트 시스템
-- `src/state/` — 상태 관리 패턴
-- `src/utils/model/` — 모델 관리
-- `src/memdir/` — 메모리 시스템
-- `src/skills/` — 스킬 로딩/실행
+| 패키지 | 역할 | 마일스톤 |
+|--------|------|---------|
+| agent_orchestrator | AI 오케스트레이션 (pi_adapter+prompt_engine) | M5 |
+| infra_scanner | 자산 자동 탐색 | M3 |
 
-## 산출물 형식
+## 개발
 
-### 분석 문서 (docs/analysis/)
-```markdown
-# [영역] 아키텍처 분석
+```bash
+# PostgreSQL
+docker compose -f docker/docker-compose.yaml up -d
 
-## 핵심 발견
-- 발견 사항 요약
+# API 서버
+cp .env.example .env
+./dev.sh api
 
-## 코드 구조
-- 파일 경로, 라인 번호, 핵심 패턴
-
-## OpsClaw 현재 상태 vs Claude Code
-- 비교 표
-
-## 적용 가능 패턴
-- 구체적 패턴 + 근거
+# CLI
+export PYTHONPATH=$(pwd)
+python -m apps.cli.main assets
 ```
 
-### 제안서 (docs/proposals/)
-```markdown
-# [단계] 제안서
+## API 인증
 
-## 현재 문제
-## 목표
-## 설계
-## 영향 파일 (OpsClaw 기준)
-## 구현 계획
-## 검증 방법
-```
+모든 API 호출에 `X-API-Key` 헤더 필요.
+기본 키: `bastion-api-key-2026`
 
-## OpsClaw 레퍼런스
+## 레퍼런스 분석 (src/)
 
-- OpsClaw 경로: `/home/opsclaw/opsclaw/`
-- Manager API: `apps/manager-api/src/main.py` (2,619줄)
-- SubAgent: `apps/subagent-runtime/src/main.py` (800줄)
-- Master Service: `apps/master-service/src/main.py` (292줄)
-- pi_adapter: `packages/pi_adapter/runtime/client.py` (295줄)
-- 프롬프트 문서: `docs/agent-system-prompt.md` (214줄)
+`src/`는 Claude Code 소스 읽기 전용 레퍼런스.
+분석 결과: `docs/analysis/`, 제안: `docs/proposals/`
+
+## 관련 시스템
+
+- **opsclaw** (연구용): https://github.com/mrgrit/opsclaw
+- **CCC** (교육용): https://github.com/mrgrit/ccc
+- **중앙서버**: opsclaw 레포 내 `apps/central-server/` (:7000)
