@@ -1,0 +1,16 @@
+playbook_id: probe_all
+title: "전체 인프라 상태 점검"
+description: "모든 VM의 SubAgent 상태, 서비스, 네트워크 연결을 순차 확인"
+steps:
+  - name: "전체 VM 상태"
+    skill: probe_all
+  - name: "Suricata IDS 점검"
+    skill: check_suricata
+  - name: "Wazuh SIEM 점검"
+    skill: check_wazuh
+  - name: "ModSecurity WAF 점검"
+    skill: check_modsecurity
+  - name: "방화벽 룰 확인"
+    skill: configure_nftables
+    params:
+      action: list

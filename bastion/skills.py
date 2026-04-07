@@ -1,0 +1,264 @@
+"""Bastion Skill 레지스트리 — 구조화된 보안 작업 단위
+
+각 skill은 이름, 설명, 파라미터, target_vm, 실행 스크립트로 정의.
+LLM이 자연어에서 skill을 선택하고 파라미터를 채운다.
+실제 실행은 SubAgent A2A 프로토콜로.
+"""
+from __future__ import annotations
+from typing import Any
+
+from bastion import run_command, health_check, INTERNAL_IPS
+
+
+# ── Skill 정의 ─────────────────────────────────
+
+SKILLS: dict[str, dict] = {
+    "probe_host": {
+        "description": "호스트 상태 점검 — uptime, 디스크, 메모리, 실패 서비스 확인",
+        "params": {"target": {"type": "string", "description": "대상 VM role (attacker/secu/web/siem/manager) 또는 IP", "required": True}},
+        "target_vm": "auto",
+    },
+    "scan_ports": {
+        "description": "nmap 포트 스캔 — 대상의 열린 포트와 서비스 버전 확인",
+        "params": {
+            "target": {"type": "string", "description": "스캔 대상 IP 또는 role", "required": True},
+            "ports": {"type": "string", "description": "포트 범위 (기본: --top-ports 100)", "required": False},
+        },
+        "target_vm": "attacker",
+    },
+    "check_suricata": {
+        "description": "Suricata IDS 상태 확인 + 최근 알림 조회",
+        "params": {"lines": {"type": "integer", "description": "표시할 알림 수 (기본: 10)", "required": False}},
+        "target_vm": "secu",
+    },
+    "check_wazuh": {
+        "description": "Wazuh SIEM 매니저 상태 + 에이전트 목록 + 최근 알림",
+        "params": {},
+        "target_vm": "siem",
+    },
+    "check_modsecurity": {
+        "description": "ModSecurity WAF 상태 + 최근 차단 로그",
+        "params": {"lines": {"type": "integer", "description": "표시할 로그 수 (기본: 10)", "required": False}},
+        "target_vm": "web",
+    },
+    "configure_nftables": {
+        "description": "nftables 방화벽 룰 조회/추가/삭제",
+        "params": {
+            "action": {"type": "string", "enum": ["list", "add", "delete"], "description": "동작", "required": True},
+            "rule": {"type": "string", "description": "추가/삭제할 룰 (예: ip saddr 1.2.3.4 drop)", "required": False},
+        },
+        "target_vm": "secu",
+        "requires_approval": True,
+    },
+    "analyze_logs": {
+        "description": "로그 파일을 수집하고 LLM으로 분석 — 이상 징후, 패턴, 요약",
+        "params": {
+            "log_source": {"type": "string", "description": "로그 경로 (예: /var/log/suricata/eve.json)", "required": True},
+            "query": {"type": "string", "description": "분석 질문 (예: 최근 1시간 의심 활동 요약)", "required": True},
+            "target": {"type": "string", "description": "대상 VM role", "required": True},
+        },
+        "target_vm": "auto",
+        "uses_llm": True,
+    },
+    "deploy_rule": {
+        "description": "Suricata 또는 Wazuh 탐지 룰 배포",
+        "params": {
+            "rule_type": {"type": "string", "enum": ["suricata", "wazuh"], "required": True},
+            "rule_content": {"type": "string", "description": "룰 내용", "required": True},
+        },
+        "target_vm": "auto",
+        "requires_approval": True,
+    },
+    "web_scan": {
+        "description": "웹 취약점 스캔 — nikto 또는 curl 기반 헤더/디렉토리 점검",
+        "params": {"url": {"type": "string", "description": "대상 URL", "required": True}},
+        "target_vm": "attacker",
+    },
+    "shell": {
+        "description": "임의 셸 명령 실행 — 다른 skill로 불가능한 작업 시 사용",
+        "params": {
+            "command": {"type": "string", "description": "실행할 명령어", "required": True},
+            "target": {"type": "string", "description": "대상 VM role", "required": True},
+        },
+        "target_vm": "auto",
+        "requires_approval": True,
+    },
+    "probe_all": {
+        "description": "전체 인프라 상태 일괄 점검 — 모든 VM의 SubAgent 상태, 서비스, 네트워크",
+        "params": {},
+        "target_vm": "local",
+    },
+}
+
+
+# ── Skill → Ollama tools 형식 변환 ─────────────
+
+def skills_to_ollama_tools() -> list[dict]:
+    """SKILLS를 Ollama /api/chat의 tools 파라미터 형식으로 변환"""
+    tools = []
+    for name, skill in SKILLS.items():
+        properties = {}
+        required = []
+        for pname, pdef in skill.get("params", {}).items():
+            prop = {"type": pdef.get("type", "string")}
+            if "description" in pdef:
+                prop["description"] = pdef["description"]
+            if "enum" in pdef:
+                prop["enum"] = pdef["enum"]
+            properties[pname] = prop
+            if pdef.get("required"):
+                required.append(pname)
+
+        tools.append({
+            "type": "function",
+            "function": {
+                "name": name,
+                "description": skill["description"],
+                "parameters": {
+                    "type": "object",
+                    "properties": properties,
+                    "required": required,
+                },
+            },
+        })
+    return tools
+
+
+# ── Skill 실행 ─────────────────────────────────
+
+def _resolve_vm_ip(target: str, vm_ips: dict[str, str]) -> str:
+    """role 이름 또는 IP를 실제 IP로 변환"""
+    if target in vm_ips:
+        return vm_ips[target]
+    # IP 형태면 그대로
+    if "." in target:
+        return target
+    # INTERNAL_IPS에서 찾기
+    return INTERNAL_IPS.get(target, target)
+
+
+def execute_skill(name: str, params: dict[str, Any], vm_ips: dict[str, str],
+                  ollama_url: str = "", model: str = "") -> dict:
+    """Skill 실행 — SubAgent A2A로 명령 전달"""
+    skill = SKILLS.get(name)
+    if not skill:
+        return {"success": False, "error": f"Unknown skill: {name}"}
+
+    target_vm = skill.get("target_vm", "auto")
+
+    if name == "probe_host":
+        target = params.get("target", "attacker")
+        ip = _resolve_vm_ip(target, vm_ips)
+        h = health_check(ip)
+        if h.get("status") != "healthy":
+            return {"success": False, "output": f"SubAgent unreachable: {ip}", "health": h}
+        r = run_command(ip, "uptime && echo '---' && df -h / && echo '---' && free -h && echo '---' && systemctl list-units --failed --no-pager | head -5", timeout=15)
+        return {"success": r.get("exit_code") == 0, "output": r.get("stdout", ""), "target": target, "ip": ip}
+
+    elif name == "probe_all":
+        results = {}
+        for role, ip in vm_ips.items():
+            h = health_check(ip)
+            if h.get("status") == "healthy":
+                r = run_command(ip, "uptime | awk '{print $3,$4}' | tr -d ','", timeout=10)
+                results[role] = {"status": "online", "ip": ip, "uptime": r.get("stdout", "").strip()}
+            else:
+                results[role] = {"status": "offline", "ip": ip}
+        return {"success": True, "output": results}
+
+    elif name == "scan_ports":
+        target = params.get("target", "10.20.30.80")
+        ip = _resolve_vm_ip(target, vm_ips)
+        ports = params.get("ports", "--top-ports 100")
+        attacker_ip = vm_ips.get("attacker", "")
+        r = run_command(attacker_ip, f"nmap -sV {ip} {ports} --max-retries 1 -T4 --host-timeout 30s", timeout=45)
+        return {"success": r.get("exit_code") == 0, "output": r.get("stdout", ""), "target": ip}
+
+    elif name == "check_suricata":
+        lines = params.get("lines", 10)
+        ip = vm_ips.get("secu", "")
+        r = run_command(ip, f"echo '=== Suricata Status ===' && systemctl is-active suricata && echo '=== Recent Alerts ===' && tail -{lines} /var/log/suricata/eve.json 2>/dev/null | python3 -c \"import sys,json; [print(f'[{{e.get(\\\"timestamp\\\",\\\"\\\")[:19]}}] {{e.get(\\\"alert\\\",{{}}).get(\\\"signature\\\",\\\"?\\\")}} src={{e.get(\\\"src_ip\\\",\\\"?\\\")}}') for l in sys.stdin for e in [json.loads(l)] if e.get('event_type')=='alert']\" 2>/dev/null || tail -{lines} /var/log/suricata/eve.json 2>/dev/null | grep alert | tail -5", timeout=15)
+        return {"success": True, "output": r.get("stdout", "")}
+
+    elif name == "check_wazuh":
+        ip = vm_ips.get("siem", "")
+        r = run_command(ip, "echo '=== Wazuh Manager ===' && systemctl is-active wazuh-manager && echo '=== Agents ===' && /var/ossec/bin/agent_control -l 2>/dev/null && echo '=== Recent Alerts ===' && tail -5 /var/ossec/logs/alerts/alerts.json 2>/dev/null | head -5", timeout=15)
+        return {"success": True, "output": r.get("stdout", "")}
+
+    elif name == "check_modsecurity":
+        lines = params.get("lines", 10)
+        ip = vm_ips.get("web", "")
+        r = run_command(ip, f"echo '=== ModSecurity Status ===' && apachectl -M 2>/dev/null | grep security && echo '=== Recent Blocks ===' && grep 'ModSecurity' /var/log/apache2/error.log 2>/dev/null | tail -{lines}", timeout=15)
+        return {"success": True, "output": r.get("stdout", "")}
+
+    elif name == "configure_nftables":
+        action = params.get("action", "list")
+        ip = vm_ips.get("secu", "")
+        if action == "list":
+            r = run_command(ip, "nft list ruleset", timeout=10)
+        elif action == "add":
+            rule = params.get("rule", "")
+            r = run_command(ip, f"nft add rule inet filter input {rule}", timeout=10)
+        elif action == "delete":
+            rule = params.get("rule", "")
+            r = run_command(ip, f"nft delete rule inet filter input {rule}", timeout=10)
+        else:
+            return {"success": False, "error": f"Unknown action: {action}"}
+        return {"success": r.get("exit_code") == 0, "output": r.get("stdout", ""), "stderr": r.get("stderr", "")}
+
+    elif name == "analyze_logs":
+        target = params.get("target", "siem")
+        ip = _resolve_vm_ip(target, vm_ips)
+        log_source = params.get("log_source", "/var/log/syslog")
+        query = params.get("query", "최근 이상 징후 요약")
+        # 로그 수집
+        r = run_command(ip, f"tail -50 {log_source} 2>/dev/null", timeout=15)
+        log_data = r.get("stdout", "")[:3000]
+        if not log_data:
+            return {"success": False, "output": f"No data from {log_source} on {target}"}
+        # LLM 분석
+        if ollama_url and model:
+            import httpx
+            try:
+                resp = httpx.post(f"{ollama_url}/api/chat", json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": "너는 보안 로그 분석 전문가다. 로그를 분석하고 간결하게 한국어로 답변해."},
+                        {"role": "user", "content": f"질문: {query}\n\n로그 데이터:\n{log_data}"},
+                    ],
+                    "stream": False, "options": {"num_predict": 500, "temperature": 0.3},
+                }, timeout=60.0)
+                analysis = resp.json().get("message", {}).get("content", "분석 실패")
+            except Exception as e:
+                analysis = f"LLM 연결 실패: {e}"
+        else:
+            analysis = f"LLM 미설정. 원본 로그:\n{log_data[:500]}"
+        return {"success": True, "output": analysis, "raw_log": log_data[:500]}
+
+    elif name == "deploy_rule":
+        rule_type = params.get("rule_type", "suricata")
+        rule_content = params.get("rule_content", "")
+        if rule_type == "suricata":
+            ip = vm_ips.get("secu", "")
+            r = run_command(ip, f"echo '{rule_content}' >> /var/lib/suricata/rules/local.rules && suricatasc -c reload-rules 2>/dev/null || systemctl reload suricata", timeout=15)
+        elif rule_type == "wazuh":
+            ip = vm_ips.get("siem", "")
+            r = run_command(ip, f"echo '{rule_content}' >> /var/ossec/etc/rules/local_rules.xml && /var/ossec/bin/wazuh-control restart 2>/dev/null", timeout=30)
+        else:
+            return {"success": False, "error": f"Unknown rule_type: {rule_type}"}
+        return {"success": r.get("exit_code") == 0, "output": r.get("stdout", ""), "stderr": r.get("stderr", "")}
+
+    elif name == "web_scan":
+        url = params.get("url", "http://10.20.30.80")
+        attacker_ip = vm_ips.get("attacker", "")
+        r = run_command(attacker_ip, f"echo '=== Headers ===' && curl -sI {url} | head -15 && echo '=== Nikto ===' && nikto -h {url} -maxtime 30 2>/dev/null | head -25", timeout=45)
+        return {"success": True, "output": r.get("stdout", "")}
+
+    elif name == "shell":
+        command = params.get("command", "echo ok")
+        target = params.get("target", "attacker")
+        ip = _resolve_vm_ip(target, vm_ips)
+        r = run_command(ip, command, timeout=30)
+        return {"success": r.get("exit_code") == 0, "output": r.get("stdout", ""), "stderr": r.get("stderr", "")}
+
+    return {"success": False, "error": f"Skill '{name}' not implemented"}

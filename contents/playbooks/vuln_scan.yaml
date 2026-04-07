@@ -1,0 +1,22 @@
+playbook_id: vuln_scan
+title: "취약점 스캔"
+description: "대상 인프라의 포트 스캔 + 웹 취약점 점검"
+steps:
+  - name: "1. 포트 스캔 (web)"
+    skill: scan_ports
+    params:
+      target: web
+      ports: "-p 22,80,443,3000,8080"
+  - name: "2. 포트 스캔 (secu)"
+    skill: scan_ports
+    params:
+      target: secu
+      ports: "-p 22,80,8002"
+  - name: "3. 웹 취약점 스캔"
+    skill: web_scan
+    params:
+      url: "http://10.20.30.80:3000"
+  - name: "4. DVWA 스캔"
+    skill: web_scan
+    params:
+      url: "http://10.20.30.80:8080"

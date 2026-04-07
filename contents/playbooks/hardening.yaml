@@ -1,0 +1,22 @@
+playbook_id: hardening
+title: "시스템 경화 체크리스트"
+description: "주요 VM의 보안 설정 점검: 패스워드 정책, SSH, 방화벽, 서비스"
+steps:
+  - name: "1. SECU 경화 점검"
+    skill: probe_host
+    params:
+      target: secu
+  - name: "2. 방화벽 룰 점검"
+    skill: configure_nftables
+    params:
+      action: list
+  - name: "3. Suricata 룰 상태"
+    skill: check_suricata
+  - name: "4. WEB 서버 점검"
+    skill: probe_host
+    params:
+      target: web
+  - name: "5. WAF 점검"
+    skill: check_modsecurity
+  - name: "6. SIEM 점검"
+    skill: check_wazuh

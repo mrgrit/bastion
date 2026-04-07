@@ -1,0 +1,30 @@
+playbook_id: incident_response
+title: "인시던트 대응 절차"
+description: "의심 활동 감지 시 표준 대응: 현황 파악 → 알림 확인 → 차단 → 분석 → 보고"
+steps:
+  - name: "1. Wazuh 현황 파악"
+    skill: check_wazuh
+    on_failure: continue
+  - name: "2. Suricata 알림 확인"
+    skill: check_suricata
+    params:
+      lines: 20
+    on_failure: continue
+  - name: "3. ModSecurity 차단 로그"
+    skill: check_modsecurity
+    params:
+      lines: 15
+    on_failure: continue
+  - name: "4. 의심 IP 차단"
+    skill: configure_nftables
+    params:
+      action: add
+      rule: "ip saddr {suspect_ip} drop"
+    requires_approval: true
+    on_failure: continue
+  - name: "5. 로그 분석 (LLM)"
+    skill: analyze_logs
+    params:
+      log_source: "/var/log/suricata/eve.json"
+      query: "최근 1시간 의심 활동 요약, 공격 유형 분류, 위험도 평가"
+      target: secu
