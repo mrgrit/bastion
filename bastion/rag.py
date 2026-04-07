@@ -152,7 +152,29 @@ def build_index(knowledge_dir: str = None) -> RAGIndex:
             metadata={"type": "lab", "course": lab.get("course", "")},
         )
 
-    # 3. Playbook (YAML)
+    # 3. 매뉴얼 (보안 솔루션 레퍼런스)
+    for mdir in [os.path.join(kdir, "manuals"),
+                 os.path.join(kdir, "contents", "knowledge", "manuals"),
+                 os.path.join(kdir, "..", "contents", "knowledge", "manuals")]:
+        if os.path.isdir(mdir):
+            for md_file in sorted(glob.glob(os.path.join(mdir, "*.md"))):
+                try:
+                    with open(md_file, encoding="utf-8") as f:
+                        content = f.read()
+                except Exception:
+                    continue
+                source = f"manual:{os.path.basename(md_file).replace('.md','')}"
+                title = content.split("\n")[0].strip("# ") if content else source
+                sections = re.split(r'\n## ', content)
+                for i, section in enumerate(sections):
+                    if len(section.strip()) < 50:
+                        continue
+                    sec_title = section.split("\n")[0].strip() if i > 0 else title
+                    index.add_chunk(source=source, title=sec_title, content=section[:2000],
+                                    metadata={"type": "manual"})
+            break  # 첫 번째 유효한 디렉토리만
+
+    # 4. Playbook (YAML)
     for pb_file in sorted(glob.glob(os.path.join(kdir, "..", "contents", "playbooks", "*.yaml"))):
         try:
             with open(pb_file, encoding="utf-8") as f:
