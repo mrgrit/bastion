@@ -90,8 +90,11 @@ def build_index(knowledge_dir: str = None) -> RAGIndex:
     kdir = knowledge_dir or KNOWLEDGE_DIR
     index = RAGIndex()
 
-    # 1. 교안 (Markdown)
-    for md_file in sorted(glob.glob(os.path.join(kdir, "education", "*", "*", "lecture.md"))):
+    # 1. 교안 (Markdown) — knowledge/education/ 또는 knowledge/contents/education/
+    edu_dir = os.path.join(kdir, "education")
+    if not os.path.isdir(edu_dir):
+        edu_dir = os.path.join(kdir, "contents", "education")
+    for md_file in sorted(glob.glob(os.path.join(edu_dir, "*", "*", "lecture.md"))):
         parts = md_file.split(os.sep)
         course = [p for p in parts if p.startswith("course")]
         week = [p for p in parts if p.startswith("week")]
@@ -119,7 +122,10 @@ def build_index(knowledge_dir: str = None) -> RAGIndex:
             )
 
     # 2. 실습 (YAML)
-    for yaml_file in sorted(glob.glob(os.path.join(kdir, "labs", "*", "*.yaml"))):
+    labs_dir = os.path.join(kdir, "labs")
+    if not os.path.isdir(labs_dir):
+        labs_dir = os.path.join(kdir, "contents", "labs")
+    for yaml_file in sorted(glob.glob(os.path.join(labs_dir, "*", "*.yaml"))):
         try:
             with open(yaml_file, encoding="utf-8") as f:
                 lab = yaml.safe_load(f)
