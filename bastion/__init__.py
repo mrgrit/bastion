@@ -179,7 +179,7 @@ table ip nat {
 }
 NFTEOF
 nft -f /etc/nftables.conf
-systemctl enable nftables
+systemctl enable --now nftables
 """,
         # ── rsyslog → SIEM 포워딩 ──
         """
