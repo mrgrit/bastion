@@ -16,6 +16,7 @@ import httpx
 from bastion.skills import SKILLS, execute_skill
 from bastion.playbook import list_playbooks, run_playbook, load_playbook
 from bastion.prompt import build_system_prompt
+from bastion.rag import RAGIndex, build_index, format_context
 
 
 # Skill 목록을 프롬프트용 텍스트로 변환
@@ -31,12 +32,21 @@ class BastionAgent:
     """Bastion 에이전트 — 대화형 보안 운영 에이전트"""
 
     def __init__(self, vm_ips: dict[str, str],
-                 ollama_url: str = "", model: str = ""):
+                 ollama_url: str = "", model: str = "",
+                 knowledge_dir: str = ""):
         self.vm_ips = vm_ips
         self.ollama_url = ollama_url or os.getenv("LLM_BASE_URL", "http://localhost:11434")
         self.model = model or os.getenv("LLM_MANAGER_MODEL", os.getenv("LLM_MODEL", "gpt-oss:120b"))
         self.history: list[dict] = []
         self.evidence: list[dict] = []
+        # RAG 인덱스 (knowledge 디렉토리가 있으면 구축)
+        self.rag_index: RAGIndex | None = None
+        kdir = knowledge_dir or os.path.join(os.path.dirname(__file__), "..", "knowledge")
+        if os.path.isdir(kdir):
+            try:
+                self.rag_index = build_index(kdir)
+            except Exception:
+                pass
 
     def chat(self, message: str, approval_callback=None) -> Generator[dict, None, None]:
         """자연어 메시지 처리 → skill/playbook 실행 → 결과 스트리밍"""
@@ -53,8 +63,14 @@ class BastionAgent:
                                         model=self.model, approval_callback=approval_callback)
                 return
 
+        # RAG: 관련 교육 자료 검색 → 프롬프트에 주입
+        rag_context = ""
+        if self.rag_index:
+            chunks = self.rag_index.search(message, top_k=3)
+            rag_context = format_context(chunks)
+
         # LLM에게 skill 선택 요청 (프롬프트 기반 JSON)
-        system_prompt = build_system_prompt(self.vm_ips)
+        system_prompt = build_system_prompt(self.vm_ips, extra_context=rag_context)
         skill_prompt = f"""{system_prompt}
 
 사용자 요청에 대해 다음 중 하나로 응답하세요:
