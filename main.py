@@ -95,7 +95,7 @@ def main():
         f"[dim]Skills: {len(agent.get_skills())} | Playbooks: {len(agent.get_playbooks())}[/]",
         border_style="orange1",
     ))
-    console.print("[dim]명령어: /skills, /playbooks, /evidence, /quit[/]\n")
+    console.print("[dim]명령어: /skills, /playbooks, /evidence, /search <키워드>, /stats, /quit[/]\n")
 
     def approval_callback(step_name: str, skill: str, params: dict) -> bool:
         """위험 작업 확인"""
@@ -130,12 +130,29 @@ def main():
                 console.print(f"  [cyan]{p['playbook_id']:20}[/] {p['title']} ({p['steps']}단계)")
             continue
         elif user_input == "/evidence":
-            if not agent.evidence:
+            evs = agent.get_evidence(10)
+            if not evs:
                 console.print("  [dim]No evidence yet[/]")
             else:
-                for i, e in enumerate(agent.evidence[-5:], 1):
-                    s = "ok" if e["result"].get("success") else "fail"
-                    console.print(f"  {i}. [{s}] {e['skill']} — {str(e['result'].get('output',''))[:60]}")
+                for e in evs:
+                    s = "ok" if e.get("success") else "fail"
+                    console.print(f"  [{s}] {e.get('timestamp','')[:16]} {e.get('skill','')} — {e.get('analysis','')[:60]}")
+            continue
+        elif user_input.startswith("/search "):
+            keyword = user_input[8:].strip()
+            evs = agent.search_evidence(keyword)
+            if not evs:
+                console.print(f"  [dim]'{keyword}' 검색 결과 없음[/]")
+            else:
+                for e in evs:
+                    console.print(f"  [{e.get('timestamp','')[:16]}] {e.get('skill','')} — {e.get('analysis','')[:60]}")
+            continue
+        elif user_input == "/stats":
+            s = agent.evidence_db.stats()
+            console.print(f"  Evidence: {s['total']} total, {s['success']} success, {s['fail']} fail")
+            if agent.rag_index:
+                rs = agent.rag_index.stats()
+                console.print(f"  RAG: {rs['chunks']} chunks, {rs['keywords']} keywords")
             continue
 
         # 에이전트 대화
@@ -162,6 +179,10 @@ def main():
                     else:
                         for line in str(output).split("\n")[:15]:
                             console.print(f"    {line}")
+            elif evt.get("event") == "analysis":
+                console.print(f"\n  [bold cyan]분석:[/] {evt['content']}")
+            elif evt.get("event") == "risk_warning":
+                console.print(f"\n  [yellow bold]  !! 위험도 {evt.get('risk','?')}: {evt.get('skill','')}[/]")
             elif evt.get("event") == "skill_skip":
                 console.print(f"  [yellow]>> {evt.get('skill','')} 스킵됨 ({evt.get('reason','')})[/]")
             elif evt.get("event") == "message":

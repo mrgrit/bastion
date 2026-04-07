@@ -64,13 +64,19 @@ class RAGIndex:
         if not query_words:
             return []
 
-        # 스코어 계산: 매칭된 키워드 수 / 총 키워드 수
+        # BM25-like 스코어링: IDF × TF 정규화
+        import math
+        N = max(len(self.chunks), 1)
         scores: dict[int, float] = defaultdict(float)
         for w in query_words:
-            for idx in self.inverted.get(w, []):
-                # IDF-like: 희귀한 단어일수록 높은 점수
-                idf = 1.0 / max(len(self.inverted[w]), 1)
-                scores[idx] += idf
+            postings = self.inverted.get(w, [])
+            if not postings:
+                continue
+            idf = math.log((N - len(postings) + 0.5) / (len(postings) + 0.5) + 1)
+            for idx in postings:
+                # TF: 키워드가 chunk에 있으면 1 (간소화)
+                tf = 1.0
+                scores[idx] += idf * tf
 
         # 상위 K개
         ranked = sorted(scores.items(), key=lambda x: -x[1])[:top_k]
