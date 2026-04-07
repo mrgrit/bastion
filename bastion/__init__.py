@@ -271,10 +271,14 @@ systemctl restart rsyslog 2>/dev/null || true
 """,
     ],
     "manager": [
-        # bastion 설치만 (Ollama는 gpu_url에 따라 동적 결정)
-        "apt-get update -y && apt-get install -y python3 python3-pip python3-venv git",
-        "if [ ! -d /opt/ccc ]; then git clone https://github.com/mrgrit/ccc.git /opt/ccc; fi",
-        "cd /opt/ccc && python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt -q",
+        # bastion 독립 설치
+        "apt-get update -y && apt-get install -y python3 python3-pip python3-venv git sshpass",
+        "if [ ! -d /opt/bastion ]; then git clone https://github.com/mrgrit/bastion.git /opt/bastion; else cd /opt/bastion && git pull; fi",
+        "cd /opt/bastion && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt -q",
+        "hostnamectl set-hostname bastion 2>/dev/null || true",
+        # 사용자 접근 설정: 소유권 + 홈 심링크
+        "chown -R $(logname 2>/dev/null || echo ccc):$(logname 2>/dev/null || echo ccc) /opt/bastion",
+        "UHOME=$(getent passwd $(logname 2>/dev/null || echo ccc) | cut -d: -f6) && mkdir -p $UHOME && ln -sf /opt/bastion $UHOME/bastion",
     ],
 }
 
@@ -751,12 +755,17 @@ fi
             role_cmds.append(f"ollama pull {m_model}")
             role_cmds.append(f"ollama pull {s_model}")
 
-        # bastion .env 생성
+        # bastion .env 생성 (LLM + VM IP)
         role_cmds.append(
-            f"cat > /opt/ccc/.env << ENVEOF\n"
+            f"cat > /opt/bastion/.env << ENVEOF\n"
             f"LLM_BASE_URL={llm_url}\n"
             f"LLM_MANAGER_MODEL={m_model}\n"
             f"LLM_SUBAGENT_MODEL={s_model}\n"
+            f"VM_ATTACKER_IP={INTERNAL_IPS['attacker']}\n"
+            f"VM_SECU_IP={INTERNAL_IPS['secu']}\n"
+            f"VM_WEB_IP={INTERNAL_IPS['web']}\n"
+            f"VM_SIEM_IP={INTERNAL_IPS['siem']}\n"
+            f"VM_MANAGER_IP={INTERNAL_IPS['manager']}\n"
             f"ENVEOF"
         )
 
