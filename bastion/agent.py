@@ -35,28 +35,36 @@ def _skills_for_prompt() -> str:
 class EvidenceDB:
     """실행 기록 영속화 (SQLite)"""
 
+    CREATE_SQL = """CREATE TABLE IF NOT EXISTS evidence (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT DEFAULT (datetime('now')),
+        skill TEXT, params TEXT, success INTEGER,
+        output TEXT, analysis TEXT, session_id TEXT
+    )"""
+
     def __init__(self, db_path: str = ""):
-        self.db_path = db_path or os.path.join(os.path.dirname(__file__), "..", "..", "bastion_evidence.db")
+        # 실행 디렉토리 또는 홈 디렉토리에 DB 생성
+        if db_path:
+            self.db_path = db_path
+        else:
+            for candidate in [
+                os.path.join(os.getcwd(), "bastion_evidence.db"),
+                os.path.join(os.path.expanduser("~"), "bastion_evidence.db"),
+                os.path.join("/tmp", "bastion_evidence.db"),
+            ]:
+                try:
+                    with sqlite3.connect(candidate) as conn:
+                        conn.execute(self.CREATE_SQL)
+                    self.db_path = candidate
+                    return
+                except Exception:
+                    continue
+            self.db_path = ":memory:"
         self._init_db()
 
     def _init_db(self):
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.execute("""CREATE TABLE IF NOT EXISTS evidence (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp TEXT DEFAULT (datetime('now')),
-                    skill TEXT, params TEXT, success INTEGER,
-                    output TEXT, analysis TEXT, session_id TEXT
-                )""")
-        except Exception:
-            self.db_path = ":memory:"
-            with sqlite3.connect(self.db_path) as conn:
-                conn.execute("""CREATE TABLE IF NOT EXISTS evidence (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp TEXT DEFAULT (datetime('now')),
-                    skill TEXT, params TEXT, success INTEGER,
-                    output TEXT, analysis TEXT, session_id TEXT
-                )""")
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(self.CREATE_SQL)
 
     def add(self, skill: str, params: dict, success: bool, output: str, analysis: str = "", session_id: str = ""):
         with sqlite3.connect(self.db_path) as conn:
@@ -64,23 +72,32 @@ class EvidenceDB:
                          (skill, json.dumps(params, ensure_ascii=False), int(success), output[:5000], analysis[:2000], session_id))
 
     def recent(self, limit: int = 10) -> list[dict]:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute("SELECT * FROM evidence ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
-        return [dict(r) for r in rows]
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute("SELECT * FROM evidence ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+            return [dict(r) for r in rows]
+        except Exception:
+            return []
 
     def search(self, keyword: str, limit: int = 5) -> list[dict]:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute("SELECT * FROM evidence WHERE skill LIKE ? OR output LIKE ? OR analysis LIKE ? ORDER BY id DESC LIMIT ?",
-                                (f"%{keyword}%", f"%{keyword}%", f"%{keyword}%", limit)).fetchall()
-        return [dict(r) for r in rows]
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute("SELECT * FROM evidence WHERE skill LIKE ? OR output LIKE ? OR analysis LIKE ? ORDER BY id DESC LIMIT ?",
+                                    (f"%{keyword}%", f"%{keyword}%", f"%{keyword}%", limit)).fetchall()
+            return [dict(r) for r in rows]
+        except Exception:
+            return []
 
     def stats(self) -> dict:
-        with sqlite3.connect(self.db_path) as conn:
-            total = conn.execute("SELECT COUNT(*) FROM evidence").fetchone()[0]
-            success = conn.execute("SELECT COUNT(*) FROM evidence WHERE success=1").fetchone()[0]
-        return {"total": total, "success": success, "fail": total - success}
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                total = conn.execute("SELECT COUNT(*) FROM evidence").fetchone()[0]
+                success = conn.execute("SELECT COUNT(*) FROM evidence WHERE success=1").fetchone()[0]
+            return {"total": total, "success": success, "fail": total - success}
+        except Exception:
+            return {"total": 0, "success": 0, "fail": 0}
 
 
 class BastionAgent:
