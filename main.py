@@ -8,6 +8,7 @@ Usage:
     python -m apps.bastion.main
     ./dev.sh bastion
 """
+import builtins
 import io
 import json
 import os
@@ -16,9 +17,27 @@ import sys
 BASTION_DIR = os.path.abspath(os.path.dirname(__file__))
 sys.path.insert(0, BASTION_DIR)
 
-# 한글 IME 잔류 바이트 방지 — stdin을 UTF-8 errors=ignore 로 재설정
-if hasattr(sys.stdin, "buffer"):
-    sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding="utf-8", errors="ignore")
+# ── 한글 IME 인코딩 오류 근본 수정 ────────────────────────────────────────
+# CPython의 input()은 TTY 연결 시 C-level readline을 사용하므로
+# sys.stdin TextIOWrapper 교체만으로는 UnicodeDecodeError가 발생한다.
+# builtins.input을 패치해 sys.stdin.buffer에서 직접 읽고 errors='ignore'로 디코딩.
+_orig_input = builtins.input
+
+def _safe_input(prompt=""):
+    if prompt:
+        sys.stdout.write(str(prompt))
+        sys.stdout.flush()
+    try:
+        if hasattr(sys.stdin, "buffer"):
+            raw = sys.stdin.buffer.readline()
+            return raw.decode("utf-8", errors="ignore").rstrip("\r\n")
+        return _orig_input()
+    except UnicodeDecodeError:
+        return ""
+    except (EOFError, KeyboardInterrupt):
+        raise
+
+builtins.input = _safe_input
 
 # .env 로드
 ENV_PATH = os.path.join(BASTION_DIR, ".env")
