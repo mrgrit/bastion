@@ -5,8 +5,8 @@
 학생은 manager VM에서, 관리자는 CCC 서버에서 사용.
 
 Usage:
-    python main.py
-    ./bastion.sh
+    python -m apps.bastion.main
+    ./dev.sh bastion
 """
 import io
 import json
@@ -32,12 +32,15 @@ if os.path.exists(ENV_PATH):
 
 
 def get_vm_ips() -> dict[str, str]:
-    """환경변수 또는 내부 기본값에서 VM IP 가져오기"""
+    """DB 또는 환경변수에서 VM IP 가져오기"""
     vm_ips = {}
     for role in ["attacker", "secu", "web", "siem", "manager"]:
         ip = os.getenv(f"VM_{role.upper()}_IP", "")
         if ip:
             vm_ips[role] = ip
+
+    if vm_ips:
+        return vm_ips
 
     if not vm_ips:
         from bastion import INTERNAL_IPS
@@ -56,13 +59,13 @@ BANNER = r"""
 """
 
 COMMANDS = {
-    "/skills":        "등록된 Skill 목록",
-    "/playbooks":     "등록된 Playbook 목록",
-    "/evidence":      "최근 실행 기록 (10건)",
+    "/skills":         "등록된 Skill 목록",
+    "/playbooks":      "등록된 Playbook 목록",
+    "/evidence":       "최근 실행 기록 (10건)",
     "/search <키워드>": "Evidence 검색",
-    "/stats":         "통계 (evidence, RAG)",
-    "/clear":         "대화 기록 초기화",
-    "/quit":          "종료",
+    "/stats":          "통계 (evidence, RAG)",
+    "/clear":          "대화 기록 초기화",
+    "/quit":           "종료",
 }
 
 
@@ -94,7 +97,6 @@ def main():
     # ── 배너 ──────────────────────────────────────────────────────────────
     console.print(Text(BANNER, style="bold orange1"))
 
-    # 인프라 상태 테이블
     infra_table = Table(box=box.SIMPLE, show_header=True, header_style="bold dim",
                         border_style="dim", padding=(0, 1))
     infra_table.add_column("Role", style="cyan", width=10)
@@ -106,7 +108,6 @@ def main():
         internal = INTERNAL_IPS.get(role, "—")
         infra_table.add_row(role, ip, internal)
 
-    # 시스템 정보 패널
     skills_count = len(agent.get_skills())
     playbooks_count = len(agent.get_playbooks())
     rag_info = ""
@@ -126,7 +127,6 @@ def main():
     ))
     console.print(infra_table)
 
-    # 명령어 힌트
     hints = "  ".join(f"[dim]{cmd}[/]" for cmd in COMMANDS)
     console.print(f"\n{hints}\n")
 
@@ -236,112 +236,147 @@ def main():
             console.print("  [dim]대화 기록 초기화됨[/]")
             continue
 
-        # ── 에이전트 대화 ──────────────────────────────────────────────────
-        with console.status("[orange1]Bastion 분석 중...[/]", spinner="dots"):
-            events = list(agent.chat(user_input, approval_callback=approval_callback))
+        # ── 에이전트 대화 (Streaming 지원) ────────────────────────────────
+        stage_labels = {
+            "planning":   "[dim]◈ PLANNING[/]",
+            "executing":  "[dim]◈ EXECUTING[/]",
+            "validating": "[dim]◈ VALIDATING[/]",
+            "qa":         "[dim]◈ Q&A[/]",
+        }
 
-        _stage = ""
-        for evt in events:
-            etype = evt.get("event", "")
+        # Planning 중에만 스피너 표시, 이후는 실시간 스트리밍
+        status = console.status("[orange1]Bastion 분석 중...[/]", spinner="dots")
+        status.start()
+        spinner_active = True
 
-            if etype == "stage":
-                _stage = evt.get("stage", "")
-                stage_labels = {
-                    "planning":   "[dim]◈ PLANNING[/]",
-                    "executing":  "[dim]◈ EXECUTING[/]",
-                    "validating": "[dim]◈ VALIDATING[/]",
-                    "qa":         "[dim]◈ Q&A[/]",
-                }
-                if _stage in stage_labels:
-                    console.print(f"\n{stage_labels[_stage]}", end="")
+        def stop_spinner():
+            nonlocal spinner_active
+            if spinner_active:
+                status.stop()
+                spinner_active = False
 
-            elif etype == "playbook_selected":
-                console.print(
-                    f"\n  [cyan bold]▶ Playbook:[/] {evt.get('title', evt.get('playbook_id', ''))}"
-                )
+        try:
+            for evt in agent.chat(user_input, approval_callback=approval_callback):
+                etype = evt.get("event", "")
 
-            elif etype == "playbook_start":
-                console.print(
-                    f"\n  [orange1 bold]Playbook:[/] {evt.get('title', '')} "
-                    f"[dim]({evt.get('total_steps', 0)}단계)[/]"
-                )
+                # Executing/QA 단계 시작 시 스피너 종료
+                if etype == "stage" and evt.get("stage") in ("executing", "qa"):
+                    stop_spinner()
+                elif etype in ("skill_start", "playbook_start", "stream_start"):
+                    stop_spinner()
 
-            elif etype == "step_start":
-                console.print(
-                    f"    [dim][{evt.get('step', 0)}][/] {evt.get('name', '')}...",
-                    end="",
-                )
+                # ── 스테이지 표시
+                if etype == "stage":
+                    stage = evt.get("stage", "")
+                    label = stage_labels.get(stage, "")
+                    if label:
+                        console.print(f"\n{label}", end="")
 
-            elif etype == "step_done":
-                mark = "[green]✓[/]" if evt.get("success") else "[red]✗[/]"
-                console.print(f" {mark}")
-                output = evt.get("output", "")
-                if output and not evt.get("success"):
-                    console.print(f"      [dim]{str(output)[:100]}[/]")
+                # ── Streaming 출력
+                elif etype == "stream_start":
+                    label = evt.get("label", "")
+                    if label == "분석":
+                        console.print(f"\n  [bold cyan]◆ 분석[/]  ", end="")
+                    elif label == "답변":
+                        console.print(f"\n  ", end="")
 
-            elif etype == "playbook_done":
-                p, t = evt.get("passed", 0), evt.get("total", 0)
-                color = "green" if p == t else "yellow"
-                console.print(f"  [bold]완료:[/] [{color}]{p}/{t}[/]")
+                elif etype == "stream_token":
+                    console.print(evt["token"], end="", highlight=False)
 
-            elif etype == "precheck_fail":
-                console.print(
-                    f"\n  [yellow]⚠ Pre-check: {evt.get('message', '')}[/]"
-                )
+                elif etype == "stream_end":
+                    console.print()
 
-            elif etype == "skill_start":
-                console.print(
-                    f"\n  [cyan]>> {evt['skill']}[/]"
-                    f" [dim]{json.dumps(evt.get('params', {}), ensure_ascii=False)[:60]}[/]",
-                    end="",
-                )
+                # ── Playbook 이벤트
+                elif etype == "playbook_selected":
+                    console.print(
+                        f"\n  [cyan bold]▶ Playbook:[/] {evt.get('title', evt.get('playbook_id', ''))}"
+                    )
 
-            elif etype == "skill_result":
-                mark = "[green]✓[/]" if evt.get("success") else "[red]✗[/]"
-                console.print(f"  {mark}")
-                output = evt.get("output", "")
-                if output:
-                    if isinstance(output, str) and output.strip().startswith("{"):
-                        try:
-                            d = json.loads(output.replace("'", '"'))
-                            for k, v in list(d.items())[:8]:
-                                console.print(f"    [dim]{k}:[/] {v}")
-                        except Exception:
+                elif etype == "playbook_start":
+                    console.print(
+                        f"\n  [orange1 bold]Playbook:[/] {evt.get('title', '')} "
+                        f"[dim]({evt.get('total_steps', 0)}단계)[/]"
+                    )
+
+                elif etype == "step_start":
+                    console.print(
+                        f"    [dim][{evt.get('step', 0)}][/] {evt.get('name', '')}...",
+                        end="",
+                    )
+
+                elif etype == "step_done":
+                    mark = "[green]✓[/]" if evt.get("success") else "[red]✗[/]"
+                    console.print(f" {mark}")
+                    output = evt.get("output", "")
+                    if output and not evt.get("success"):
+                        console.print(f"      [dim]{str(output)[:100]}[/]")
+
+                elif etype == "playbook_done":
+                    p, t = evt.get("passed", 0), evt.get("total", 0)
+                    color = "green" if p == t else "yellow"
+                    console.print(f"  [bold]완료:[/] [{color}]{p}/{t}[/]")
+
+                # ── Skill 이벤트
+                elif etype == "precheck_fail":
+                    console.print(f"\n  [yellow]⚠ Pre-check: {evt.get('message', '')}[/]")
+
+                elif etype == "skill_start":
+                    console.print(
+                        f"\n  [cyan]>> {evt['skill']}[/]"
+                        f" [dim]{json.dumps(evt.get('params', {}), ensure_ascii=False)[:60]}[/]",
+                        end="",
+                    )
+
+                elif etype == "skill_result":
+                    mark = "[green]✓[/]" if evt.get("success") else "[red]✗[/]"
+                    console.print(f"  {mark}")
+                    output = evt.get("output", "")
+                    if output:
+                        if isinstance(output, str) and output.strip().startswith("{"):
+                            try:
+                                d = json.loads(output.replace("'", '"'))
+                                for k, v in list(d.items())[:8]:
+                                    console.print(f"    [dim]{k}:[/] {v}")
+                            except Exception:
+                                for line in str(output).split("\n")[:12]:
+                                    console.print(f"    {line}")
+                        else:
                             for line in str(output).split("\n")[:12]:
-                                console.print(f"    {line}")
-                    else:
-                        for line in str(output).split("\n")[:12]:
-                            if line.strip():
-                                console.print(f"    {line}")
+                                if line.strip():
+                                    console.print(f"    {line}")
 
-            elif etype == "analysis":
-                console.print(f"\n  [bold cyan]◆ 분석[/]\n  {evt['content']}")
+                elif etype == "risk_warning":
+                    console.print(
+                        f"\n  [yellow bold]⚠ 위험 작업:[/] {evt.get('skill', '')} "
+                        f"[dim](risk={evt.get('risk', '?')})[/]"
+                    )
 
-            elif etype == "risk_warning":
-                console.print(
-                    f"\n  [yellow bold]⚠ 위험 작업:[/] {evt.get('skill', '')} "
-                    f"[dim](risk={evt.get('risk', '?')})[/]"
-                )
+                elif etype == "skill_skip":
+                    console.print(
+                        f"  [yellow]⊘ {evt.get('skill', '')} 스킵 "
+                        f"({evt.get('reason', '')})[/]"
+                    )
 
-            elif etype == "skill_skip":
-                console.print(
-                    f"  [yellow]⊘ {evt.get('skill', '')} 스킵 "
-                    f"({evt.get('reason', '')})[/]"
-                )
+                elif etype == "message":
+                    stop_spinner()
+                    console.print(f"\n  {evt['content']}")
 
-            elif etype == "message":
-                console.print(f"\n  {evt['content']}")
+                elif etype == "error":
+                    stop_spinner()
+                    console.print(
+                        f"\n  [red bold]✗ 오류:[/] {evt.get('content', evt.get('message', ''))}"
+                    )
 
-            elif etype == "error":
-                console.print(
-                    f"\n  [red bold]✗ 오류:[/] {evt.get('content', evt.get('message', ''))}"
-                )
+                elif etype == "playbook_abort":
+                    console.print(
+                        f"\n  [red bold]✗ Playbook 중단:[/] "
+                        f"step {evt.get('step', '?')} — {evt.get('reason', '')}"
+                    )
 
-            elif etype == "playbook_abort":
-                console.print(
-                    f"\n  [red bold]✗ Playbook 중단:[/] "
-                    f"step {evt.get('step', '?')} — {evt.get('reason', '')}"
-                )
+        except Exception as e:
+            console.print(f"\n  [red bold]✗ 처리 오류:[/] {e}")
+        finally:
+            stop_spinner()
 
 
 if __name__ == "__main__":
