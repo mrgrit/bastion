@@ -1,0 +1,16 @@
+[Unit]
+Description=Bastion Headless API Server
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/bastion
+EnvironmentFile=-/opt/bastion/.env
+ExecStart=/opt/bastion/.venv/bin/uvicorn api:app --host 0.0.0.0 --port 8003
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
