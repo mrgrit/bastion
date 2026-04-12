@@ -27,7 +27,7 @@ import httpx
 from bastion.playbook import list_playbooks, load_playbook, run_playbook
 from bastion.prompt import build_system_prompt, build_planning_prompt
 from bastion.rag import build_index, format_context
-from bastion.skills import SKILLS, execute_skill, skills_to_ollama_tools
+from bastion.skills import SKILLS, execute_skill, preview_skill, skills_to_ollama_tools
 
 
 # ── 입력 정제 ──────────────────────────────────────────────────────────────
@@ -135,6 +135,13 @@ class EvidenceDB:
         output      TEXT,
         analysis    TEXT,
         session_id  TEXT
+    );
+    CREATE TABLE IF NOT EXISTS assets (
+        role        TEXT PRIMARY KEY,
+        ip          TEXT,
+        status      TEXT DEFAULT 'unknown',
+        last_seen   TEXT,
+        notes       TEXT
     )"""
 
     def __init__(self, db_path: str = ""):
@@ -149,13 +156,19 @@ class EvidenceDB:
                 continue
             try:
                 with sqlite3.connect(candidate) as conn:
-                    conn.execute(self.CREATE_SQL)
+                    for stmt in self.CREATE_SQL.split(";"):
+                        stmt = stmt.strip()
+                        if stmt:
+                            conn.execute(stmt)
                 self.db_path = candidate
                 return
             except Exception:
                 continue
         with sqlite3.connect(":memory:") as conn:
-            conn.execute(self.CREATE_SQL)
+            for stmt in self.CREATE_SQL.split(";"):
+                stmt = stmt.strip()
+                if stmt:
+                    conn.execute(stmt)
 
     def add(self, *, skill: str = "", playbook_id: str = "", params: dict = None,
             success: bool, exit_code: int = -1, output: str = "",
@@ -217,6 +230,27 @@ class EvidenceDB:
             lines.append(f"- {label}: {status} | {(e.get('analysis') or '')[:80]}")
         return "\n".join(lines)
 
+    def update_asset(self, role: str, ip: str, status: str, notes: str = ""):
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute(
+                    "INSERT OR REPLACE INTO assets (role, ip, status, last_seen, notes) "
+                    "VALUES (?, ?, ?, datetime('now'), ?)",
+                    (role, ip, status, notes),
+                )
+        except Exception:
+            pass
+
+    def get_assets(self) -> list[dict]:
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                return [dict(r) for r in conn.execute(
+                    "SELECT * FROM assets ORDER BY role"
+                ).fetchall()]
+        except Exception:
+            return []
+
 
 # ── Bastion Agent ──────────────────────────────────────────────────────────
 
@@ -249,6 +283,9 @@ class BastionAgent:
         if not message:
             return
         self.history.append({"role": "user", "content": message})
+
+        # History 압축 — 12턴 초과 시 오래된 6턴 LLM 요약 (4층 전략 간소화)
+        self._compress_history()
 
         rag_ctx = ""
         if self.rag_index:
@@ -322,6 +359,10 @@ class BastionAgent:
         # ══ STAGE 2: EXECUTING — 멀티스텝 Skill ═══════════════════════════
         yield {"event": "stage", "stage": "executing"}
 
+        # Dry-run 미리보기: 실행 전 전체 계획을 보여줌
+        previews = [preview_skill(n, p, self.vm_ips) for n, p in skill_steps]
+        yield {"event": "plan_preview", "steps": previews}
+
         all_results = []
         for skill_name, params in skill_steps:
             # 파라미터 자동완성 (role→IP)
@@ -358,6 +399,11 @@ class BastionAgent:
             )
             all_results.append({"skill": skill_name, "params": params,
                                  "success": success, "output": output})
+
+            # Asset 상태 업데이트 (probe 계열)
+            if skill_name in ("probe_host", "probe_all", "check_suricata",
+                              "check_wazuh", "check_modsecurity"):
+                self._update_assets_from_result(skill_name, params, success)
 
         # ══ STAGE 3: VALIDATING ════════════════════════════════════════════
         yield {"event": "stage", "stage": "validating"}
@@ -671,3 +717,55 @@ class BastionAgent:
         if skill_name in {"scan_ports", "web_scan"}:
             return "medium"
         return "low"
+
+    # ── History 압축 (4층 전략 간소화) ─────────────────────────────────────
+
+    def _compress_history(self):
+        """history > 12턴 시 오래된 6턴을 LLM 요약 → 1개 요약 메시지로 압축."""
+        if len(self.history) <= 12:
+            return
+        to_compress = self.history[:6]
+        self.history = self.history[6:]
+        dialogue = "\n".join(
+            f"[{m['role']}] {m['content'][:200]}"
+            for m in to_compress
+        )
+        try:
+            r = httpx.post(f"{self.ollama_url}/api/chat", json={
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": "이전 대화를 3줄 이내로 한국어 요약해. 핵심 작업과 결과만 포함."},
+                    {"role": "user", "content": dialogue},
+                ],
+                "stream": False,
+                "options": {"temperature": 0.1, "num_predict": 200},
+            }, timeout=30.0)
+            summary = r.json().get("message", {}).get("content", "")
+            if summary:
+                self.history.insert(0, {"role": "system", "content": f"[이전 대화 요약] {summary}"})
+        except Exception:
+            pass
+
+    # ── Asset 추적 ───────────────────────────────────────────────────────────
+
+    def _update_assets_from_result(self, skill_name: str, params: dict, success: bool):
+        """Skill 실행 결과로 Asset 상태 업데이트."""
+        from bastion import INTERNAL_IPS
+        status = "online" if success else "unreachable"
+        if skill_name == "probe_all":
+            for role, ip in self.vm_ips.items():
+                self.evidence_db.update_asset(role, ip, status)
+        elif skill_name == "probe_host":
+            target = params.get("target", "")
+            ip = self.vm_ips.get(target, INTERNAL_IPS.get(target, target))
+            role = target if target in self.vm_ips else target
+            self.evidence_db.update_asset(role, ip, status)
+        elif skill_name == "check_suricata":
+            ip = self.vm_ips.get("secu", INTERNAL_IPS.get("secu", ""))
+            self.evidence_db.update_asset("secu", ip, status, "Suricata 점검")
+        elif skill_name == "check_wazuh":
+            ip = self.vm_ips.get("siem", INTERNAL_IPS.get("siem", ""))
+            self.evidence_db.update_asset("siem", ip, status, "Wazuh 점검")
+        elif skill_name == "check_modsecurity":
+            ip = self.vm_ips.get("web", INTERNAL_IPS.get("web", ""))
+            self.evidence_db.update_asset("web", ip, status, "ModSecurity 점검")

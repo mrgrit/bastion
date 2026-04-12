@@ -137,6 +137,69 @@ def _resolve_vm_ip(target: str, vm_ips: dict[str, str]) -> str:
     return INTERNAL_IPS.get(target, target)
 
 
+def preview_skill(name: str, params: dict[str, Any], vm_ips: dict[str, str]) -> dict:
+    """Skill 실행 미리보기 — dry_run용. 실제 명령·대상·위험도만 반환."""
+    skill = SKILLS.get(name, {})
+    target_vm = skill.get("target_vm", "auto")
+
+    # 대상 IP 결정
+    target_role = ""
+    target_ip = ""
+    if target_vm == "local":
+        target_role = "local"
+        target_ip = "localhost"
+    elif target_vm == "auto":
+        target_role = params.get("target", "")
+        target_ip = _resolve_vm_ip(target_role, vm_ips)
+    else:
+        target_role = target_vm
+        target_ip = vm_ips.get(target_vm, INTERNAL_IPS.get(target_vm, ""))
+
+    # Skill별 실행 커맨드 미리보기
+    cmd_preview = ""
+    if name == "probe_host":
+        cmd_preview = "uptime && df -h / && free -h && systemctl list-units --failed"
+    elif name == "scan_ports":
+        ports = params.get("ports", "--top-ports 100")
+        cmd_preview = f"nmap -sV {target_ip} {ports}"
+    elif name == "check_suricata":
+        cmd_preview = "systemctl is-active suricata && tail -N /var/log/suricata/eve.json"
+    elif name == "check_wazuh":
+        cmd_preview = "systemctl is-active wazuh-manager && /var/ossec/bin/agent_control -l"
+    elif name == "check_modsecurity":
+        cmd_preview = "grep 'ModSecurity' /var/log/apache2/error.log | tail -N"
+    elif name == "configure_nftables":
+        action = params.get("action", "list")
+        rule = params.get("rule", "")
+        cmd_preview = f"nft {action} rule inet filter input {rule}".strip()
+    elif name == "analyze_logs":
+        log_source = params.get("log_source", "/var/log/syslog")
+        cmd_preview = f"tail -50 {log_source} → LLM 분석"
+    elif name == "deploy_rule":
+        rule_type = params.get("rule_type", "suricata")
+        cmd_preview = f"룰 추가 → {rule_type} reload"
+    elif name == "web_scan":
+        url = params.get("url", "")
+        cmd_preview = f"curl -sI {url} && nikto -h {url}"
+    elif name == "shell":
+        cmd_preview = params.get("command", "")
+    elif name == "probe_all":
+        cmd_preview = "uptime (전체 VM)"
+
+    risk = "HIGH" if skill.get("requires_approval") or name in {"configure_nftables", "deploy_rule", "shell"} \
+        else "MEDIUM" if name in {"scan_ports", "web_scan"} else "LOW"
+
+    return {
+        "skill": name,
+        "description": skill.get("description", ""),
+        "target_role": target_role,
+        "target_ip": target_ip,
+        "command": cmd_preview,
+        "params": params,
+        "risk": risk,
+    }
+
+
 def execute_skill(name: str, params: dict[str, Any], vm_ips: dict[str, str],
                   ollama_url: str = "", model: str = "") -> dict:
     """Skill 실행 — SubAgent A2A로 명령 전달"""
