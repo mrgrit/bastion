@@ -88,6 +88,14 @@ SKILLS: dict[str, dict] = {
         "params": {},
         "target_vm": "local",
     },
+    "enroll_wazuh_agent": {
+        "description": "대상 VM에 wazuh-agent를 Wazuh Manager(siem)에 등록 — 미등록 에이전트 자동 연결",
+        "params": {
+            "target": {"type": "string", "description": "등록할 VM role (secu/web/attacker/manager)", "required": True},
+        },
+        "target_vm": "siem",
+        "requires_approval": True,
+    },
 }
 
 
@@ -215,7 +223,13 @@ def execute_skill(name: str, params: dict[str, Any], vm_ips: dict[str, str],
         h = health_check(ip)
         if h.get("status") != "healthy":
             return {"success": False, "output": f"SubAgent unreachable: {ip}", "health": h}
-        r = run_command(ip, "uptime && echo '---' && df -h / && echo '---' && free -h && echo '---' && systemctl list-units --failed --no-pager | head -5", timeout=15)
+        r = run_command(ip,
+            "echo '=== UPTIME ===' && uptime && "
+            "echo '=== CPU ===' && top -bn1 2>/dev/null | grep 'Cpu(s)' | head -1 && "
+            "echo '=== DISK ===' && df -h / && "
+            "echo '=== MEMORY ===' && free -h && "
+            "echo '=== FAILED SERVICES ===' && systemctl list-units --failed --no-pager | head -5",
+            timeout=20)
         return {"success": r.get("exit_code") == 0, "output": r.get("stdout", ""), "target": target, "ip": ip}
 
     elif name == "probe_all":
@@ -234,8 +248,23 @@ def execute_skill(name: str, params: dict[str, Any], vm_ips: dict[str, str],
         ip = _resolve_vm_ip(target, vm_ips)
         ports = params.get("ports", "--top-ports 100")
         attacker_ip = vm_ips.get("attacker", "")
-        r = run_command(attacker_ip, f"nmap -sV {ip} {ports} --max-retries 1 -T4 --host-timeout 30s", timeout=45)
-        return {"success": r.get("exit_code") == 0, "output": r.get("stdout", ""), "target": ip}
+        # greppable output (-oG) for reliable parsing, plus normal output
+        r = run_command(attacker_ip,
+            f"nmap -sV {ip} {ports} --max-retries 1 -T4 --host-timeout 30s -oG - 2>/dev/null | grep 'Ports:' || "
+            f"nmap -sV {ip} {ports} --max-retries 1 -T4 --host-timeout 30s 2>/dev/null | grep -E '^[0-9]+/tcp'",
+            timeout=45)
+        raw = r.get("stdout", "")
+        # extract open ports summary
+        open_ports = []
+        for line in raw.splitlines():
+            if "/open/" in line:  # greppable format
+                import re
+                for m in re.finditer(r'(\d+)/open/tcp//([^/]*)//', line):
+                    open_ports.append(f"{m.group(1)}/tcp {m.group(2)}")
+            elif "/tcp" in line and "open" in line:  # normal format
+                open_ports.append(line.strip())
+        summary = f"Open ports on {ip}: {len(open_ports)} found\n" + "\n".join(open_ports) if open_ports else f"No open ports found on {ip}"
+        return {"success": r.get("exit_code") == 0, "output": summary, "target": ip, "open_count": len(open_ports)}
 
     elif name == "check_suricata":
         lines = params.get("lines", 10)
@@ -247,6 +276,64 @@ def execute_skill(name: str, params: dict[str, Any], vm_ips: dict[str, str],
         ip = vm_ips.get("siem", "")
         r = run_command(ip, "echo '=== Wazuh Manager ===' && systemctl is-active wazuh-manager && echo '=== Agents ===' && /var/ossec/bin/agent_control -l 2>/dev/null && echo '=== Recent Alerts ===' && tail -5 /var/ossec/logs/alerts/alerts.json 2>/dev/null | head -5", timeout=15)
         return {"success": True, "output": r.get("stdout", "")}
+
+    elif name == "enroll_wazuh_agent":
+        target_role = params.get("target", "secu")
+        target_ip = _resolve_vm_ip(target_role, vm_ips)
+        siem_ip = vm_ips.get("siem", "10.20.30.100")
+        steps = []
+
+        # 1. wazuh-agent 설치 여부 확인
+        check = run_command(target_ip, "dpkg -l wazuh-agent 2>/dev/null | grep -q '^ii' && echo installed || echo not_installed", timeout=10)
+        installed = check.get("stdout", "").strip() == "installed"
+        steps.append(f"installed={installed}")
+
+        if not installed:
+            # Wazuh Manager 버전과 일치하는 버전 설치 (4.10.3)
+            install_cmd = (
+                "curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | sudo gpg --dearmor -o /usr/share/keyrings/wazuh.gpg 2>&1 | tail -1 && "
+                "echo 'deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main' | "
+                "sudo tee /etc/apt/sources.list.d/wazuh.list > /dev/null && "
+                "sudo apt-get update -qq 2>&1 | tail -2 && "
+                "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y wazuh-agent=4.10.3-1 2>&1 | tail -5"
+            )
+            r = run_command(target_ip, install_cmd, timeout=180)
+            steps.append(f"install: {r.get('stdout','')[-200:]}")
+
+        # 2. Manager IP 설정 (placeholder 포함 모든 address 교체)
+        cfg_cmd = (
+            f"sudo sed -i 's|<address>[^<]*</address>|<address>{siem_ip}</address>|g' /var/ossec/etc/ossec.conf && "
+            f"grep '<address>' /var/ossec/etc/ossec.conf"
+        )
+        r = run_command(target_ip, cfg_cmd, timeout=15)
+        steps.append(f"config: {r.get('stdout','').strip()}")
+
+        # 3. 에이전트 등록 (authd)
+        auth_cmd = f"sudo /var/ossec/bin/agent-auth -m {siem_ip} -A {target_role} 2>&1"
+        r = run_command(target_ip, auth_cmd, timeout=30)
+        auth_out = r.get("stdout", "")
+        steps.append(f"auth: {auth_out[:200]}")
+
+        # 4. 서비스 시작
+        r = run_command(target_ip,
+            "sudo systemctl daemon-reload && sudo systemctl enable wazuh-agent && "
+            "sudo systemctl restart wazuh-agent && sleep 3 && sudo systemctl is-active wazuh-agent",
+            timeout=20)
+        steps.append(f"service: {r.get('stdout','').strip()}")
+
+        # 5. siem에서 등록 확인
+        verify = run_command(siem_ip,
+            f"/var/ossec/bin/agent_control -l 2>/dev/null | grep -i {target_role}",
+            timeout=10)
+        enrolled = bool(verify.get("stdout", "").strip())
+        steps.append(f"enrolled_on_siem: {enrolled} → {verify.get('stdout','').strip()}")
+
+        return {
+            "success": enrolled,
+            "output": "\n".join(steps),
+            "target": target_role,
+            "enrolled": enrolled,
+        }
 
     elif name == "check_modsecurity":
         lines = params.get("lines", 10)
@@ -299,14 +386,36 @@ def execute_skill(name: str, params: dict[str, Any], vm_ips: dict[str, str],
         return {"success": True, "output": analysis, "raw_log": log_data[:500]}
 
     elif name == "deploy_rule":
+        import base64
         rule_type = params.get("rule_type", "suricata")
         rule_content = params.get("rule_content", "")
+        # base64 인코딩으로 인용부호 문제 방지
+        b64 = base64.b64encode(rule_content.encode()).decode()
         if rule_type == "suricata":
             ip = vm_ips.get("secu", "")
-            r = run_command(ip, f"echo '{rule_content}' >> /var/lib/suricata/rules/local.rules && suricatasc -c reload-rules 2>/dev/null || systemctl reload suricata", timeout=15)
+            rules_path = "/var/lib/suricata/rules/local.rules"
+            # sid 중복 방지: 해당 sid가 없을 때만 추가
+            sid = ""
+            import re as _re
+            sid_m = _re.search(r'sid:(\d+)', rule_content)
+            if sid_m:
+                sid = sid_m.group(1)
+            dedup_check = f"grep -q 'sid:{sid}' {rules_path} 2>/dev/null && echo DUPLICATE || echo NEW" if sid else "echo NEW"
+            r_check = run_command(ip, dedup_check, timeout=5)
+            if "DUPLICATE" in r_check.get("stdout", ""):
+                return {"success": True, "output": f"Rule sid:{sid} already exists in {rules_path}"}
+            r = run_command(ip,
+                f"echo '{b64}' | base64 -d | sudo tee -a {rules_path} > /dev/null && "
+                f"echo -n 'Rule added. Reloading... ' && "
+                f"sudo kill -HUP $(pidof suricata) 2>/dev/null && echo 'OK' || echo 'reload failed'",
+                timeout=15)
         elif rule_type == "wazuh":
             ip = vm_ips.get("siem", "")
-            r = run_command(ip, f"echo '{rule_content}' >> /var/ossec/etc/rules/local_rules.xml && /var/ossec/bin/wazuh-control restart 2>/dev/null", timeout=30)
+            rules_path = "/var/ossec/etc/rules/local_rules.xml"
+            r = run_command(ip,
+                f"echo '{b64}' | base64 -d | sudo tee -a {rules_path} > /dev/null && "
+                f"echo 'Rule added' && sudo /var/ossec/bin/wazuh-control restart 2>/dev/null | tail -3",
+                timeout=30)
         else:
             return {"success": False, "error": f"Unknown rule_type: {rule_type}"}
         return {"success": r.get("exit_code") == 0, "output": r.get("stdout", ""), "stderr": r.get("stderr", "")}

@@ -9,20 +9,22 @@ Usage:
     ./dev.sh bastion-api
 
 Endpoints:
-    POST /chat          — 자연어 요청 실행 (NDJSON 스트림)
-    GET  /skills        — Skill 목록
-    GET  /playbooks     — Playbook 목록
-    GET  /evidence      — 최근 실행 기록
-    GET  /assets        — Asset 레지스트리
-    GET  /health        — 헬스체크
+    POST /chat              — 자연어 요청 실행 (NDJSON 스트림)
+    POST /onboard           — VM 온보딩 (NDJSON 스트림, 타임아웃 없음)
+    GET  /skills            — Skill 목록
+    GET  /playbooks         — Playbook 목록
+    GET  /evidence          — 최근 실행 기록
+    GET  /assets            — Asset 레지스트리
+    PUT  /assets/{role}     — Asset 직접 등록/갱신
+    GET  /health            — 헬스체크
 """
 import json
 import os
 import sys
 
 BASTION_DIR = os.path.abspath(os.path.dirname(__file__))
-BASTION_DIR = os.path.abspath(os.path.dirname(__file__))
-sys.path.insert(0, BASTION_DIR)
+CCC_DIR = os.path.abspath(os.path.join(BASTION_DIR, "..", ".."))
+sys.path.insert(0, CCC_DIR)
 
 # .env 로드
 ENV_PATH = os.path.join(BASTION_DIR, ".env")
@@ -60,11 +62,10 @@ def _get_vm_ips() -> dict[str, str]:
     return vm_ips or dict(INTERNAL_IPS)
 
 
-_vm_ips = _get_vm_ips()
-_ollama_url = os.getenv("LLM_BASE_URL", "http://localhost:11434")
-_model = os.getenv("LLM_MANAGER_MODEL", os.getenv("LLM_MODEL", "gpt-oss:120b"))
+from bastion import LLM_BASE_URL, LLM_MANAGER_MODEL
 
-agent = BastionAgent(vm_ips=_vm_ips, ollama_url=_ollama_url, model=_model)
+_vm_ips = _get_vm_ips()
+agent = BastionAgent(vm_ips=_vm_ips, ollama_url=LLM_BASE_URL, model=LLM_MANAGER_MODEL)
 
 app = FastAPI(
     title="Bastion API",
@@ -79,6 +80,11 @@ class ChatRequest(BaseModel):
     message: str
     auto_approve: bool = False   # True: 고위험 작업 자동 승인 (주의)
     stream: bool = True          # False: 전체 이벤트 배열 한번에 반환
+    # 테스트 메타데이터 — evidence DB에 함께 기록
+    course: str = ""
+    lab_id: str = ""
+    step_order: int = 0
+    test_session: str = ""
 
 
 # ── 엔드포인트 ──────────────────────────────────────────────────────────────
@@ -87,8 +93,8 @@ class ChatRequest(BaseModel):
 def health():
     return {
         "status": "ok",
-        "model": _model,
-        "llm": _ollama_url,
+        "model": agent.model,
+        "llm": agent.ollama_url,
         "skills": len(agent.get_skills()),
         "playbooks": len(agent.get_playbooks()),
     }
@@ -114,6 +120,138 @@ def assets():
     return agent.evidence_db.get_assets()
 
 
+class AssetUpdateBody(BaseModel):
+    ip: str
+    status: str = "healthy"
+    notes: str = ""
+
+
+@app.put("/assets/{role}")
+def update_asset(role: str, body: AssetUpdateBody):
+    """온보딩 완료 후 asset 등록/갱신. LLM 호출 없이 직접 등록."""
+    agent.evidence_db.update_asset(role, body.ip, body.status, body.notes)
+    return {"role": role, "ip": body.ip, "status": body.status}
+
+
+# ── Ollama 호환 프록시 엔드포인트 ─────────────────────────────────────────────
+# 실습 스크립트가 기존 Ollama API 형식 그대로 사용하되 bastion을 통해 라우팅
+
+@app.post("/api/generate")
+def ollama_generate_proxy(request: dict):
+    """Ollama /api/generate 호환 프록시 — bastion을 통해 LLM으로 포워딩.
+    모델이 지정되지 않거나 없는 모델 요청 시 bastion 설정 모델(LLM_SUBAGENT_MODEL)로 교체.
+    """
+    import httpx
+    # 모델을 설정된 서브에이전트 모델로 강제 지정 (gemma3:4b 등 없는 모델 방지)
+    request["model"] = agent.model
+    request.setdefault("stream", False)
+    try:
+        resp = httpx.post(
+            f"{agent.ollama_url}/api/generate",
+            json=request,
+            timeout=120,
+        )
+        return resp.json()
+    except Exception as e:
+        return {"error": str(e), "response": ""}
+
+
+@app.post("/api/chat")
+def ollama_chat_proxy(request: dict):
+    """Ollama /api/chat 호환 프록시 — bastion을 통해 LLM으로 포워딩.
+    모델을 bastion 설정 모델로 교체.
+    """
+    import httpx
+    request["model"] = agent.model
+    request.setdefault("stream", False)
+    try:
+        resp = httpx.post(
+            f"{agent.ollama_url}/api/chat",
+            json=request,
+            timeout=120,
+        )
+        return resp.json()
+    except Exception as e:
+        return {"error": str(e), "message": {"content": ""}}
+
+
+@app.get("/api/tags")
+def ollama_tags_proxy():
+    """Ollama /api/tags 호환 프록시"""
+    import httpx
+    try:
+        resp = httpx.get(f"{agent.ollama_url}/api/tags", timeout=10)
+        return resp.json()
+    except Exception as e:
+        return {"models": [], "error": str(e)}
+
+
+@app.get("/api/version")
+def ollama_version_proxy():
+    """Ollama /api/version 호환 프록시"""
+    import httpx
+    try:
+        resp = httpx.get(f"{agent.ollama_url}/api/version", timeout=10)
+        return resp.json()
+    except Exception as e:
+        return {"version": "unknown", "error": str(e)}
+
+
+class OnboardRequest(BaseModel):
+    role: str
+    ip: str
+    ssh_user: str = "ccc"
+    ssh_password: str = "1"
+    gpu_url: str = ""
+
+
+@app.post("/onboard")
+def onboard(req: OnboardRequest):
+    """VM 온보딩 — SubAgent 설치 + 역할별 소프트웨어 + Asset 등록.
+
+    NDJSON 스트림으로 단계별 진행상황 실시간 반환. 타임아웃 없음.
+
+    예시:
+        curl -N -X POST http://localhost:8003/onboard \\
+             -H 'Content-Type: application/json' \\
+             -d '{"role": "secu", "ip": "192.168.208.155"}'
+    """
+    from bastion import onboard_vm, LLM_BASE_URL, LLM_MANAGER_MODEL, LLM_SUBAGENT_MODEL
+
+    def event_generator():
+        yield json.dumps({"event": "start", "role": req.role, "ip": req.ip}, ensure_ascii=False) + "\n"
+        try:
+            result = onboard_vm(
+                ip=req.ip, role=req.role,
+                user=req.ssh_user, password=req.ssh_password,
+                gpu_url=req.gpu_url or LLM_BASE_URL,
+                manager_model=LLM_MANAGER_MODEL,
+                subagent_model=LLM_SUBAGENT_MODEL,
+            )
+            for step in result.get("steps", []):
+                yield json.dumps({"event": "step", **step}, ensure_ascii=False) + "\n"
+
+            healthy = result.get("healthy", False)
+            internal_ip = result.get("internal_ip", req.ip)
+
+            # Asset 등록
+            status = "healthy" if healthy else "unreachable"
+            agent.evidence_db.update_asset(req.role, internal_ip, status, "온보딩")
+
+            yield json.dumps({
+                "event": "done",
+                "role": req.role,
+                "healthy": healthy,
+                "internal_ip": internal_ip,
+                "error": result.get("error", ""),
+            }, ensure_ascii=False) + "\n"
+
+        except Exception as e:
+            yield json.dumps({"event": "error", "role": req.role, "message": str(e)}, ensure_ascii=False) + "\n"
+
+    return StreamingResponse(event_generator(), media_type="application/x-ndjson")
+
+
 @app.post("/chat")
 def chat(req: ChatRequest):
     """자연어 요청을 bastion에 실행.
@@ -129,9 +267,18 @@ def chat(req: ChatRequest):
     def approval_callback(step_name: str, skill: str, params: dict) -> bool:
         return req.auto_approve
 
+    # 테스트 메타데이터를 agent에 주입 → evidence DB 기록 시 사용
+    agent._test_meta = {
+        "course": req.course,
+        "lab_id": req.lab_id,
+        "step_order": req.step_order,
+        "test_session": req.test_session,
+    } if req.course else {}
+
     def event_generator():
         for evt in agent.chat(req.message, approval_callback=approval_callback):
             yield json.dumps(evt, ensure_ascii=False) + "\n"
+        agent._test_meta = {}
 
     if req.stream:
         return StreamingResponse(
@@ -140,7 +287,51 @@ def chat(req: ChatRequest):
         )
     else:
         events = list(agent.chat(req.message, approval_callback=approval_callback))
+        agent._test_meta = {}
         return {"events": events}
+
+
+class AskRequest(BaseModel):
+    message: str
+    auto_approve: bool = True  # /ask는 기본 자동승인 (실습용)
+
+
+@app.post("/ask")
+def ask(req: AskRequest):
+    """실습 스크립트용 단순 질문 API — LLM 답변 텍스트만 반환.
+
+    /chat의 간소화 버전. 스트리밍 없이 답변 텍스트만 반환하여 셸 스크립트에서 쉽게 사용 가능.
+
+    예시:
+        curl -s -X POST http://localhost:8003/ask \\
+             -H 'Content-Type: application/json' \\
+             -d '{"message": "프롬프트 인젝션이란?"}' \\
+             | python3 -c "import sys,json; print(json.load(sys.stdin)['answer'])"
+    """
+    def approval_callback(step_name: str, skill: str, params: dict) -> bool:
+        return req.auto_approve
+
+    answer = ""
+    skill_outputs = []
+    events = []
+    for evt in agent.chat(req.message, approval_callback=approval_callback):
+        events.append(evt)
+        e = evt.get("event", "")
+        if e == "stream_token":
+            answer += evt.get("token", "")
+        elif e == "skill_result":
+            skill_outputs.append({
+                "skill": evt.get("skill", ""),
+                "output": evt.get("output", ""),
+                "success": evt.get("success", False),
+            })
+
+    return {
+        "answer": answer,
+        "success": True,
+        "skill_outputs": skill_outputs,
+        "event_count": len(events),
+    }
 
 
 # ── 직접 실행 ───────────────────────────────────────────────────────────────
@@ -148,4 +339,4 @@ def chat(req: ChatRequest):
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("BASTION_API_PORT", "8003"))
-    uvicorn.run("api:app", host="0.0.0.0", port=port, reload=False)
+    uvicorn.run("apps.bastion.api:app", host="0.0.0.0", port=port, reload=False)

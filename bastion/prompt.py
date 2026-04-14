@@ -13,7 +13,8 @@ from bastion.playbook import list_playbooks
 
 def build_planning_prompt(vm_ips: dict[str, str] = None,
                           rag_context: str = "",
-                          prev_context: str = "") -> str:
+                          prev_context: str = "",
+                          learned_context: str = "") -> str:
     """Skill 선택 전용 프롬프트 — 간결하고 명확한 지시만 포함.
 
     Tool Calling 모드: 모델이 tool_calls 필드로 응답.
@@ -23,8 +24,19 @@ def build_planning_prompt(vm_ips: dict[str, str] = None,
 
     sections.append(
         "너는 Bastion 보안 운영 에이전트다.\n"
-        "사용자 요청을 분석하고 적절한 Skill을 선택해 실행한다.\n"
-        "Skill이 필요 없는 질문에는 도구 없이 직접 한국어로 답변한다."
+        "사용자 요청을 분석하고 적절한 Skill을 선택해 실행한다.\n\n"
+        "## 핵심 원칙\n"
+        "1. 보안 작업 요청(확인, 설정, 스캔, 테스트, 실행)은 반드시 Skill을 사용해 실행하라.\n"
+        "2. '확인해줘', '설정해줘', '스캔해줘', '실행해줘', '점검해줘', '테스트해줘' 등의 요청은 Q&A가 아닌 Skill 실행이다.\n"
+        "3. 구체적인 명령어(curl, nmap, grep, sed, systemctl 등)가 포함된 요청은 반드시 shell Skill로 실행하라.\n"
+        "4. 대상 VM이 명시되지 않으면 요청 내용으로 추론하라:\n"
+        "   - nmap/hydra/curl/nikto/sqlmap → attacker\n"
+        "   - nftables/suricata/방화벽 → secu\n"
+        "   - docker/apache/modsecurity/웹서버 → web\n"
+        "   - wazuh/siem/로그/알림 → siem\n"
+        "   - python3/ollama/LLM/AI → manager\n"
+        "5. '설명해줘'로 끝나더라도 인프라 상태를 확인하거나 명령을 실행해야 하는 작업이면 Skill로 실행하라.\n"
+        "6. 순수한 개념 질문(정의, 원리, 이론)에만 도구 없이 직접 답변한다."
     )
 
     # VM 인프라 정보
@@ -35,6 +47,10 @@ def build_planning_prompt(vm_ips: dict[str, str] = None,
     # 이전 실행 컨텍스트
     if prev_context:
         sections.append(prev_context)
+
+    # 학습된 경험 (experience learning)
+    if learned_context:
+        sections.append(learned_context)
 
     # RAG 컨텍스트
     if rag_context:

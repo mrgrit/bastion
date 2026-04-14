@@ -144,7 +144,19 @@ class EvidenceDB:
         notes       TEXT
     )"""
 
+    MIGRATIONS = [
+        "ALTER TABLE evidence ADD COLUMN stage TEXT",
+        "ALTER TABLE evidence ADD COLUMN playbook_id TEXT",
+        "ALTER TABLE evidence ADD COLUMN exit_code INTEGER DEFAULT -1",
+        "ALTER TABLE evidence ADD COLUMN session_id TEXT",
+        "ALTER TABLE evidence ADD COLUMN course TEXT",
+        "ALTER TABLE evidence ADD COLUMN lab_id TEXT",
+        "ALTER TABLE evidence ADD COLUMN step_order INTEGER",
+        "ALTER TABLE evidence ADD COLUMN test_session TEXT",
+    ]
+
     def __init__(self, db_path: str = ""):
+        self._conn = None  # persistent connection for :memory: mode
         self.db_path = ":memory:"
         for candidate in [
             db_path,
@@ -155,66 +167,114 @@ class EvidenceDB:
             if not candidate:
                 continue
             try:
-                with sqlite3.connect(candidate) as conn:
-                    for stmt in self.CREATE_SQL.split(";"):
-                        stmt = stmt.strip()
-                        if stmt:
-                            conn.execute(stmt)
+                conn = sqlite3.connect(candidate)
+                for stmt in self.CREATE_SQL.split(";"):
+                    stmt = stmt.strip()
+                    if stmt:
+                        conn.execute(stmt)
+                conn.commit()
+                self._migrate(conn)
+                conn.commit()
+                conn.close()
                 self.db_path = candidate
                 return
             except Exception:
                 continue
-        with sqlite3.connect(":memory:") as conn:
-            for stmt in self.CREATE_SQL.split(";"):
-                stmt = stmt.strip()
-                if stmt:
-                    conn.execute(stmt)
+        # Fallback: persistent in-memory connection
+        conn = sqlite3.connect(":memory:")
+        for stmt in self.CREATE_SQL.split(";"):
+            stmt = stmt.strip()
+            if stmt:
+                conn.execute(stmt)
+        conn.commit()
+        self._migrate(conn)
+        conn.commit()
+        self._conn = conn  # keep alive — :memory: is lost on close
+
+    def _migrate(self, conn):
+        """기존 DB에 누락 컬럼 추가 (idempotent)."""
+        for sql in self.MIGRATIONS:
+            try:
+                conn.execute(sql)
+            except sqlite3.OperationalError:
+                pass  # 이미 존재하면 무시
+
+    def _connect(self):
+        """DB 연결 반환 — :memory: 모드에서는 영구 연결 재사용."""
+        if self._conn is not None:
+            return self._conn, False  # (conn, should_close)
+        return sqlite3.connect(self.db_path), True
 
     def add(self, *, skill: str = "", playbook_id: str = "", params: dict = None,
             success: bool, exit_code: int = -1, output: str = "",
-            analysis: str = "", stage: str = "", session_id: str = ""):
-        with sqlite3.connect(self.db_path) as conn:
+            analysis: str = "", stage: str = "", session_id: str = "",
+            course: str = "", lab_id: str = "", step_order: int = 0,
+            test_session: str = ""):
+        conn, should_close = self._connect()
+        try:
+            # Ensure schema is up-to-date (e.g. old DB without stage column)
+            self._migrate(conn)
             conn.execute(
                 "INSERT INTO evidence "
-                "(stage,skill,playbook_id,params,success,exit_code,output,analysis,session_id) "
-                "VALUES (?,?,?,?,?,?,?,?,?)",
+                "(stage,skill,playbook_id,params,success,exit_code,output,analysis,"
+                "session_id,course,lab_id,step_order,test_session) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (stage, skill, playbook_id,
                  json.dumps(params or {}, ensure_ascii=False),
                  int(success), exit_code,
-                 output[:5000], analysis[:2000], session_id),
+                 output[:5000], analysis[:2000], session_id,
+                 course, lab_id, step_order, test_session),
             )
+            conn.commit()
+            # 마지막 삽입 ID 반환 (테스트 추적용)
+            row_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            if should_close:
+                conn.close()
+            return row_id
+        except Exception:
+            if should_close:
+                conn.close()
+            return None
 
     def recent(self, limit: int = 10) -> list[dict]:
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row
-                rows = conn.execute(
-                    "SELECT * FROM evidence ORDER BY id DESC LIMIT ?", (limit,)
-                ).fetchall()
-            return [dict(r) for r in rows]
+            conn, should_close = self._connect()
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT * FROM evidence ORDER BY id DESC LIMIT ?", (limit,)
+            ).fetchall()
+            result = [dict(r) for r in rows]
+            if should_close:
+                conn.close()
+            return result
         except Exception:
             return []
 
     def search(self, keyword: str, limit: int = 5) -> list[dict]:
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row
-                rows = conn.execute(
-                    "SELECT * FROM evidence WHERE skill LIKE ? OR output LIKE ? "
-                    "OR analysis LIKE ? OR playbook_id LIKE ? ORDER BY id DESC LIMIT ?",
-                    (f"%{keyword}%",) * 4 + (limit,),
-                ).fetchall()
-            return [dict(r) for r in rows]
+            conn, should_close = self._connect()
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT * FROM evidence WHERE skill LIKE ? OR output LIKE ? "
+                "OR analysis LIKE ? OR playbook_id LIKE ? ORDER BY id DESC LIMIT ?",
+                (f"%{keyword}%",) * 4 + (limit,),
+            ).fetchall()
+            result = [dict(r) for r in rows]
+            if should_close:
+                conn.close()
+            return result
         except Exception:
             return []
 
     def stats(self) -> dict:
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                total = conn.execute("SELECT COUNT(*) FROM evidence").fetchone()[0]
-                success = conn.execute(
-                    "SELECT COUNT(*) FROM evidence WHERE success=1"
-                ).fetchone()[0]
+            conn, should_close = self._connect()
+            total = conn.execute("SELECT COUNT(*) FROM evidence").fetchone()[0]
+            success = conn.execute(
+                "SELECT COUNT(*) FROM evidence WHERE success=1"
+            ).fetchone()[0]
+            if should_close:
+                conn.close()
             return {"total": total, "success": success, "fail": total - success}
         except Exception:
             return {"total": 0, "success": 0, "fail": 0}
@@ -232,22 +292,28 @@ class EvidenceDB:
 
     def update_asset(self, role: str, ip: str, status: str, notes: str = ""):
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.execute(
-                    "INSERT OR REPLACE INTO assets (role, ip, status, last_seen, notes) "
-                    "VALUES (?, ?, ?, datetime('now'), ?)",
-                    (role, ip, status, notes),
-                )
+            conn, should_close = self._connect()
+            conn.execute(
+                "INSERT OR REPLACE INTO assets (role, ip, status, last_seen, notes) "
+                "VALUES (?, ?, ?, datetime('now'), ?)",
+                (role, ip, status, notes),
+            )
+            conn.commit()
+            if should_close:
+                conn.close()
         except Exception:
             pass
 
     def get_assets(self) -> list[dict]:
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row
-                return [dict(r) for r in conn.execute(
-                    "SELECT * FROM assets ORDER BY role"
-                ).fetchall()]
+            conn, should_close = self._connect()
+            conn.row_factory = sqlite3.Row
+            result = [dict(r) for r in conn.execute(
+                "SELECT * FROM assets ORDER BY role"
+            ).fetchall()]
+            if should_close:
+                conn.close()
+            return result
         except Exception:
             return []
 
@@ -261,11 +327,17 @@ class BastionAgent:
                  ollama_url: str = "", model: str = "",
                  knowledge_dir: str = "", evidence_db: str = ""):
         self.vm_ips = vm_ips
-        self.ollama_url = (ollama_url or os.getenv("LLM_BASE_URL", "http://localhost:11434")).rstrip("/")
-        self.model = model or os.getenv("LLM_MANAGER_MODEL", os.getenv("LLM_MODEL", "gpt-oss:120b"))
+        from bastion import LLM_BASE_URL, LLM_MANAGER_MODEL
+        self.ollama_url = (ollama_url or LLM_BASE_URL).rstrip("/")
+        self.model = model or LLM_MANAGER_MODEL
         self.history: list[dict] = []
         self.session_id = f"s{int(time.time())}"
         self.evidence_db = EvidenceDB(evidence_db)
+        self._test_meta: dict = {}  # 테스트 메타데이터 (course, lab_id, step_order, test_session)
+
+        # Experience Learning Layer — 카테고리 수준 일반화 경험 학습
+        from bastion.experience import ExperienceLearner
+        self.experience = ExperienceLearner(db_path=self.evidence_db.db_path)
 
         self.rag_index = None
         kdir = knowledge_dir or os.path.join(os.path.dirname(__file__), "..", "..", "contents")
@@ -292,6 +364,7 @@ class BastionAgent:
             chunks = self.rag_index.search(message, top_k=3)
             rag_ctx = format_context(chunks)
         prev_ctx = self.evidence_db.recent_context()
+        exp_ctx = self.experience.get_context(message)
 
         # ══ STAGE 1: PLANNING ══════════════════════════════════════════════
         yield {"event": "stage", "stage": "planning"}
@@ -323,12 +396,21 @@ class BastionAgent:
                 playbook_id=playbook_id, success=passed == len(pb_results),
                 output="\n".join(r.get("output", "") for r in pb_results)[:3000],
                 analysis=analysis, stage="playbook", session_id=self.session_id,
+                **self._test_meta,
             )
             self.history.append({"role": "assistant", "content": analysis})
             return
 
         # 1-b. 멀티스텝 Skill 선택 (Tool Calling → JSON fallback)
-        skill_steps = self._select_skills_multi(message, rag_ctx, prev_ctx)
+        skill_steps = self._select_skills_multi(message, rag_ctx, prev_ctx, exp_ctx)
+
+        # LLM이 target을 잘못 지정했을 수 있으므로 _infer_target_vm으로 보정
+        if skill_steps:
+            inferred_target = self._infer_target_vm(message)
+            for i, (name, params) in enumerate(skill_steps):
+                if name == "shell" and params.get("target") not in self.vm_ips:
+                    params["target"] = inferred_target
+                    skill_steps[i] = (name, params)
 
         if not skill_steps:
             # 1-c. 동적 Playbook 생성 (등록된 Playbook·Skill 매칭 없을 때)
@@ -346,15 +428,30 @@ class BastionAgent:
                     playbook_id="dynamic", success=all(r.get("success") for r in pb_results),
                     output="\n".join(r.get("output", "") for r in pb_results)[:3000],
                     analysis=analysis, stage="dynamic_playbook", session_id=self.session_id,
+                    **self._test_meta,
                 )
                 self.history.append({"role": "assistant", "content": analysis})
                 return
 
-            # 1-d. 순수 Q&A
-            yield {"event": "stage", "stage": "qa"}
-            response = yield from self._stream_qa_events(message)
-            self.history.append({"role": "assistant", "content": response})
-            return
+            # 1-d. shell 자동 fallback — 실행 가능한 작업이면 Q&A 대신 shell로
+            if self._should_execute(message):
+                target = self._infer_target_vm(message)
+                command = self._generate_shell_command(message, target)
+                if command:
+                    skill_steps = [("shell", {"target": target, "command": command})]
+                    # → STAGE 2로 진행
+                else:
+                    # 명령어 생성 실패 → Q&A
+                    yield {"event": "stage", "stage": "qa"}
+                    response = yield from self._stream_qa_events(message)
+                    self.history.append({"role": "assistant", "content": response})
+                    return
+            else:
+                # 순수 Q&A
+                yield {"event": "stage", "stage": "qa"}
+                response = yield from self._stream_qa_events(message)
+                self.history.append({"role": "assistant", "content": response})
+                return
 
         # ══ STAGE 2: EXECUTING — 멀티스텝 Skill ═══════════════════════════
         yield {"event": "stage", "stage": "executing"}
@@ -381,6 +478,10 @@ class BastionAgent:
             pre_ok, pre_msg = self._pre_check(skill_name, params)
             if not pre_ok:
                 yield {"event": "precheck_fail", "skill": skill_name, "message": pre_msg}
+                yield {"event": "skill_skip", "skill": skill_name, "reason": pre_msg}
+                all_results.append({"skill": skill_name, "params": params,
+                                     "success": False, "output": f"pre-check failed: {pre_msg}"})
+                continue
 
             yield {"event": "skill_start", "skill": skill_name, "params": params}
             result = execute_skill(skill_name, params, self.vm_ips, self.ollama_url, self.model)
@@ -396,9 +497,18 @@ class BastionAgent:
                 skill=skill_name, params=params, success=success,
                 exit_code=exit_code, output=output,
                 stage="skill", session_id=self.session_id,
+                **self._test_meta,
             )
             all_results.append({"skill": skill_name, "params": params,
                                  "success": success, "output": output})
+
+            # Experience Learning — 실행 결과를 카테고리 수준으로 일반화하여 축적
+            self.experience.record(
+                message=message, skill=skill_name,
+                target_vm=params.get("target", ""),
+                command=params.get("command", ""),
+                success=success,
+            )
 
             # Asset 상태 업데이트 (probe 계열)
             if skill_name in ("probe_host", "probe_all", "check_suricata",
@@ -409,6 +519,13 @@ class BastionAgent:
         yield {"event": "stage", "stage": "validating"}
         analysis = yield from self._stream_analysis_events(message, all_results)
         self.history.append({"role": "assistant", "content": analysis})
+
+        # Experience → Playbook 자동 승격 (10회마다 체크)
+        stats = self.experience.stats()
+        if stats.get("total_patterns", 0) % 10 == 0 and stats.get("total_patterns", 0) > 0:
+            promoted = self.experience.promote_to_playbook()
+            if promoted:
+                yield {"event": "message", "message": f"경험 → Playbook 승격: {', '.join(promoted)}"}
 
     def get_skills(self) -> list[dict]:
         return [{"name": k, "description": v["description"],
@@ -436,7 +553,7 @@ class BastionAgent:
                 "messages": messages,
                 "stream": True,
                 "options": {"temperature": temperature, "num_predict": max_tokens},
-            }, timeout=120.0) as resp:
+            }, timeout=90.0) as resp:
                 for line in resp.iter_lines():
                     if not line:
                         continue
@@ -454,25 +571,31 @@ class BastionAgent:
 
     def _stream_analysis_events(self, user_msg: str, results: list[dict]):
         """분석 결과를 stream_token 이벤트로 yield. 전체 텍스트 반환 (yield from 사용)."""
-        results_text = "\n".join(
-            f"[{r.get('skill', r.get('name', '?'))}] "
-            f"{'성공' if r.get('success') else '실패'}: "
-            f"{str(r.get('output', ''))[:300]}"
-            for r in results
-        )
+        # 각 스킬 결과를 명확히 구분 — 스킬명, 성패, 전체 출력
+        parts = []
+        for r in results:
+            skill_name = r.get('skill', r.get('name', '?'))
+            status = '성공' if r.get('success') else '실패'
+            output = str(r.get('output', '')).strip()
+            parts.append(f"## 스킬: {skill_name} ({status})\n{output[:2000]}")
+        results_text = "\n\n".join(parts)
+
         messages = [
             {"role": "system",
              "content": (
-                 "너는 사이버보안 전문가 Bastion 에이전트다. "
-                 "실행 결과를 분석하고 3줄 이내로 한국어 요약해. "
-                 "이상 징후가 있으면 다음 행동을 추천해."
+                 "너는 사이버보안 전문가 Bastion 에이전트다.\n"
+                 "규칙:\n"
+                 "1. 출력에 있는 데이터를 있는 그대로 읽어라. 데이터가 있으면 '누락' '잘림' '없음'이라고 하지 마라.\n"
+                 "2. 수치(CPU, 메모리, 디스크 %)를 반드시 포함해 요약해라.\n"
+                 "3. 이상 징후가 있으면 구체적 행동을 추천해라.\n"
+                 "4. 한국어로 답변해라. 5줄 이내."
              )},
             {"role": "user",
-             "content": f"요청: {user_msg}\n\n결과:\n{results_text}\n\n분석:"},
+             "content": f"요청: {user_msg}\n\n실행 결과:\n{results_text}\n\n분석:"},
         ]
         yield {"event": "stream_start", "label": "분석"}
         full = ""
-        for token in self._stream_llm(messages, max_tokens=400, temperature=0.2):
+        for token in self._stream_llm(messages, max_tokens=600, temperature=0.1):
             yield {"event": "stream_token", "token": token}
             full += token
         yield {"event": "stream_end"}
@@ -497,8 +620,100 @@ class BastionAgent:
 
     # ── PLANNING helpers ────────────────────────────────────────────────────
 
+    # 구체적 명령어 패턴 — 이 패턴이 포함되면 Playbook 대신 Skill로 라우팅
+    _CONCRETE_CMD_PATTERNS = re.compile(
+        r'(curl\s|nmap\s|grep\s|sed\s|awk\s|systemctl\s|auditctl\s|chage\s|chmod\s|'
+        r'docker\s|nft\s|hydra\s|nikto\s|sqlmap\s|ping\s|dig\s|nc\s|netcat\s|'
+        r'python3\s|cat\s|echo\s|ls\s|find\s|tail\s|head\s|mkdir\s|useradd\s|usermod\s)',
+        re.IGNORECASE
+    )
+
+    # 실행 가능한 작업 키워드 — 이 키워드가 있으면 Q&A가 아닌 shell 실행
+    _EXEC_KEYWORDS = re.compile(
+        r'(확인해줘|설정해줘|스캔해줘|실행해줘|점검해줘|테스트해줘|수행해줘|'
+        r'조회해줘|추가해줘|삭제해줘|생성해줘|저장해줘|분석해줘|검색해줘|'
+        r'활성화해줘|비활성화해줘|시작해줘|중지해줘|'
+        r'확인하|설정하|스캔하|실행하|점검하|시오)',
+        re.IGNORECASE
+    )
+
+    # VM 추론 패턴
+    _VM_ROUTE_RULES = [
+        (re.compile(r'attacker|nmap|hydra|nikto|sqlmap|searchsploit|metasploit|msfconsole', re.I), "attacker"),
+        (re.compile(r'secu|방화벽|nftables|suricata|IDS|게이트웨이|감사|auditd|audit|패스워드|PAM|SSH.*설정|배너|rsyslog|sshd|login\.defs|chage|계정.*잠금|계정.*관리', re.I), "secu"),
+        (re.compile(r'web|docker|apache|modsecurity|WAF|JuiceShop|DVWA|컨테이너|80|3000|8080', re.I), "web"),
+        (re.compile(r'siem|wazuh|alerts|알림|에이전트.*목록|ossec|로그.*분석', re.I), "siem"),
+        (re.compile(r'manager|ollama|LLM|python3.*스크립트|AI|가드레일|PII', re.I), "manager"),
+    ]
+
+    def _generate_shell_command(self, message: str, target_vm: str) -> str:
+        """자연어 요청을 셸 명령어로 변환. LLM이 적절한 명령어를 생성한다."""
+        # 메시지에 이미 구체적 명령어가 포함되어 있으면 추출
+        cmd_match = self._CONCRETE_CMD_PATTERNS.search(message)
+        if cmd_match:
+            # 명령어 부분 추출 시도 — 전체 메시지가 명령어일 수 있음
+            # "attacker에서 nmap -sV 10.20.30.80 실행해줘" → "nmap -sV 10.20.30.80"
+            import re
+            # VM 언급과 "에서" / "실행해줘" 같은 한국어 제거하고 명령어 부분만
+            cleaned = re.sub(r'^.*?에서\s+', '', message)
+            cleaned = re.sub(r'\s*(실행해줘|확인해줘|해줘|수행해줘|하시오).*$', '', cleaned)
+            if cleaned and self._CONCRETE_CMD_PATTERNS.search(cleaned):
+                return cleaned.strip()
+
+        # LLM으로 명령어 생성
+        vm_info = f"{target_vm} VM (IP: {self.vm_ips.get(target_vm, 'unknown')})"
+        prompt = (
+            f"다음 요청을 {vm_info}에서 실행할 셸 명령어 1줄로 변환하세요.\n"
+            f"명령어만 출력하세요. 설명이나 주석은 붙이지 마세요.\n\n"
+            f"요청: {message}\n\n명령어:"
+        )
+        try:
+            r = httpx.post(f"{self.ollama_url}/api/generate", json={
+                "model": self.model, "prompt": prompt, "stream": False,
+                "options": {"temperature": 0.0, "num_predict": 200},
+            }, timeout=15.0)
+            response = r.json().get("response", "").strip()
+            # 마크다운 코드블록 제거
+            import re
+            response = re.sub(r'^```\w*\n?', '', response)
+            response = re.sub(r'\n?```$', '', response)
+            response = response.strip().split('\n')[0]  # 첫 줄만
+            if response and not response.startswith('#'):
+                return response
+        except Exception:
+            pass
+        return ""
+
+    def _should_execute(self, message: str) -> bool:
+        """메시지가 실행 가능한 작업인지 판단."""
+        # 구체적 명령어가 포함되면 무조건 실행
+        if self._CONCRETE_CMD_PATTERNS.search(message):
+            return True
+        # 실행 키워드가 포함되면 실행
+        if self._EXEC_KEYWORDS.search(message):
+            return True
+        return False
+
+    def _infer_target_vm(self, message: str) -> str:
+        """메시지에서 대상 VM role을 추론."""
+        msg_lower = message.lower()
+        # 명시적 VM 언급 확인
+        for role in ["attacker", "secu", "web", "siem", "manager"]:
+            if role in msg_lower:
+                return role
+        # 키워드 패턴 매칭
+        for pattern, role in self._VM_ROUTE_RULES:
+            if pattern.search(message):
+                return role
+        return "attacker"  # 기본값
+
     def _select_playbook(self, message: str) -> str | None:
-        """LLM으로 정적 Playbook 매칭."""
+        """LLM으로 정적 Playbook 매칭.
+        구체적 명령어가 포함된 요청은 Playbook이 아닌 Skill로 라우팅."""
+        # 구체적 명령어가 포함되면 Playbook 매칭 건너뜀
+        if self._CONCRETE_CMD_PATTERNS.search(message):
+            return None
+
         playbooks = list_playbooks()
         if not playbooks:
             return None
@@ -507,7 +722,8 @@ class BastionAgent:
             for p in playbooks
         )
         prompt = (
-            f"다음 Playbook 중 사용자 요청에 맞는 것을 선택하세요.\n"
+            f"다음 Playbook 중 사용자 요청에 정확히 맞는 것을 선택하세요.\n"
+            f"구체적인 명령어 실행 요청이면 반드시 'none'을 출력하세요.\n"
             f"없으면 정확히 'none' 만 출력하세요. 있으면 playbook_id 만 출력하세요.\n\n"
             f"Playbook:\n{pb_lines}\n\n"
             f"요청: {message}\n\nplaybook_id:"
@@ -516,7 +732,7 @@ class BastionAgent:
             r = httpx.post(f"{self.ollama_url}/api/generate", json={
                 "model": self.model, "prompt": prompt, "stream": False,
                 "options": {"temperature": 0.0, "num_predict": 20},
-            }, timeout=30.0)
+            }, timeout=10.0)
             response = r.json().get("response", "").strip().lower()
             valid_ids = {p["playbook_id"] for p in playbooks}
             for word in re.split(r'[\s,]+', response):
@@ -527,9 +743,9 @@ class BastionAgent:
         return None
 
     def _select_skills_multi(self, message: str, rag_ctx: str,
-                             prev_ctx: str) -> list[tuple[str, dict]]:
+                             prev_ctx: str, exp_ctx: str = "") -> list[tuple[str, dict]]:
         """멀티스텝 Skill 선택 — Tool Calling → JSON 배열 fallback."""
-        system = build_planning_prompt(self.vm_ips, rag_ctx, prev_ctx)
+        system = build_planning_prompt(self.vm_ips, rag_ctx, prev_ctx, learned_context=exp_ctx)
         messages = [{"role": "system", "content": system}] + self.history[-8:]
 
         # ── 1차: Ollama Tool Calling (여러 tool_calls 지원) ────────────────
@@ -540,7 +756,7 @@ class BastionAgent:
                 "tools": skills_to_ollama_tools(),
                 "stream": False,
                 "options": {"temperature": 0.1, "num_predict": 400},
-            }, timeout=60.0)
+            }, timeout=20.0)
             msg = r.json().get("message", {})
             tool_calls = msg.get("tool_calls", [])
             if tool_calls:
@@ -576,7 +792,7 @@ class BastionAgent:
                 "stream": False,
                 "format": "json",
                 "options": {"temperature": 0.1, "num_predict": 400},
-            }, timeout=60.0)
+            }, timeout=20.0)
             content = r.json().get("message", {}).get("content", "")
             items = extract_json_array(content)
             if items is not None:
@@ -619,7 +835,7 @@ class BastionAgent:
                 "stream": False,
                 "format": "json",
                 "options": {"temperature": 0.0, "num_predict": 600},
-            }, timeout=45.0)
+            }, timeout=15.0)
             content = r.json().get("message", {}).get("content", "")
             items = extract_json_array(content)
             if items is not None:
@@ -651,6 +867,14 @@ class BastionAgent:
             self.evidence_db.add(
                 skill=skill_name, params=params, success=success,
                 output=output, stage="dynamic", session_id=self.session_id,
+                **self._test_meta,
+            )
+            # Experience Learning
+            self.experience.record(
+                message=name, skill=skill_name,
+                target_vm=params.get("target", ""),
+                command=params.get("command", ""),
+                success=success,
             )
             yield {"event": "step_done", "step": i, "name": name,
                    "success": success, "output": output}
@@ -748,6 +972,17 @@ class BastionAgent:
 
     # ── Asset 추적 ───────────────────────────────────────────────────────────
 
+    def _ip_to_role(self, ip: str) -> str:
+        """IP → role 역방향 조회."""
+        for role, r_ip in self.vm_ips.items():
+            if r_ip == ip:
+                return role
+        from bastion import INTERNAL_IPS
+        for role, r_ip in INTERNAL_IPS.items():
+            if r_ip == ip:
+                return role
+        return ip  # 못 찾으면 IP 그대로
+
     def _update_assets_from_result(self, skill_name: str, params: dict, success: bool):
         """Skill 실행 결과로 Asset 상태 업데이트."""
         from bastion import INTERNAL_IPS
@@ -757,8 +992,12 @@ class BastionAgent:
                 self.evidence_db.update_asset(role, ip, status)
         elif skill_name == "probe_host":
             target = params.get("target", "")
-            ip = self.vm_ips.get(target, INTERNAL_IPS.get(target, target))
-            role = target if target in self.vm_ips else target
+            # target이 IP일 수도 있으므로 role로 역조회
+            if target in self.vm_ips:
+                role, ip = target, self.vm_ips[target]
+            else:
+                ip = target
+                role = self._ip_to_role(ip)
             self.evidence_db.update_asset(role, ip, status)
         elif skill_name == "check_suricata":
             ip = self.vm_ips.get("secu", INTERNAL_IPS.get("secu", ""))
@@ -769,3 +1008,9 @@ class BastionAgent:
         elif skill_name == "check_modsecurity":
             ip = self.vm_ips.get("web", INTERNAL_IPS.get("web", ""))
             self.evidence_db.update_asset("web", ip, status, "ModSecurity 점검")
+        elif skill_name in ("probe_host", "onboard"):
+            role = params.get("role") or params.get("target", "")
+            ip = params.get("ip") or self.vm_ips.get(role, INTERNAL_IPS.get(role, ""))
+            if role and ip:
+                notes = "온보딩 완료" if skill_name == "onboard" else ""
+                self.evidence_db.update_asset(role, ip, status, notes)

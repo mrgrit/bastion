@@ -19,9 +19,15 @@ from typing import Any
 import httpx
 
 # ── Config ────────────────────────────────────────
-LLM_BASE_URL = os.getenv("LLM_BASE_URL", "http://localhost:11434")
-LLM_MANAGER_MODEL = os.getenv("LLM_MANAGER_MODEL", "gpt-oss:120b")
-LLM_SUBAGENT_MODEL = os.getenv("LLM_SUBAGENT_MODEL", "gemma3:4b")
+def _require_env(key: str) -> str:
+    val = os.getenv(key)
+    if not val:
+        raise ValueError(f"{key} is not set — add it to .env")
+    return val
+
+LLM_BASE_URL       = _require_env("LLM_BASE_URL")
+LLM_MANAGER_MODEL  = _require_env("LLM_MANAGER_MODEL")
+LLM_SUBAGENT_MODEL = _require_env("LLM_SUBAGENT_MODEL")
 # bastion TUI는 manager 모델 사용
 LLM_MODEL = LLM_MANAGER_MODEL
 SUBAGENT_PORT = 8002
@@ -172,6 +178,10 @@ table inet filter {
     }
 }
 table ip nat {
+    chain prerouting {
+        type nat hook prerouting priority -100;
+        iifname "$EXTERNAL" tcp dport 80 dnat to 10.20.30.80:80
+    }
     chain postrouting {
         type nat hook postrouting priority 100;
         oifname "$EXTERNAL" masquerade
@@ -187,6 +197,34 @@ cat > /etc/rsyslog.d/50-ccc-siem.conf << 'RSEOF'
 *.* @@10.20.30.100:514
 RSEOF
 systemctl restart rsyslog
+""",
+        # ── dnsmasq 내부 DNS ──
+        """
+apt-get install -y dnsmasq
+# systemd-resolved stub 비활성화 (포트 53 충돌 방지)
+mkdir -p /etc/systemd/resolved.conf.d
+cat > /etc/systemd/resolved.conf.d/no-stub.conf << 'RESEOF'
+[Resolve]
+DNSStubListener=no
+RESEOF
+systemctl restart systemd-resolved 2>/dev/null || true
+# dnsmasq 설정
+cat > /etc/dnsmasq.d/ccc.conf << 'DNSEOF'
+domain-needed
+bogus-priv
+no-resolv
+bind-dynamic
+listen-address=127.0.0.1,10.20.30.1
+server=8.8.8.8
+server=1.1.1.1
+address=/attacker/10.20.30.201
+address=/web/10.20.30.80
+address=/siem/10.20.30.100
+address=/manager/10.20.30.200
+address=/secu/10.20.30.1
+address=/windows/10.20.30.50
+DNSEOF
+systemctl enable --now dnsmasq
 """,
     ],
     "web": [
@@ -223,6 +261,20 @@ docker rm -f juiceshop dvwa 2>/dev/null || true
 docker run -d --restart=always --name juiceshop -p 3000:3000 bkimminich/juice-shop 2>/dev/null || true
 docker run -d --restart=always --name dvwa -p 8080:80 vulnerables/web-dvwa 2>/dev/null || true
 """,
+        # ── Apache → JuiceShop 리버스 프록시 (포트 80) ──
+        """
+cat > /etc/apache2/sites-available/juiceshop.conf << 'APEOF'
+<VirtualHost *:80>
+    ProxyPreserveHost On
+    ProxyPass / http://localhost:3000/
+    ProxyPassReverse / http://localhost:3000/
+    Header always set X-Forwarded-Proto http
+</VirtualHost>
+APEOF
+a2dissite 000-default 2>/dev/null || true
+a2ensite juiceshop
+systemctl reload apache2
+""",
         # ── rsyslog → SIEM ──
         """
 cat > /etc/rsyslog.d/50-ccc-siem.conf << 'RSEOF'
@@ -234,16 +286,31 @@ systemctl restart rsyslog
         WAZUH_AGENT_INSTALL,
     ],
     "siem": [
-        # ── Wazuh Manager 설치 ──
-        "apt-get update -y",
-        "apt-get install -y curl apt-transport-https gnupg2",
+        # ── Wazuh All-in-One 공식 설치 (Manager + Indexer + Dashboard + Filebeat) ──
+        "apt-get update -y && apt-get install -y curl apt-transport-https gnupg2",
+        # 공식 설치 스크립트 다운로드
         """
-curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | gpg --no-default-keyring --keyring gnupg-ring:/usr/share/keyrings/wazuh.gpg --import 2>/dev/null && chmod 644 /usr/share/keyrings/wazuh.gpg
-echo 'deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main' > /etc/apt/sources.list.d/wazuh.list
-apt-get update -y
-apt-get install -y wazuh-manager 2>/dev/null || true
+cd /tmp
+curl -sO https://packages.wazuh.com/4.10/wazuh-install.sh
+curl -sO https://packages.wazuh.com/4.10/config.yml
+# config.yml 단일 노드 설정
+cat > /tmp/config.yml << 'CFGEOF'
+nodes:
+  indexer:
+    - name: node-1
+      ip: 127.0.0.1
+  server:
+    - name: wazuh-1
+      ip: 127.0.0.1
+  dashboard:
+    - name: dashboard
+      ip: 127.0.0.1
+CFGEOF
+chmod +x /tmp/wazuh-install.sh
 """,
-        # ── Wazuh 기본 설정: syslog 리스너 + 에이전트 등록 ──
+        # All-in-One 설치 실행 (--ignore-check: 리소스 체크 무시)
+        "cd /tmp && bash wazuh-install.sh -a --ignore-check 2>&1 | tail -20",
+        # ── 설치 후 추가 설정: syslog + agent 등록 ──
         """
 if [ -f /var/ossec/etc/ossec.conf ]; then
     # syslog 리스너 활성화 (514/tcp)
@@ -251,15 +318,14 @@ if [ -f /var/ossec/etc/ossec.conf ]; then
         sed -i '/<\\/ossec_config>/i \\
   <remote>\\n    <connection>syslog</connection>\\n    <port>514</port>\\n    <protocol>tcp</protocol>\\n    <allowed-ips>10.20.30.0/24</allowed-ips>\\n  </remote>' /var/ossec/etc/ossec.conf
     fi
-    # 에이전트 자동 등록 활성화
+    # 에이전트 자동 등록
     if ! grep -q '<auth>' /var/ossec/etc/ossec.conf; then
         sed -i '/<\\/ossec_config>/i \\
   <auth>\\n    <disabled>no</disabled>\\n    <port>1515</port>\\n    <use_password>yes</use_password>\\n  </auth>' /var/ossec/etc/ossec.conf
     fi
+    echo 'ccc2026' > /var/ossec/etc/authd.pass 2>/dev/null || true
+    systemctl restart wazuh-manager 2>/dev/null || true
 fi
-# 에이전트 등록 비밀번호 설정
-echo 'ccc2026' > /var/ossec/etc/authd.pass 2>/dev/null || true
-systemctl enable --now wazuh-manager 2>/dev/null || true
 """,
         # ── rsyslog 수신 설정 ──
         """
@@ -268,6 +334,95 @@ module(load="imtcp")
 input(type="imtcp" port="514")
 RSEOF
 systemctl restart rsyslog 2>/dev/null || true
+""",
+        # ── OpenCTI 설치 (Docker) ──
+        """
+# Docker 설치
+if ! command -v docker &>/dev/null; then
+    curl -fsSL https://get.docker.com | sh
+    usermod -aG docker ccc 2>/dev/null || true
+fi
+systemctl enable --now docker
+
+# OpenCTI docker-compose
+mkdir -p /opt/opencti
+cat > /opt/opencti/docker-compose.yml << 'OCEOF'
+version: '3'
+services:
+  redis:
+    image: redis:7
+    restart: always
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    restart: always
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+  minio:
+    image: minio/minio
+    environment:
+      MINIO_ROOT_USER: opencti
+      MINIO_ROOT_PASSWORD: opencti2026
+    command: server /data --console-address ":9001"
+    restart: always
+  rabbitmq:
+    image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: opencti
+      RABBITMQ_DEFAULT_PASS: opencti2026
+    restart: always
+  opencti:
+    image: opencti/platform:6.4.4
+    depends_on:
+      - redis
+      - elasticsearch
+      - minio
+      - rabbitmq
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_OPTIONS=--max-old-space-size=2048
+      - APP__PORT=8080
+      - APP__BASE_URL=http://localhost:8080
+      - APP__ADMIN__EMAIL=admin@opencti.io
+      - APP__ADMIN__PASSWORD=CCC2026!
+      - APP__ADMIN__TOKEN=ccc-opencti-token-2026
+      - REDIS__HOSTNAME=redis
+      - ELASTICSEARCH__URL=http://elasticsearch:9200
+      - MINIO__ENDPOINT=minio
+      - MINIO__PORT=9000
+      - MINIO__USE_SSL=false
+      - MINIO__ACCESS_KEY=opencti
+      - MINIO__SECRET_KEY=opencti2026
+      - RABBITMQ__HOSTNAME=rabbitmq
+      - RABBITMQ__PORT=5672
+      - RABBITMQ__USERNAME=opencti
+      - RABBITMQ__PASSWORD=opencti2026
+      - SMTP__HOSTNAME=localhost
+      - SMTP__PORT=25
+    restart: always
+  worker:
+    image: opencti/worker:6.4.4
+    depends_on:
+      - opencti
+    environment:
+      - OPENCTI_URL=http://opencti:8080
+      - OPENCTI_TOKEN=ccc-opencti-token-2026
+    restart: always
+OCEOF
+
+# vm.max_map_count (Elasticsearch 요구)
+sysctl -w vm.max_map_count=262144
+echo 'vm.max_map_count=262144' >> /etc/sysctl.conf 2>/dev/null || true
+
+# OpenCTI 시작 (백그라운드, 이미지 pull 오래 걸림)
+cd /opt/opencti && docker compose up -d 2>&1 | tail -10
+echo 'OpenCTI 시작됨 — http://SIEM_IP:8080 (admin@opencti.io / CCC2026!)'
 """,
     ],
     "manager": [
@@ -770,7 +925,7 @@ fi
         )
 
     if role_cmds:
-        t = 300 if role in ("manager", "siem") or (role == "manager" and not gpu_url) else 180
+        t = 600 if role == "siem" else 300 if role == "manager" and not gpu_url else 180
         r = ssh_run(ip, user, password, role_cmds, timeout=t)
         results["steps"].append({"step": "role_setup", **r})
         # role_setup 실패는 경고만 (SubAgent는 이미 설치됨, 계속 진행)
@@ -789,12 +944,21 @@ fi
     r = ssh_run(ip, user, password, [internal_script])
     results["steps"].append({"step": "internal_ip_setup", "ip": internal_ip, **r})
 
-    # 4. NAT disable + Security GW 경유
+    # 4. NAT disable + Security GW 경유 + DNS 설정
     if role != "secu":
         nat_script = f"""
 ip route del default 2>/dev/null || true
 ip route add default via {SECU_GW} 2>/dev/null || true
 echo "Default gateway set to {SECU_GW}"
+# DNS → secu
+mkdir -p /etc/systemd/resolved.conf.d
+cat > /etc/systemd/resolved.conf.d/ccc.conf << 'RESEOF'
+[Resolve]
+DNS=10.20.30.1
+FallbackDNS=8.8.8.8
+RESEOF
+systemctl restart systemd-resolved 2>/dev/null || true
+echo "DNS set to {SECU_GW}"
 """
         r = ssh_run(ip, user, password, [nat_script])
         results["steps"].append({"step": "nat_disable_gw_route", "gateway": SECU_GW, **r})

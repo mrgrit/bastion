@@ -124,13 +124,11 @@ def main():
         from rich import box
 
     from bastion.agent import BastionAgent, sanitize_text
+    from bastion import LLM_BASE_URL, LLM_MANAGER_MODEL
 
     console = Console()
     vm_ips = get_vm_ips()
-    ollama_url = os.getenv("LLM_BASE_URL", "http://localhost:11434")
-    model = os.getenv("LLM_MANAGER_MODEL", os.getenv("LLM_MODEL", "gpt-oss:120b"))
-
-    agent = BastionAgent(vm_ips=vm_ips, ollama_url=ollama_url, model=model)
+    agent = BastionAgent(vm_ips=vm_ips, ollama_url=LLM_BASE_URL, model=LLM_MANAGER_MODEL)
 
     # ── 배너 ──────────────────────────────────────────────────────────────
     console.print(Text(BANNER, style="bold orange1"))
@@ -470,4 +468,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
