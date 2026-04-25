@@ -13,7 +13,28 @@ import yaml
 from bastion.skills import execute_skill, SKILLS
 
 
-PLAYBOOKS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "contents", "playbooks")
+def _resolve_playbooks_dir() -> str:
+    """레이아웃별 playbook 경로 자동 감지.
+    - CCC nested: packages/bastion/playbook.py → ../../contents/playbooks
+    - bastion flat: bastion/playbook.py → ../contents/playbooks
+    - 환경변수 override: BASTION_PLAYBOOKS_DIR
+    """
+    override = os.getenv("BASTION_PLAYBOOKS_DIR", "").strip()
+    if override and os.path.isdir(override):
+        return override
+    here = os.path.dirname(__file__)
+    candidates = [
+        os.path.normpath(os.path.join(here, "..", "..", "contents", "playbooks")),  # CCC
+        os.path.normpath(os.path.join(here, "..", "contents", "playbooks")),         # bastion flat
+    ]
+    for p in candidates:
+        if os.path.isdir(p):
+            return p
+    # 둘 다 없으면 첫 후보 반환 (디렉토리 자동 생성 시 그쪽으로)
+    return candidates[0]
+
+
+PLAYBOOKS_DIR = _resolve_playbooks_dir()
 
 
 def load_playbook(playbook_id: str) -> dict | None:

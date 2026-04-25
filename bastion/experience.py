@@ -329,9 +329,9 @@ class ExperienceLearner:
         """
         import os, yaml
         if not playbooks_dir:
-            playbooks_dir = os.path.join(
-                os.path.dirname(__file__), "..", "..", "contents", "playbooks"
-            )
+            # _resolve_playbooks_dir 재사용 — CCC/flat 양 레이아웃 자동 감지
+            from bastion.playbook import PLAYBOOKS_DIR as _PD
+            playbooks_dir = _PD
         os.makedirs(playbooks_dir, exist_ok=True)
 
         # 이미 존재하는 playbook_id 수집
