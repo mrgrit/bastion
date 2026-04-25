@@ -193,6 +193,84 @@ def compact_all_pb(min_experiences: int = 5, limit_playbooks: int = 50):
                        limit_playbooks=limit_playbooks)
 
 
+# ── Knowledge Graph 조회 (KG-6) ────────────────────────────────────────────
+
+@app.get("/graph/stats")
+def graph_stats():
+    """노드/엣지 카운트 + 최근 변경."""
+    from bastion.graph import get_graph
+    return get_graph().stats()
+
+
+@app.get("/graph/nodes")
+def graph_nodes(types: str = "", limit: int = 500):
+    """모든 노드 메타. types 콤마 구분 필터.
+
+    UI 의 그래프 시각화 용 — content/embedding 제외 메타만.
+    """
+    from bastion.graph import get_graph
+    type_list = [t.strip() for t in types.split(",") if t.strip()] if types else None
+    g = get_graph()
+    nodes = g.all_nodes(types=type_list)[:limit]
+    return {"nodes": nodes, "count": len(nodes)}
+
+
+@app.get("/graph/edges")
+def graph_edges(types: str = ""):
+    """모든 엣지. types 필터."""
+    from bastion.graph import get_graph
+    type_list = [t.strip() for t in types.split(",") if t.strip()] if types else None
+    g = get_graph()
+    edges = g.all_edges(types=type_list)
+    return {"edges": edges, "count": len(edges)}
+
+
+@app.get("/graph/node/{node_id}")
+def graph_node_detail(node_id: str):
+    """노드 풀 콘텐츠 + backlinks (incoming edges 그룹) + neighbors."""
+    from bastion.graph import get_graph
+    g = get_graph()
+    node = g.get_node(node_id)
+    if not node:
+        raise HTTPException(404, f"node not found: {node_id}")
+    backlinks = g.backlinks(node_id)
+    out_edges = g.neighbors(node_id, direction="out")
+    return {"node": node, "backlinks": backlinks, "out_edges": out_edges}
+
+
+@app.get("/graph/search")
+def graph_search(q: str = "", type: str = "", limit: int = 30):
+    """전문 검색 (FTS5)."""
+    from bastion.graph import get_graph
+    if not q.strip():
+        return {"results": []}
+    g = get_graph()
+    results = g.search_fts(q, type=type or None, limit=limit)
+    return {"results": results, "count": len(results)}
+
+
+@app.get("/graph/lineage/{node_id}")
+def graph_lineage(node_id: str, max_depth: int = 3):
+    """supersedes / depends_on 체인 — playbook 진화 경로 추적."""
+    from bastion.graph import get_graph
+    g = get_graph()
+    node = g.get_node(node_id)
+    if not node:
+        raise HTTPException(404, f"node not found: {node_id}")
+    lineage = g.traverse(node_id, max_depth=max_depth,
+                         edge_types=["supersedes", "depends_on", "often_chains"])
+    return {"start": node, "lineage": list(lineage.values())}
+
+
+@app.delete("/graph/node/{node_id}")
+def graph_delete_node(node_id: str):
+    """노드 삭제 (관련 엣지 cascade) — admin 용."""
+    from bastion.graph import get_graph
+    g = get_graph()
+    deleted = g.delete_node(node_id)
+    return {"deleted": deleted, "node_id": node_id}
+
+
 @app.get("/assets")
 def assets():
     return agent.evidence_db.get_assets()
