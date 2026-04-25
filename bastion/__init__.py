@@ -846,6 +846,18 @@ if ($listening) { Write-Host "SubAgent running on :8002" } else { Write-Host "WA
     except Exception as e:
         results["steps"].append({"step": "subagent_install", "success": False, "stderr": str(e)})
 
+    # 1b. 시각/타임존 설정 — Korea Standard Time + NTP 동기화
+    win_tz = (
+        'tzutil /s "Korea Standard Time"; '
+        'sc config w32time start= auto 2>$null; '
+        'net start w32time 2>$null; '
+        'w32tm /config /manualpeerlist:"time.windows.com,0x1 time.google.com,0x1" /syncfromflags:manual /reliable:yes /update 2>$null; '
+        'w32tm /resync 2>$null; '
+        'w32tm /tz; w32tm /query /status 2>$null'
+    )
+    r_tz = _win_ssh_run(ip, user, password, win_tz)
+    results["steps"].append({"step": "time_sync", **r_tz})
+
     # 2. 내부 IP 설정
     script = WIN_INTERNAL_IP_SCRIPT.format(internal_ip=internal_ip)
     r = _win_ssh_run(ip, user, password, script)
@@ -931,6 +943,26 @@ fi
         results["healthy"] = False
         results["error"] = f"SubAgent 설치 실패: {r.get('stderr', '')[:300]}"
         return results
+
+    # 1b. 시각/타임존 설정 — Asia/Seoul (UTC+9) + NTP 동기화
+    # 모든 VM 의 로그·이벤트 시간을 일관되게 만들어 SIEM 상관분석·conntrack·디지털 포렌식의 시계 어긋남 방지.
+    tz_script = """
+timedatectl set-timezone Asia/Seoul 2>/dev/null || true
+# systemd-timesyncd 활성화 (Ubuntu/Debian 기본)
+if systemctl list-unit-files 2>/dev/null | grep -q '^systemd-timesyncd'; then
+    systemctl enable --now systemd-timesyncd 2>/dev/null || true
+    timedatectl set-ntp true 2>/dev/null || true
+elif command -v chronyd >/dev/null 2>&1; then
+    systemctl enable --now chronyd 2>/dev/null || systemctl enable --now chrony 2>/dev/null || true
+else
+    # systemd-timesyncd 없는 경우 chrony 설치 시도
+    apt-get install -y chrony 2>/dev/null && systemctl enable --now chrony 2>/dev/null || true
+fi
+echo "[time] 현재 시각 + 동기화 상태:"
+timedatectl 2>/dev/null | grep -E 'Time zone|System clock synchronized|NTP service' || date
+"""
+    r_tz = ssh_run(ip, user, password, [tz_script], timeout=60)
+    results["steps"].append({"step": "time_sync", **r_tz})
 
     # 2. 역할별 소프트웨어 설치
     role_cmds = list(ROLE_SETUP_SCRIPTS.get(role, []))
