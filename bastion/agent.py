@@ -335,7 +335,8 @@ class BastionAgent:
 
     def __init__(self, vm_ips: dict[str, str],
                  ollama_url: str = "", model: str = "",
-                 knowledge_dir: str = "", evidence_db: str = ""):
+                 knowledge_dir: str = "", evidence_db: str = "",
+                 approval_mode: str = "normal"):
         self.vm_ips = vm_ips
         from bastion import LLM_BASE_URL, LLM_MANAGER_MODEL
         self.ollama_url = (ollama_url or LLM_BASE_URL).rstrip("/")
@@ -344,6 +345,8 @@ class BastionAgent:
         self.session_id = f"s{int(time.time())}"
         self.evidence_db = EvidenceDB(evidence_db)
         self._test_meta: dict = {}  # 테스트 메타데이터 (course, lab_id, step_order, test_session)
+        # 승인 모드: normal / danger_danger / danger_danger_danger
+        self.approval_mode = approval_mode
 
         # Experience Learning Layer — 카테고리 수준 일반화 경험 학습
         from bastion.experience import ExperienceLearner
@@ -624,11 +627,11 @@ class BastionAgent:
             params = self._enrich_params(skill_name, params)
 
             risk = self._assess_risk(skill_name, params)
-            if risk == "high":
+            if risk in ("high", "critical"):
                 yield {"event": "risk_warning", "skill": skill_name, "risk": risk}
 
             skill_def = SKILLS.get(skill_name, {})
-            if (skill_def.get("requires_approval") or risk == "high") and approval_callback:
+            if self._should_ask_approval(risk, skill_def) and approval_callback:
                 if not approval_callback(skill_name, skill_name, params):
                     yield {"event": "skill_skip", "skill": skill_name, "reason": "User denied"}
                     continue
@@ -1174,12 +1177,33 @@ class BastionAgent:
                     approval_callback=None) -> Generator[dict, None, None]:
         """ReAct 루프: LLM ↔ tool 결과 교환. 1회 plan 모델 폐기.
 
+        KG-4: 매 chat 시작 시 lookup → reuse/adapt/new 결정. reuse/adapt 면
+        매칭된 playbook 의 plan + reasoning 을 system prompt 에 주입해 LLM 이
+        그 plan 을 따라가도록 유도. new 면 자유 ReAct.
+
         매 turn:
           1) LLM 호출 (tools 포함) → tool_calls 또는 final content
           2) tool_calls 있으면 실행 → tool_result 를 messages 에 push → 다음 turn
           3) tool_calls 없으면 self-verify → 충족이면 종료, 미흡이면 1회 재촉
         """
         sys_prompt = self._build_react_system_prompt()
+
+        # KG-4: playbook lookup → reuse/adapt/new 결정
+        lookup_result = None
+        try:
+            from bastion.lookup import decide, build_lookup_prompt
+            lookup_result = decide(message, self.ollama_url, self.model)
+            yield {"event": "lookup_decision",
+                   "decision": lookup_result.get("decision"),
+                   "playbook_id": lookup_result.get("playbook_id", ""),
+                   "confidence": lookup_result.get("confidence", 0),
+                   "reason": lookup_result.get("reason", "")}
+            inject = build_lookup_prompt(lookup_result)
+            if inject:
+                sys_prompt += "\n\n## [lookup result — 매칭된 playbook 활용]\n" + inject
+        except Exception as _e:
+            yield {"event": "lookup_error", "error": str(_e)[:200]}
+
         # 메시지 빌드. 컨텍스트(rag/prev/exp)는 system 에 추가.
         ctx_lines = []
         if rag_ctx:
@@ -1300,12 +1324,12 @@ class BastionAgent:
                     params["target"] = self._infer_target_vm(message)
                     params = self._enrich_params(skill_name, params)
 
-                # 위험 평가 + 승인
+                # 위험 평가 + 승인 — 명령 내용 기반 + approval_mode 적용
                 risk = self._assess_risk(skill_name, params)
-                if risk == "high":
+                if risk in ("high", "critical"):
                     yield {"event": "risk_warning", "skill": skill_name, "risk": risk}
                 sk_def = SKILLS.get(skill_name, {})
-                if (sk_def.get("requires_approval") or risk == "high") and approval_callback:
+                if self._should_ask_approval(risk, sk_def) and approval_callback:
                     if not approval_callback(skill_name, skill_name, params):
                         yield {"event": "skill_skip", "skill": skill_name, "reason": "denied"}
                         msgs.append({"role": "tool", "content": "[error] approval denied"})
@@ -1399,16 +1423,18 @@ class BastionAgent:
 
         self.history.append({"role": "assistant", "content": last_assistant_content})
 
-        # KG-3: ReAct trace → Playbook + Experience 노드 등록
+        # KG-3 + KG-4: ReAct trace → Playbook + Experience 노드 등록
+        # lookup_result 가 reuse/adapt 면 매칭된 playbook 의 exec_history 갱신,
+        # new 면 신규 playbook 생성.
         try:
             self._persist_react_run_to_graph(
                 message=message,
                 turn_traces=turn_traces,
                 tool_outputs=all_tool_outputs,
                 final_content=last_assistant_content,
+                lookup_result=lookup_result,
             )
         except Exception as _e:
-            # 그래프 실패가 retest/실행 자체를 막아서는 안 됨
             yield {"event": "graph_persist_error", "error": str(_e)[:200]}
 
         # Experience → Playbook 자동 승격
@@ -1425,7 +1451,8 @@ class BastionAgent:
     def _persist_react_run_to_graph(self, message: str,
                                     turn_traces: list[dict],
                                     tool_outputs: list[dict],
-                                    final_content: str) -> None:
+                                    final_content: str,
+                                    lookup_result: dict | None = None) -> None:
         """ReAct 한 사이클의 결과를 KnowledgeGraph 에 기록.
 
         - tool 한 번도 안 돌았으면 skip (학습 가치 적음)
@@ -1458,9 +1485,9 @@ class BastionAgent:
 
         # 사용된 skill 집합
         used_skills = sorted({t["skill"] for t in tool_outputs if t.get("skill")})
-        # 대상 VM
+        # 대상 VM (빈 문자열 제거)
         used_targets = sorted({(t.get("params") or {}).get("target", "")
-                               for t in tool_outputs}) - {""}
+                               for t in tool_outputs if (t.get("params") or {}).get("target")})
         # 성공 여부
         any_success = any(t.get("success") for t in tool_outputs)
 
@@ -1470,7 +1497,15 @@ class BastionAgent:
         sig_str = (message[:200] + "|" + ",".join(used_skills)).encode("utf-8", "ignore")
         sig = hashlib.sha1(sig_str).hexdigest()[:10]
         slug = _slugify(message[:50]) or "untitled"
-        pb_id = f"pb-auto-{slug}-{sig}"
+        # KG-4: lookup 이 reuse/adapt 라면 그 playbook 사용
+        if lookup_result and lookup_result.get("decision") in ("reuse", "adapt"):
+            matched_id = lookup_result.get("playbook_id", "")
+            if matched_id:
+                pb_id = matched_id if matched_id.startswith("pb-") else f"pb-{matched_id}"
+            else:
+                pb_id = f"pb-auto-{slug}-{sig}"
+        else:
+            pb_id = f"pb-auto-{slug}-{sig}"
 
         # ─ playbook reasoning 합성 (turn_traces 에서) ─
         first_turn_text = (turn_traces[0].get("content", "") if turn_traces else "")[:1500]
@@ -2210,12 +2245,147 @@ class BastionAgent:
         ok = h.get("status") == "healthy"
         return ok, f"{ip} {'healthy' if ok else 'unreachable'}"
 
+    # 조회성 명령 prefix — 정확 매치 (앞부터 소문자 strip 후)
+    _SAFE_COMMAND_HEADS = (
+        "ls", "cat", "less", "more", "head", "tail", "grep", "egrep", "fgrep",
+        "find", "locate", "ps", "pgrep", "top", "htop", "free", "df", "du",
+        "stat", "file", "which", "whereis", "type", "whoami", "id", "groups",
+        "hostname", "hostnamectl", "date", "uptime", "uname",
+        "echo", "env", "printenv", "pwd", "history",
+        "diff", "cmp", "md5sum", "sha256sum", "sha1sum", "sha512sum",
+        "b2sum", "cksum", "wc",
+        "awk", "sed", "sort", "uniq", "cut", "tr", "rev", "tac", "comm",
+        "paste", "fold", "column", "expand", "unexpand", "nl",
+        "ip", "ss", "netstat", "lsof", "arp", "route",
+        "ping", "traceroute", "tracepath", "mtr", "dig", "nslookup", "host",
+        "whatweb", "curl", "wget",
+        "strings", "objdump", "readelf", "nm", "ldd", "file",
+        "journalctl", "dmesg",
+        "openssl", "base64", "xxd", "hexdump", "od",
+        "python3", "perl", "ruby", "node",
+        "git", "tree",
+    )
+    _SAFE_PREFIX_RE = re.compile(
+        r"^\s*("
+        r"systemctl\s+(status|is-active|is-enabled|list-units|list-unit-files|list-timers|cat|show|get-default)|"
+        r"service\s+\S+\s+status|"
+        r"docker\s+(ps|images|logs|inspect|version|info|stats|top|events|history)|"
+        r"nft\s+(list|export|--check)|"
+        r"iptables\s+-[LSnvNZ]|"
+        r"firewall-cmd\s+--list|"
+        r"nmap\s+(-sP|-sn|-sL|-V|--version)|"
+        r"jq\s|"
+        r"yq\s"
+        r")",
+        re.IGNORECASE,
+    )
+    # critical (rm -rf, dd to disk, fork bomb, ...)
+    _CRITICAL_PATTERNS = [
+        re.compile(p, re.IGNORECASE) for p in [
+            r"\brm\s+(-[rR]?[fF]|-[fF][rR])",
+            r"\brm\s+--no-preserve",
+            r"\bkill\s+-9\b", r"\bkillall\b", r"\bpkill\s+-9\b",
+            r"\bdd\b.*\bof=/dev/[hsv]d[a-z]",
+            r"\bmkfs\.",
+            r"\bshutdown\b", r"\breboot\b", r"\bhalt\b", r"\bpoweroff\b",
+            r":\s*\(\)\s*\{[^}]*\}\s*;\s*:",  # fork bomb
+            r"\bchmod\s+(-R\s+)?[0-7]?7{2,3}\b\s+/\s*$",
+            r"\bchown\s+.*\s+/$",
+            r">\s*/dev/[hsv]d[a-z]",
+            r"\biptables\s+-F\b", r"\bnft\s+flush\b",
+            r"\bsystemctl\s+(stop|disable|mask)\s+(sshd|ssh|wazuh|suricata|nftables|systemd-)",
+            r"\buserdel\b", r"\bgroupdel\b",
+            r"\bDROP\s+(TABLE|DATABASE|SCHEMA)\b",
+            r"\bTRUNCATE\s+TABLE\b",
+            r"\bDELETE\s+FROM\s+\w+\s*;",  # DELETE without WHERE
+        ]
+    ]
+    # high (rm 단순, mv 루트로, chmod·chown, systemd 변경, apt install, sudo, ...)
+    _HIGH_PATTERNS = [
+        re.compile(p, re.IGNORECASE) for p in [
+            r"\brm\b(?!\s+-i)",
+            r"\bmv\b\s+\S+\s+/\S*$",
+            r"\bchmod\b", r"\bchown\b",
+            r"\biptables\b(?!\s*-[LSnv])",
+            r"\bnft\s+(add|delete|insert|replace|create)\b",
+            r"\bsystemctl\s+(start|restart|reload|enable)\b",
+            r"\bservice\b\s+\S+\s+(start|stop|restart|reload)",
+            r"\bdocker\s+(rm|stop|kill|prune|exec\s+-it)\b",
+            r"\buseradd\b", r"\bgroupadd\b",
+            r"\bpasswd\b(?!\s+-S)",
+            r"\bcrontab\s+-(r|e)\b",
+            r"\bapt\s+(install|remove|purge|update|upgrade)\b",
+            r"\b(yum|dnf)\s+(install|remove|update)\b",
+            r"\bpip\s+install\b", r"\bnpm\s+install\b",
+            r"\b>\s*/etc/", r"\btee\s+/etc/",
+            r"\bsudo\s+",
+            r"\bnft\s+-f\b",
+            r"\bsystemd-run\b",
+        ]
+    ]
+
+    def _classify_command_risk(self, cmd: str) -> str:
+        """shell command 내용 기반 위험도 (safe/medium/high/critical)."""
+        if not cmd:
+            return "low"
+        c = cmd.strip().lstrip("$#").lstrip()
+        # 첫 토큰이 안전 prefix?
+        first = c.split()[0] if c.split() else ""
+        # 파이프·세미콜론으로 chain 시 — chain 의 모든 segment 검사
+        segments = re.split(r"[|;&]+|\&\&|\|\|", c)
+        worst = "safe"
+        for seg in segments:
+            seg = seg.strip()
+            if not seg:
+                continue
+            # 첫 토큰 safe 여부
+            f = seg.split()[0] if seg.split() else ""
+            seg_safe = (f in self._SAFE_COMMAND_HEADS or
+                        bool(self._SAFE_PREFIX_RE.match(seg)))
+            seg_critical = any(p.search(seg) for p in self._CRITICAL_PATTERNS)
+            seg_high = any(p.search(seg) for p in self._HIGH_PATTERNS)
+            if seg_critical:
+                worst = "critical"
+                break
+            if seg_high:
+                worst = "high"
+                continue
+            if not seg_safe and worst != "high":
+                worst = "medium"
+        return worst
+
     def _assess_risk(self, skill_name: str, params: dict) -> str:
-        if skill_name in {"configure_nftables", "deploy_rule", "shell"}:
+        """skill + params 기반 위험도. shell 이면 command 내용까지 분석.
+
+        반환: safe | low | medium | high | critical
+        """
+        if skill_name == "shell":
+            cmd = (params or {}).get("command", "") or ""
+            return self._classify_command_risk(cmd)
+        if skill_name in {"configure_nftables", "deploy_rule"}:
             return "high"
-        if skill_name in {"scan_ports", "web_scan"}:
+        if skill_name in {"scan_ports", "web_scan", "attack_simulate"}:
             return "medium"
         return "low"
+
+    def _should_ask_approval(self, risk: str, skill_def: dict | None = None) -> bool:
+        """승인 요청 여부 — approval_mode 고려.
+
+        normal: high/critical 묻기, requires_approval=True 명시 skill 도 묻기
+        danger_danger: critical 만 묻기 (high 도 통과)
+        danger_danger_danger: 절대 안 묻기
+        """
+        mode = (self.approval_mode or "normal").lower()
+        if mode in ("danger_danger_danger", "danger-danger-danger", "yolo"):
+            return False
+        if mode in ("danger_danger", "danger-danger"):
+            return risk == "critical"
+        # normal — 기본
+        if risk in ("high", "critical"):
+            return True
+        if skill_def and skill_def.get("requires_approval"):
+            return True
+        return False
 
     # ── History 압축 (4층 전략 간소화) ─────────────────────────────────────
 

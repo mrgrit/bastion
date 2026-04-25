@@ -107,6 +107,22 @@ COMMANDS = {
 }
 
 
+def _parse_args():
+    """CLI 옵션 — 승인 모드 플래그 (Claude Code 스타일).
+
+    --danger-danger-danger : 절대 묻지 않고 모두 자동 실행 (yolo 모드)
+    --danger-danger        : critical 만 묻기 (high 도 통과)
+    기본                    : high/critical 묻기, 조회성 명령은 자동
+    """
+    import argparse
+    p = argparse.ArgumentParser(prog="bastion", description="CCC Bastion 보안 운영 에이전트 TUI")
+    p.add_argument("--danger-danger-danger", dest="yolo", action="store_true",
+                   help="모든 작업 자동 승인 (위험! — 검증된 운영 환경에서만)")
+    p.add_argument("--danger-danger", dest="danger2", action="store_true",
+                   help="critical 만 묻기 (rm -rf, kill -9, mkfs 등) — high 자동 승인")
+    return p.parse_args()
+
+
 def main():
     try:
         from rich.console import Console
@@ -126,9 +142,21 @@ def main():
     from bastion.agent import BastionAgent, sanitize_text
     from bastion import LLM_BASE_URL, LLM_MANAGER_MODEL
 
+    args = _parse_args()
+    if args.yolo:
+        approval_mode = "danger_danger_danger"
+    elif args.danger2:
+        approval_mode = "danger_danger"
+    else:
+        approval_mode = "normal"
+
     console = Console()
     vm_ips = get_vm_ips()
-    agent = BastionAgent(vm_ips=vm_ips, ollama_url=LLM_BASE_URL, model=LLM_MANAGER_MODEL)
+    agent = BastionAgent(vm_ips=vm_ips, ollama_url=LLM_BASE_URL,
+                         model=LLM_MANAGER_MODEL, approval_mode=approval_mode)
+    if approval_mode != "normal":
+        console.print(f"[bold red]⚠ approval_mode = {approval_mode}[/]\n",
+                      style="on red")
 
     # ── 배너 ──────────────────────────────────────────────────────────────
     console.print(Text(BANNER, style="bold orange1"))

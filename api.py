@@ -96,6 +96,8 @@ class ChatRequest(BaseModel):
     message: str
     auto_approve: bool = False   # True: 고위험 작업 자동 승인 (주의)
     stream: bool = True          # False: 전체 이벤트 배열 한번에 반환
+    # 승인 모드 — normal | danger_danger | danger_danger_danger
+    approval_mode: str = "normal"
     # 테스트 메타데이터 — evidence DB에 함께 기록
     course: str = ""
     lab_id: str = ""
@@ -289,6 +291,9 @@ def chat(req: ChatRequest):
     """
     def approval_callback(step_name: str, skill: str, params: dict) -> bool:
         return req.auto_approve
+
+    # 승인 모드 주입 — agent._should_ask_approval 가 참조
+    agent.approval_mode = (req.approval_mode or "normal").lower()
 
     # 테스트 메타데이터를 agent에 주입 → evidence DB 기록 시 사용
     agent._test_meta = {
