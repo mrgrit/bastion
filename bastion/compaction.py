@@ -212,17 +212,34 @@ def compact_playbook(playbook_id: str,
             pass
 
     # 6. 노이즈 표시 (delete 안 함 — audit 위해 보존, deprecated meta 만)
+    # History anchor 면역 게이트 — anchor 와 매칭되거나 narrative 에 속한 experience 는 보존.
+    try:
+        from bastion.history import HistoryLayer, is_compaction_immune
+        _history = HistoryLayer()
+    except Exception:
+        _history = None
+
     dropped = 0
+    immune = 0
     for did in drop_ids[:30]:
         node = g.get_node(did)
-        if node and node.get("type") == "Experience":
-            meta = node.get("meta") or {}
-            meta["deprecated"] = True
-            meta["deprecated_reason"] = "compaction noise"
-            meta["deprecated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-            g.add_node(did, "Experience", node.get("name", ""),
-                       content=node.get("content"), meta=meta)
-            dropped += 1
+        if not (node and node.get("type") == "Experience"):
+            continue
+        # anchor / narrative 면역 검사
+        if _history is not None:
+            try:
+                if is_compaction_immune(_history, did, node.get("name", "") or ""):
+                    immune += 1
+                    continue
+            except Exception:
+                pass
+        meta = node.get("meta") or {}
+        meta["deprecated"] = True
+        meta["deprecated_reason"] = "compaction noise"
+        meta["deprecated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+        g.add_node(did, "Experience", node.get("name", ""),
+                   content=node.get("content"), meta=meta)
+        dropped += 1
 
     return {
         "playbook_id": playbook_id,
@@ -231,6 +248,7 @@ def compact_playbook(playbook_id: str,
         "recoveries_added": len(recoveries),
         "insights_created": insights_created,
         "dropped": dropped,
+        "history_immune": immune,
         "summary": summary[:200],
     }
 

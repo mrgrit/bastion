@@ -271,6 +271,118 @@ def graph_delete_node(node_id: str):
     return {"deleted": deleted, "node_id": node_id}
 
 
+# ── History (L4) — 시계열·내러티브·anchor·changelog ────────────────────────
+
+def _history():
+    from bastion.history import HistoryLayer
+    return HistoryLayer()
+
+
+@app.get("/history/handoff/{asset_id}")
+def history_handoff(asset_id: str, since: str = ""):
+    """신규 운영자 인수인계 패키지 — narrative + anchor + changelog 일괄."""
+    return _history().handoff(asset_id, since=since)
+
+
+@app.get("/history/range")
+def history_range(asset_id: str = "", since: str = "", until: str = ""):
+    """규제 감사용 시간 범위 쿼리 — events + active anchors."""
+    return _history().range_query(asset_id=asset_id, since=since, until=until)
+
+
+@app.get("/history/events")
+def history_events(asset_id: str = "", narrative_id: str = "", kind: str = "",
+                   since: str = "", until: str = "", limit: int = 100):
+    return {"events": _history().list_events(
+        asset_id=asset_id, narrative_id=narrative_id, kind=kind,
+        since=since, until=until, limit=limit,
+    )}
+
+
+@app.get("/history/narratives/{narrative_id}")
+def history_narrative(narrative_id: str):
+    n = _history().get_narrative(narrative_id)
+    return n or {}
+
+
+class NarrativeOpenBody(BaseModel):
+    title: str
+    tags: list[str] = []
+    summary: str = ""
+
+
+@app.post("/history/narratives")
+def history_open_narrative(body: NarrativeOpenBody):
+    nid = _history().open_narrative(body.title, tags=body.tags, summary=body.summary)
+    return {"narrative_id": nid}
+
+
+@app.post("/history/narratives/{narrative_id}/close")
+def history_close_narrative(narrative_id: str, summary: str = ""):
+    _history().close_narrative(narrative_id, summary=summary)
+    return {"narrative_id": narrative_id, "status": "closed"}
+
+
+class AnchorBody(BaseModel):
+    kind: str           # ioc / regulatory / policy_decision / breach_record
+    label: str
+    body: str
+    related_ids: list[str] = []
+    valid_from: str = ""
+    valid_until: str = ""
+
+
+@app.post("/history/anchors")
+def history_add_anchor(body: AnchorBody):
+    """anchor 등록 — 압축 면역 영구 보존 사실."""
+    aid = _history().add_anchor(
+        body.kind, body.label, body.body,
+        related_ids=body.related_ids,
+        valid_from=body.valid_from,
+        valid_until=body.valid_until,
+    )
+    return {"anchor_id": aid}
+
+
+@app.get("/history/anchors")
+def history_list_anchors(kind: str = "", label_like: str = "", limit: int = 50):
+    return {"anchors": _history().find_anchors(
+        kind=kind, label_like=label_like, limit=limit,
+    )}
+
+
+class IocCheckBody(BaseModel):
+    iocs: list[str]
+
+
+@app.post("/history/repeat-iocs")
+def history_check_repeat_iocs(body: IocCheckBody):
+    """관찰된 IoC 가 과거 침해 anchor 와 매칭되는지 — 반복 침해 탐지."""
+    return {"hits": _history().match_repeat_iocs(body.iocs)}
+
+
+class ChangelogBody(BaseModel):
+    target_kind: str   # asset / rule / policy / playbook
+    target_id: str
+    diff: str
+    actor: str = ""
+    rationale: str = ""
+
+
+@app.post("/history/changelog")
+def history_add_changelog(body: ChangelogBody):
+    v = _history().add_changelog(
+        body.target_kind, body.target_id, body.diff,
+        actor=body.actor, rationale=body.rationale,
+    )
+    return {"version": v}
+
+
+@app.get("/history/changelog/{target_kind}/{target_id}")
+def history_changelog(target_kind: str, target_id: str):
+    return {"changelog": _history().changelog(target_kind, target_id)}
+
+
 @app.get("/assets")
 def assets():
     return agent.evidence_db.get_assets()

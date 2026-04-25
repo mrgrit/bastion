@@ -454,6 +454,13 @@ class BastionAgent:
         from bastion.experience import ExperienceLearner
         self.experience = ExperienceLearner(db_path=self.evidence_db.db_path)
 
+        # History Layer (L4) — 시계열·내러티브·anchor·changelog. KG 와 동일 SQLite 공유.
+        try:
+            from bastion.history import HistoryLayer
+            self.history_layer = HistoryLayer()
+        except Exception:
+            self.history_layer = None
+
         self.rag_index = None
         kdir = knowledge_dir or os.path.join(os.path.dirname(__file__), "..", "..", "contents")
         if os.path.isdir(kdir):
@@ -893,6 +900,27 @@ class BastionAgent:
                 command=params.get("command", ""),
                 success=success,
             )
+
+            # History (L4) — atomic event 자동 기록 (시계열 보존)
+            if self.history_layer is not None:
+                try:
+                    self.history_layer.add_event(
+                        kind="task_done" if success else "task_fail",
+                        summary=f"{skill_name} on {params.get('target','-')}: "
+                                f"{(message or '')[:80]}",
+                        actor=self._test_meta.get("test_session", "manager"),
+                        asset_id=params.get("target", ""),
+                        payload={
+                            "skill": skill_name,
+                            "course": self._test_meta.get("course", ""),
+                            "lab_id": self._test_meta.get("lab_id", ""),
+                            "step_order": self._test_meta.get("step_order", 0),
+                            "exit_code": exit_code,
+                            "output_tail": (output or "")[-500:],
+                        },
+                    )
+                except Exception:
+                    pass  # history 기록 실패는 작업 실행을 막지 않음
 
             # Asset 상태 업데이트 (probe 계열)
             if skill_name in ("probe_host", "probe_all", "check_suricata",
