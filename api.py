@@ -176,6 +176,23 @@ def audit_verify_chain(start_id: int = 1):
     return get_audit_log().verify_chain(start_id=start_id)
 
 
+# ── Compaction (KG-5) — experience 정제 / Insight 노드 생성 ─────────────────
+
+@app.post("/graph/compact/{playbook_id}")
+def compact_one(playbook_id: str, min_experiences: int = 5):
+    """특정 playbook 의 experience 압축 → known_pitfalls·insights 생성."""
+    from bastion.compaction import compact_playbook
+    return compact_playbook(playbook_id, min_experiences=min_experiences)
+
+
+@app.post("/graph/compact")
+def compact_all_pb(min_experiences: int = 5, limit_playbooks: int = 50):
+    """전체 playbook compaction."""
+    from bastion.compaction import compact_all
+    return compact_all(min_experiences=min_experiences,
+                       limit_playbooks=limit_playbooks)
+
+
 @app.get("/assets")
 def assets():
     return agent.evidence_db.get_assets()
