@@ -462,24 +462,10 @@ class BastionAgent:
             elif ev == "stream_token":
                 audit_final_answer += evt.get("token", "")
         # ── /Audit 시작 ────────────────────────────────────────────────────
-        # Step 3: api.py 가 주입한 채점 기준을 메시지 앞에 prepend → 같은 기준으로 작업
-        verify_ctx = getattr(self, "_verify_context", {}) or {}
-        if verify_ctx.get("intent") or verify_ctx.get("success_criteria"):
-            criteria_lines = "\n".join(f"  - {c}" for c in verify_ctx.get("success_criteria", []))
-            methods_lines = "\n".join(f"  - {m}" for m in verify_ctx.get("acceptable_methods", []))
-            negative_lines = "\n".join(f"  - {n}" for n in verify_ctx.get("negative_signs", []))
-            criteria_block = (
-                "[채점 기준 — 이걸 충족해야 성공으로 판정됩니다]\n"
-                f"의도: {verify_ctx.get('intent','')}\n"
-            )
-            if criteria_lines:
-                criteria_block += f"성공 기준 (하나 이상 충족 필요):\n{criteria_lines}\n"
-            if methods_lines:
-                criteria_block += f"허용 방법 (이 중 어느 도구·방식이든 등가 인정):\n{methods_lines}\n"
-            if negative_lines:
-                criteria_block += f"피해야 할 신호:\n{negative_lines}\n"
-            criteria_block += "\n위 기준을 머리에 두고 아래 작업을 수행하라:\n\n"
-            original = criteria_block + original
+        # 채점 기준은 _build_react_system_prompt 가 system prompt 에 이미 주입함.
+        # 여기서 message 앞에 또 prepend 하면 user message 가 "긴 지시문" 처럼 보여
+        # LLM 이 Q&A 로 응답하고 tool 을 안 부른다 (round 4 분석에서 발견).
+        # → 사용자 message 는 원본 그대로 두고, 그래프 ID 도 원본 기준.
         MAX_STEP_RETRY = 1
         cur_message = original
         outcome = "fail"
@@ -1254,11 +1240,13 @@ class BastionAgent:
             "  siem:     Wazuh Manager, OpenCTI:8080\n"
             "  manager:  Bastion 자체 + Ollama 프록시\n"
             "\n"
-            "## 핵심 원칙\n"
-            "- 개념 설명·표·체크리스트만 출력 금지. 반드시 실제 도구를 호출해서 결과를 받아야 한다.\n"
+            "## 핵심 원칙 (★ 강제)\n"
+            "- **첫 turn 에 반드시 tool_call 1개 이상 발생**. tool 없이 자연어 답변만 하면 작업 무효.\n"
+            "- 개념 설명·표·체크리스트만 출력 금지. 반드시 실제 도구를 호출해서 stdout 을 받아 그것에 근거해 답하라.\n"
             "- shell 도구의 command 는 비대화형(non-interactive)으로. < /dev/null, --noinput, -y 등 자동 응답.\n"
             "- 도구 호출 결과가 부적합하면 같은 도구 다시 호출하지 말고 다른 접근으로.\n"
             "- 작업 종료 전 반드시 GOAL 와 SUCCESS 기준에 비추어 자체 평가.\n"
+            "- 사용자 요청이 짧고 단순해 보여도 (예: 'hostname 확인') 반드시 shell 또는 적절한 도구 호출.\n"
             f"{verify_block}"
         )
 
