@@ -91,8 +91,110 @@ def extract_json(text: str) -> dict | None:
     return None
 
 
+_HARMONY_TOKEN_RE = re.compile(
+    r'<\|(?:call|message|channel|start|end|return|constrain)\|>|'
+    r'<\|(?:assistant|system|user|tool)\|>|'
+    r'<\|im_(?:start|end)\|>',
+    re.IGNORECASE,
+)
+_HARMONY_BLOCK_RE = re.compile(
+    r'<\|channel\|>(?:analysis|thinking|final)<\|message\|>(.*?)(?=<\||$)',
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _strip_harmony(text: str) -> str:
+    """gpt-oss harmony format / abliterated 모델의 채널 태그 제거.
+    `<|channel|>analysis<|message|>...` 같은 사고 블록은 본문에서 분리하고
+    `<|call|>` 등 잔여 토큰은 모두 제거한다.
+    """
+    if not text:
+        return text
+    # 채널 블록 내용만 보존 (메시지)
+    text = _HARMONY_BLOCK_RE.sub(lambda m: m.group(1), text)
+    # 남은 단일 토큰 제거
+    text = _HARMONY_TOKEN_RE.sub('', text)
+    return text
+
+
+# gpt-oss harmony format 의 tool call 패턴:
+#   <|channel|>commentary to=functions.SKILL <|constrain|>json<|message|>{ARGS_JSON}<|call|>
+# 또는 commentary 채널 없이 바로:
+#   to=functions.SKILL <|...|>{ARGS}
+# 모델이 다양한 변형을 출력하므로 여유롭게 매칭한다.
+_HARMONY_TOOLCALL_RE = re.compile(
+    r'(?:to=functions?\.|to=functions/)([A-Za-z_][A-Za-z0-9_]*)'
+    r'[^{]*?(\{[^}]*(?:\{[^}]*\}[^}]*)*\})',
+    re.DOTALL,
+)
+
+
+def _extract_harmony_tool_calls(text: str) -> list[tuple[str, dict]]:
+    """gpt-oss harmony format 응답에서 tool call (skill_name, args dict) 추출.
+    Ollama 의 native tool_calls 가 비어있는 derestricted/abliterated 모델에 필수.
+    """
+    out: list[tuple[str, dict]] = []
+    if not text or "to=functions" not in text:
+        return out
+    for m in _HARMONY_TOOLCALL_RE.finditer(text):
+        name = m.group(1).strip()
+        args_str = m.group(2)
+        try:
+            args = json.loads(args_str)
+        except Exception:
+            # JSON 일부 깨짐 — 핵심 필드만 추출 시도
+            try:
+                # "command":"..." 류 단일 필드 추출
+                m2 = re.search(r'"(command|target|skill|prompt|url|host)"\s*:\s*"([^"]+)"', args_str)
+                if m2:
+                    args = {m2.group(1): m2.group(2)}
+                else:
+                    continue
+            except Exception:
+                continue
+        if isinstance(args, dict):
+            out.append((name, args))
+    return out
+
+
+_PROSE_CMD_RE = re.compile(
+    r'(?:^|\n)\s*(?:Running|Run|Let.s run|Try|Execute|Attempting to run|We.ll run|We need to run)[:\s]+'
+    r'`?([^\n`]+?)`?(?=\s*\.?\s*$|\s*\n)',
+    re.IGNORECASE | re.MULTILINE,
+)
+_BACKTICK_CMD_RE = re.compile(r'`([^`\n]{4,200})`')
+_BANG_CMD_RE = re.compile(r'(?:^|\s)![ \t]*([^\n!]{3,200})(?=\n|$)', re.MULTILINE)
+
+
+def _extract_shell_from_prose(text: str) -> list[str]:
+    """harmony/자유형 응답에서 의도된 셸 명령 추출 (마지막 폴백).
+    추출 우선순위: 백틱 인용 > 'Running:' 류 동사 > '!cmd' 줄.
+    셸 신호어가 없으면 빈 리스트.
+    """
+    cands: list[str] = []
+    for m in _BACKTICK_CMD_RE.finditer(text):
+        c = m.group(1).strip()
+        if any(c.startswith(p) for p in ('curl ', 'nmap ', 'ls ', 'cat ', 'grep ', 'awk ',
+                                         'find ', 'ping ', 'dig ', 'nslookup ', 'ss ',
+                                         'systemctl ', 'docker ', 'sudo ', 'echo ', 'uname',
+                                         'whoami', 'id', 'ps ', 'netstat', 'ip ', 'which ',
+                                         'msfvenom', 'bash ', 'sh ', 'python', 'jq ',
+                                         'tar ', 'wget ')):
+            cands.append(c)
+    for m in _PROSE_CMD_RE.finditer(text):
+        c = m.group(1).strip().strip('`').strip()
+        if c and len(c) > 2 and c not in cands:
+            cands.append(c)
+    for m in _BANG_CMD_RE.finditer(text):
+        c = m.group(1).strip()
+        if c and len(c) > 2 and c not in cands:
+            cands.append(c)
+    return cands[:3]  # 상위 3개만
+
+
 def extract_json_array(text: str) -> list | None:
     """LLM 출력에서 JSON 배열 추출."""
+    text = _strip_harmony(text)
     text = re.sub(r'```(?:json)?\s*', '', text)
     text = re.sub(r'```', '', text)
     stripped = text.strip()
@@ -1336,6 +1438,36 @@ class BastionAgent:
             thinking = response_msg.get("thinking", "") or ""  # gpt-oss/qwen 등 분리 필드
             tool_calls = response_msg.get("tool_calls", []) or []
 
+            # ── derestricted/abliterated 폴백 — Ollama tool_calls 가 빈 경우에도
+            # content/thinking 의 harmony format 또는 prose 에서 의도된 명령을 추출해 합성.
+            # gpt-oss harmony native tool calling 을 Ollama 가 추출 못하는 케이스 대응.
+            if not tool_calls:
+                _full = (content or "") + "\n" + (thinking or "")
+                # 1차: harmony format `to=functions.X <|message|>{...}` 직접 파싱 (정확)
+                _harmony_calls = _extract_harmony_tool_calls(_full)
+                if _harmony_calls:
+                    synth = []
+                    for skill_name, args in _harmony_calls[:2]:
+                        if skill_name in SKILLS:
+                            synth.append({
+                                "function": {"name": skill_name, "arguments": args},
+                            })
+                    if synth:
+                        tool_calls = synth
+                        yield {"event": "synthesized_tool_calls", "source": "harmony_format",
+                               "skill": synth[0]["function"]["name"],
+                               "args": synth[0]["function"]["arguments"]}
+                # 2차: 프로즈 fallback — 백틱·"Running:" 등에서 셸 명령 추출
+                if not tool_calls:
+                    _probe = _strip_harmony(_full)
+                    _cmds = _extract_shell_from_prose(_probe)
+                    if _cmds:
+                        synth = [{"function": {"name": "shell",
+                                               "arguments": {"command": _cmds[0]}}}]
+                        tool_calls = synth
+                        yield {"event": "synthesized_tool_calls", "source": "prose_fallback",
+                               "skill": "shell", "command": _cmds[0][:200]}
+
             # KG-3 trace 누적
             turn_traces.append({
                 "turn": turn,
@@ -2127,6 +2259,11 @@ class BastionAgent:
                     return result
                 if items == []:
                     return []  # 명시적 빈 배열 → Q&A
+            # 3차: harmony/abliterated 모델용 prose 폴백 — 백틱·"Running:" 등에서 셸 명령 추출
+            if "shell" in SKILLS:
+                cmds = _extract_shell_from_prose(content)
+                if cmds:
+                    return [("shell", {"command": cmds[0]})]
         except Exception:
             pass
 
