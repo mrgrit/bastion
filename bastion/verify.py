@@ -6,6 +6,10 @@ from typing import Any, Generator
 # bastion의 run_command, health_check 재사용
 from bastion import run_command, health_check, INTERNAL_IPS
 
+def _ip(role: str) -> str:
+    """INTERNAL_IPS에서 역할별 IP 조회 (환경변수 기반)."""
+    return INTERNAL_IPS.get(role, "")
+
 
 # ── 체크 정의 ─────────────────────────────────────
 
@@ -59,7 +63,7 @@ def _checks_common(ip: str, role: str) -> list[dict]:
         checks.append(_check(ip, "internal_ip", f"ip addr show | grep {expected_ip}", expected_ip))
     # 기본 게이트웨이 (secu 자신은 제외)
     if role != "secu":
-        checks.append(_check(ip, "default_gateway", "ip route show default", "10.20.30.1"))
+        checks.append(_check(ip, "default_gateway", "ip route show default", _ip('secu')))
     return checks
 
 
@@ -70,7 +74,7 @@ def _checks_secu(ip: str) -> list[dict]:
         _check(ip, "nftables_nat", "nft list ruleset 2>/dev/null | grep masquerade", "masquerade"),
         _check(ip, "suricata_running", "systemctl is-active suricata 2>/dev/null", "active"),
         _check(ip, "suricata_rules", "ls /var/lib/suricata/rules/ 2>/dev/null | head -5", "", mode="not_empty"),
-        _check(ip, "rsyslog_forward", "grep -r '10.20.30.100' /etc/rsyslog.d/ 2>/dev/null", "10.20.30.100"),
+        _check(ip, "rsyslog_forward", f"grep -r '{_ip('siem')}' /etc/rsyslog.d/ 2>/dev/null", _ip('siem')),
     ]
 
 
@@ -82,7 +86,7 @@ def _checks_web(ip: str) -> list[dict]:
         _check(ip, "juiceshop_running", "curl -s -o /dev/null -w '%{http_code}' http://localhost:3000 2>/dev/null", "", mode="http_ok"),
         _check(ip, "dvwa_running", "curl -s -o /dev/null -w '%{http_code}' http://localhost:8080 2>/dev/null", "", mode="http_ok"),
         _check(ip, "wazuh_agent", "systemctl is-active wazuh-agent 2>/dev/null", "active"),
-        _check(ip, "rsyslog_forward", "grep -r '10.20.30.100' /etc/rsyslog.d/ 2>/dev/null", "10.20.30.100"),
+        _check(ip, "rsyslog_forward", f"grep -r '{_ip('siem')}' /etc/rsyslog.d/ 2>/dev/null", _ip('siem')),
     ]
 
 
@@ -148,12 +152,12 @@ def _checks_network_flow(ips: dict[str, str]) -> list[dict]:
 
     # 1. attacker에서 web으로 정상 HTTP 요청
     checks.append(_check(attacker_ip, "http_to_web",
-                         "curl -s -o /dev/null -w '%{http_code}' http://10.20.30.80/ 2>/dev/null || echo 000",
+                         f"curl -s -o /dev/null -w '%{{http_code}}' http://{_ip('web')}/ 2>/dev/null || echo 000",
                          "", mode="http_ok"))
 
     # 2. attacker에서 web으로 SQL Injection 시도 (modsecurity 탐지 대상)
     r = run_command(attacker_ip,
-                    "curl -s -o /dev/null -w '%{http_code}' 'http://10.20.30.80/?id=1%20OR%201=1' 2>/dev/null || echo 000",
+                    f"curl -s -o /dev/null -w '%{{http_code}}' 'http://{_ip('web')}/?id=1%20OR%201=1' 2>/dev/null || echo 000",
                     timeout=10)
     sqli_code = r.get("stdout", "").strip()
     # modsecurity가 차단하면 403, 아니면 200

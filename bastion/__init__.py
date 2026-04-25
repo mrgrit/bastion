@@ -108,16 +108,32 @@ def build_system_prompt(extra_context: str = "") -> str:
 
 # 역할별 설치 스크립트
 # ── Wazuh Agent 설치 (web, attacker에서 공통 사용) ──
+# - 버전: Wazuh Manager와 일치시키기 위해 4.10.3-1 고정 (더 높으면 manager가 거부)
+# - dpkg lock: unattended-upgrades 경쟁 방지를 위해 최대 90s 대기
+# - SIEM 준비: 10.20.30.100:1515 (authd) 포트 열림까지 최대 60s 대기
+# - agent-auth 실패 시에도 서비스는 시작 (첫 등록은 agent 내장 enrollment로 재시도됨)
 WAZUH_AGENT_INSTALL = """
+# dpkg lock 대기 (최대 90초)
+for i in $(seq 1 30); do
+  fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || break
+  sleep 3
+done
 curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | gpg --no-default-keyring --keyring gnupg-ring:/usr/share/keyrings/wazuh.gpg --import 2>/dev/null && chmod 644 /usr/share/keyrings/wazuh.gpg
 echo 'deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main' > /etc/apt/sources.list.d/wazuh.list
 apt-get update -y
-WAZUH_MANAGER="10.20.30.100" apt-get install -y wazuh-agent 2>/dev/null || true
+# 버전 고정 (Manager 4.10.3과 일치). 실패 시 최신 fallback (후속 diagnose가 잡음)
+WAZUH_MANAGER="10.20.30.100" DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-downgrades wazuh-agent=4.10.3-1 2>&1 | tail -3 || \\
+  WAZUH_MANAGER="10.20.30.100" DEBIAN_FRONTEND=noninteractive apt-get install -y wazuh-agent 2>&1 | tail -3
 if [ -f /var/ossec/bin/agent-auth ]; then
-    sed -i 's|<address>.*</address>|<address>10.20.30.100</address>|' /var/ossec/etc/ossec.conf 2>/dev/null || true
-    /var/ossec/bin/agent-auth -m 10.20.30.100 2>/dev/null || true
+    sed -i 's|<address>.*</address>|<address>10.20.30.100</address>|g' /var/ossec/etc/ossec.conf 2>/dev/null || true
+    # SIEM manager 준비 대기 (최대 60초)
+    for i in $(seq 1 20); do
+      (echo > /dev/tcp/10.20.30.100/1515) 2>/dev/null && break
+      sleep 3
+    done
+    /var/ossec/bin/agent-auth -m 10.20.30.100 2>&1 | tail -3 || true
     systemctl daemon-reload
-    systemctl enable --now wazuh-agent 2>/dev/null || true
+    systemctl enable --now wazuh-agent 2>&1 | tail -2
 fi
 """
 
@@ -153,8 +169,17 @@ fi
 systemctl enable --now suricata 2>/dev/null || true
 """,
         # ── nftables 기본 방화벽 + NAT ──
+        # 외부(EXTERNAL) / 내부(INTERNAL) NIC 자동 감지.
+        # head -1 = 첫 NIC = 외부망(예: ens33), tail -1 = 마지막 NIC = 내부망(예: ens34).
+        # 실패 시 hard-fail 로 잘못된 빈 EXTERNAL/INTERNAL 로 룰 만들지 않음.
         """
 EXTERNAL=$(ip -o link show | grep -v 'lo\\|docker\\|veth' | awk '{print $2}' | tr -d ':' | head -1)
+INTERNAL=$(ip -o link show | grep -v 'lo\\|docker\\|veth' | awk '{print $2}' | tr -d ':' | tail -1)
+if [ -z "$EXTERNAL" ] || [ -z "$INTERNAL" ] || [ "$EXTERNAL" = "$INTERNAL" ]; then
+    echo "[ERROR] NIC 감지 실패: EXTERNAL='$EXTERNAL' INTERNAL='$INTERNAL'. ip link 확인 필요." >&2
+    exit 1
+fi
+echo "[NFT] EXTERNAL=$EXTERNAL INTERNAL=$INTERNAL"
 cat > /etc/nftables.conf << NFTEOF
 #!/usr/sbin/nft -f
 flush ruleset
@@ -181,15 +206,27 @@ table ip nat {
     chain prerouting {
         type nat hook prerouting priority -100;
         iifname "$EXTERNAL" tcp dport 80 dnat to 10.20.30.80:80
+        iifname "$EXTERNAL" tcp dport 443 dnat to 10.20.30.80:443
+        iifname "$EXTERNAL" tcp dport 3000 dnat to 10.20.30.80:3000
+        iifname "$EXTERNAL" tcp dport 8080 dnat to 10.20.30.80:8080
     }
     chain postrouting {
         type nat hook postrouting priority 100;
+        # 1) 내부 VM 의 외부 인터넷 접근 (기존)
         oifname "$EXTERNAL" masquerade
+        # 2) DNAT 트래픽 SNAT — 외부 클라이언트의 응답 경로 보장 (asymmetric routing 회피).
+        #    backend 가 secu 가 아닌 기본 게이트웨이로 응답 라우팅하더라도 secu IP 로 source 가 바뀌어 정상 작동.
+        ip saddr != 10.20.30.0/24 oifname "$INTERNAL" ip daddr 10.20.30.0/24 masquerade
     }
 }
 NFTEOF
-nft -f /etc/nftables.conf
+nft -f /etc/nftables.conf || { echo "[ERROR] nft -f 실패" >&2; exit 1; }
 systemctl enable --now nftables
+# 검증 — DNAT 룰이 실제로 로드됐는지 확인
+echo "[NFT] 적용 후 nat 룰:"
+nft list table ip nat 2>&1 | head -30
+# net.ipv4.ip_forward 재확인
+test "$(cat /proc/sys/net/ipv4/ip_forward)" = "1" || sysctl -w net.ipv4.ip_forward=1
 """,
         # ── rsyslog → SIEM 포워딩 ──
         """
@@ -602,15 +639,15 @@ def ssh_run(ip: str, user: str, password: str, commands: list[str], timeout: int
 
 # 내부 IP 고정 (API의 INTERNAL_IPS와 동일)
 INTERNAL_IPS = {
-    "attacker": "10.20.30.201",
-    "secu":     "10.20.30.1",
-    "web":      "10.20.30.80",
-    "siem":     "10.20.30.100",
-    "manager":  "10.20.30.200",
-    "windows":  "10.20.30.50",
+    "attacker": os.getenv("VM_ATTACKER_IP", "10.20.30.201"),
+    "secu":     os.getenv("VM_SECU_IP",     "10.20.30.1"),
+    "web":      os.getenv("VM_WEB_IP",      "10.20.30.80"),
+    "siem":     os.getenv("VM_SIEM_IP",     "10.20.30.100"),
+    "manager":  os.getenv("VM_MANAGER_IP",  "10.20.30.200"),
+    "windows":  os.getenv("VM_WINDOWS_IP",  "10.20.30.50"),
 }
-INTERNAL_SUBNET = "10.20.30.0/24"
-SECU_GW = INTERNAL_IPS["secu"]  # Security Gateway = 기본 게이트웨이
+INTERNAL_SUBNET = os.getenv("VM_INTERNAL_SUBNET", "10.20.30.0/24")
+SECU_GW = INTERNAL_IPS["secu"]
 
 
 def _win_ssh_run(ip: str, user: str, password: str, ps_script: str, timeout: int = 120) -> dict:
@@ -994,7 +1031,12 @@ echo "NAT masquerade on $EXTERNAL"
 # ── SubAgent Communication (A2A) ─────────────────
 
 def health_check(ip: str) -> dict:
-    """SubAgent 헬스체크"""
+    """SubAgent 헬스체크.
+
+    바스티온 자신(로컬 IP)은 SubAgent가 없으므로 healthy로 즉답.
+    """
+    if _is_local_ip(ip):
+        return {"status": "healthy", "hostname": "bastion", "role": "manager", "local": True}
     try:
         r = httpx.get(f"http://{ip}:{SUBAGENT_PORT}/health", timeout=5.0)
         return r.json()
@@ -1002,8 +1044,40 @@ def health_check(ip: str) -> dict:
         return {"status": "unreachable", "error": str(e)}
 
 
+_LOCAL_IPS = {"127.0.0.1", "localhost", "0.0.0.0", "::1"}
+
+
+def _is_local_ip(ip: str) -> bool:
+    """IP가 이 호스트 자신인지 판정 — 127.x, 바스티온 자체 내부/외부 IP 포함."""
+    if not ip or ip in _LOCAL_IPS:
+        return True
+    try:
+        import subprocess as _sp
+        out = _sp.run(["ip", "-4", "-o", "addr"], capture_output=True, text=True, timeout=2)
+        if out.returncode == 0 and ip in out.stdout:
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def run_command(ip: str, script: str, timeout: int = 60) -> dict:
-    """SubAgent에 명령 실행 (A2A)"""
+    """대상 VM에 명령 실행.
+
+    - IP가 로컬(바스티온 자신)이면 subprocess로 직접 실행
+    - 그 외에는 SubAgent(/a2a/run_script)로 위임
+    """
+    if _is_local_ip(ip):
+        try:
+            import subprocess as _sp
+            r = _sp.run(["bash", "-c", script], capture_output=True, text=True, timeout=timeout)
+            return {
+                "exit_code": r.returncode,
+                "stdout": r.stdout,
+                "stderr": r.stderr,
+            }
+        except Exception as e:
+            return {"exit_code": -1, "stdout": "", "stderr": f"local exec: {e}"}
     try:
         r = httpx.post(
             f"http://{ip}:{SUBAGENT_PORT}/a2a/run_script",

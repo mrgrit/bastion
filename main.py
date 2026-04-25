@@ -152,8 +152,8 @@ def main():
         rag_info = f"RAG {rs['chunks']} chunks"
 
     console.print(Panel(
-        f"[bold white]Model:[/] [orange1]{model}[/]   "
-        f"[bold white]LLM:[/] [dim]{ollama_url}[/]\n"
+        f"[bold white]Model:[/] [orange1]{LLM_MANAGER_MODEL}[/]   "
+        f"[bold white]LLM:[/] [dim]{LLM_BASE_URL}[/]\n"
         f"[bold white]Skills:[/] [cyan]{skills_count}[/]   "
         f"[bold white]Playbooks:[/] [cyan]{playbooks_count}[/]"
         + (f"   [bold white]{rag_info}[/]" if rag_info else ""),

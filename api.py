@@ -63,9 +63,25 @@ def _get_vm_ips() -> dict[str, str]:
 
 
 from bastion import LLM_BASE_URL, LLM_MANAGER_MODEL
+import threading
+
+# 공격/대전 과목은 derestricted 모델로 — gpt-oss:120b 가 공격 페이로드 작성을 거절하는 문제(B유형 fail)
+# 해결. 방어/SOC/컴플라이언스 과목은 safety 보존된 기본 모델 유지.
+LLM_MANAGER_MODEL_UNSAFE = os.getenv("LLM_MANAGER_MODEL_UNSAFE", "gurubot/gpt-oss-derestricted:120b")
+ATTACK_COURSES = {
+    "attack-ai", "attack-adv-ai",
+    "battle-ai", "battle-adv-ai",
+}
 
 _vm_ips = _get_vm_ips()
 agent = BastionAgent(vm_ips=_vm_ips, ollama_url=LLM_BASE_URL, model=LLM_MANAGER_MODEL)
+# 동시 요청에서 self.model 을 per-course 로 스왑하기 위한 락 (API는 대부분 순차 호출이지만 안전망)
+_model_swap_lock = threading.Lock()
+
+
+def _resolve_manager_model(course: str) -> str:
+    """course 기반 manager LLM 선택. 공격/대전 계열만 derestricted."""
+    return LLM_MANAGER_MODEL_UNSAFE if course in ATTACK_COURSES else LLM_MANAGER_MODEL
 
 app = FastAPI(
     title="Bastion API",
@@ -85,6 +101,11 @@ class ChatRequest(BaseModel):
     lab_id: str = ""
     step_order: int = 0
     test_session: str = ""
+    # Step 3: 채점 기준 정렬 — agent 가 verify.semantic 을 보고 작업하도록
+    verify_intent: str = ""              # success_criteria 의 한 줄 의도
+    verify_success_criteria: list = []   # 충족해야 할 기준 (3+)
+    verify_acceptable_methods: list = [] # 등가 허용 방법
+    verify_negative_signs: list = []     # 명시적 fail 신호
 
 
 # ── 엔드포인트 ──────────────────────────────────────────────────────────────
@@ -94,6 +115,8 @@ def health():
     return {
         "status": "ok",
         "model": agent.model,
+        "model_unsafe": LLM_MANAGER_MODEL_UNSAFE,
+        "attack_courses": sorted(ATTACK_COURSES),
         "llm": agent.ollama_url,
         "skills": len(agent.get_skills()),
         "playbooks": len(agent.get_playbooks()),
@@ -274,11 +297,29 @@ def chat(req: ChatRequest):
         "step_order": req.step_order,
         "test_session": req.test_session,
     } if req.course else {}
+    # Step 3: 채점 기준 정렬 — agent 가 같은 기준으로 작업
+    agent._verify_context = {
+        "intent": req.verify_intent or "",
+        "success_criteria": list(req.verify_success_criteria or []),
+        "acceptable_methods": list(req.verify_acceptable_methods or []),
+        "negative_signs": list(req.verify_negative_signs or []),
+    } if (req.verify_intent or req.verify_success_criteria) else {}
+
+    # course 기반 manager LLM 선택 (공격/대전만 derestricted)
+    target_model = _resolve_manager_model(req.course)
 
     def event_generator():
-        for evt in agent.chat(req.message, approval_callback=approval_callback):
-            yield json.dumps(evt, ensure_ascii=False) + "\n"
-        agent._test_meta = {}
+        with _model_swap_lock:
+            original = agent.model
+            agent.model = target_model
+            try:
+                if target_model != original:
+                    yield json.dumps({"event": "model_routing", "course": req.course, "model": target_model}, ensure_ascii=False) + "\n"
+                for evt in agent.chat(req.message, approval_callback=approval_callback):
+                    yield json.dumps(evt, ensure_ascii=False) + "\n"
+            finally:
+                agent.model = original
+                agent._test_meta = {}
 
     if req.stream:
         return StreamingResponse(
@@ -286,8 +327,16 @@ def chat(req: ChatRequest):
             media_type="application/x-ndjson",
         )
     else:
-        events = list(agent.chat(req.message, approval_callback=approval_callback))
-        agent._test_meta = {}
+        with _model_swap_lock:
+            original = agent.model
+            agent.model = target_model
+            try:
+                events = list(agent.chat(req.message, approval_callback=approval_callback))
+                if target_model != original:
+                    events.insert(0, {"event": "model_routing", "course": req.course, "model": target_model})
+            finally:
+                agent.model = original
+                agent._test_meta = {}
         return {"events": events}
 
 

@@ -33,11 +33,19 @@ from bastion.skills import SKILLS, execute_skill, preview_skill, skills_to_ollam
 # ── 입력 정제 ──────────────────────────────────────────────────────────────
 
 def sanitize_text(text: str) -> str:
-    """한글 IME 백스페이스 잔류 바이트·제어문자 제거."""
+    """한글 IME 백스페이스 잔류 바이트·제어문자 제거.
+
+    단 \t, \n 은 보존 — 멀티라인 프롬프트가 줄바꿈 의미를 잃으면
+    플래너가 번호 목록 분할을 할 수 없게 된다.
+    """
+    keep_controls = ('\t', '\n')
     result = []
     for ch in text:
+        if ch in keep_controls:
+            result.append(ch)
+            continue
         cp = ord(ch)
-        if cp < 0x20 and ch not in ('\t', '\n'):
+        if cp < 0x20:
             continue
         if cp == 0x7F:
             continue
@@ -46,7 +54,9 @@ def sanitize_text(text: str) -> str:
             continue
         result.append(ch)
     cleaned = re.sub(r'[\u00a0\u200b\u3000\ufeff]+', ' ', ''.join(result))
-    return re.sub(r' {2,}', ' ', cleaned).strip()
+    # 공백만 2개 이상을 1개로 (줄바꿈 영향 없도록 스페이스만 타겟)
+    cleaned = re.sub(r'[ \t]{2,}', ' ', cleaned)
+    return cleaned.strip()
 
 
 # ── JSON 추출 (nested 대응) ────────────────────────────────────────────────
@@ -349,11 +359,147 @@ class BastionAgent:
 
     # ── Public API ──────────────────────────────────────────────────────────
 
+    _MULTITASK_SPLIT = re.compile(r"(?:^|\n)\s*(\d+)[)\.]\s+", re.MULTILINE)
+
+    def _maybe_split_multitask(self, message: str) -> list[str]:
+        """복합 요청을 개별 서브태스크 리스트로 분할.
+
+        감지 조건: 메시지에 `1)` `2)` `3)` ... 또는 `1.` `2.` `3.` 형식의 번호
+        목록이 3개 이상 + '순서대로/차례대로/다음 작업' 등 순차 실행 힌트.
+        반환: 각 서브태스크 문자열 리스트 (분할 불필요 시 빈 리스트).
+        """
+        hints = ("순서대로", "차례대로", "다음 작업", "다음과 같이", "아래 작업", "다음을 수행")
+        if not any(h in message for h in hints):
+            return []
+        matches = list(self._MULTITASK_SPLIT.finditer(message))
+        if len(matches) < 3:
+            return []
+        # 머리말(prefix) 추출: 1) 앞의 공통 지시
+        prefix = message[: matches[0].start()].strip()
+        # 공통 컨텍스트(예: "siem VM(Wazuh)에서") 유지용
+        ctx_line = ""
+        if prefix:
+            # 마지막 문장만 컨텍스트로 사용 (예: "siem VM에서 다음 작업들을 순서대로 수행해줘:")
+            ctx_line = prefix.rstrip(":;, ").split("\n")[-1].strip()
+            # '다음 작업들을 ...' 같은 메타 문구 제거
+            for tail in ("다음 작업들을 순서대로 수행해줘",
+                         "다음 작업들을 순서대로 수행하라",
+                         "다음을 수행해줘", "다음 작업을 수행해줘",
+                         "아래 작업을 수행해줘"):
+                ctx_line = ctx_line.replace(tail, "").rstrip(" :,")
+        subtasks = []
+        for i, m in enumerate(matches):
+            start = m.end()
+            end = matches[i + 1].start() if i + 1 < len(matches) else len(message)
+            body = message[start:end].strip().rstrip(",.;")
+            if not body:
+                continue
+            if ctx_line and ctx_line not in body:
+                sub = f"{ctx_line} {body}".strip()
+            else:
+                sub = body
+            subtasks.append(sub)
+        return subtasks if len(subtasks) >= 3 else []
+
     def chat(self, message: str, approval_callback=None) -> Generator[dict, None, None]:
-        """자연어 메시지 처리 — 3단계 상태 머신 (Streaming 포함)"""
-        message = sanitize_text(message)
+        """자연어 메시지 처리 — step 단위 retry 래퍼.
+
+        1차 시도가 skill 실행 없이 종료되거나(=skills=[]) 모든 skill 실패로 끝나면
+        피드백 포함한 더 강한 prompt 로 1회 재시도. action 요청에 한해서.
+        """
+        original = sanitize_text(message)
+        if not original:
+            return
+        # Step 3: api.py 가 주입한 채점 기준을 메시지 앞에 prepend → 같은 기준으로 작업
+        verify_ctx = getattr(self, "_verify_context", {}) or {}
+        if verify_ctx.get("intent") or verify_ctx.get("success_criteria"):
+            criteria_lines = "\n".join(f"  - {c}" for c in verify_ctx.get("success_criteria", []))
+            methods_lines = "\n".join(f"  - {m}" for m in verify_ctx.get("acceptable_methods", []))
+            negative_lines = "\n".join(f"  - {n}" for n in verify_ctx.get("negative_signs", []))
+            criteria_block = (
+                "[채점 기준 — 이걸 충족해야 성공으로 판정됩니다]\n"
+                f"의도: {verify_ctx.get('intent','')}\n"
+            )
+            if criteria_lines:
+                criteria_block += f"성공 기준 (하나 이상 충족 필요):\n{criteria_lines}\n"
+            if methods_lines:
+                criteria_block += f"허용 방법 (이 중 어느 도구·방식이든 등가 인정):\n{methods_lines}\n"
+            if negative_lines:
+                criteria_block += f"피해야 할 신호:\n{negative_lines}\n"
+            criteria_block += "\n위 기준을 머리에 두고 아래 작업을 수행하라:\n\n"
+            original = criteria_block + original
+        MAX_STEP_RETRY = 1
+        cur_message = original
+        for step_attempt in range(MAX_STEP_RETRY + 1):
+            events_buf: list[dict] = []
+            for evt in self._chat_once(cur_message, approval_callback):
+                events_buf.append(evt)
+                yield evt
+            if step_attempt >= MAX_STEP_RETRY:
+                return
+            ok, fb = self._step_attempt_ok(original, events_buf)
+            if ok:
+                return
+            yield {"event": "step_retry", "attempt": step_attempt + 2,
+                   "feedback": fb}
+            cur_message = (
+                f"[자기 수정 — 이전 시도가 부족함]\n"
+                f"사유: {fb}\n\n"
+                f"원래 요청: {original}\n\n"
+                f"이번엔 반드시 실제 쉘 명령을 실행해서 stdout 을 받아내고, "
+                f"그 결과를 근거로 답하라. 개념 설명·표·체크리스트만 출력 금지."
+            )
+
+    def _step_attempt_ok(self, original_message: str, events: list[dict]) -> tuple[bool, str]:
+        """step 시도가 충분히 수행됐는지 판정.
+
+        OK 조건:
+        - skill_result 가 하나 이상 있고 그 중 success=True 가 1개 이상
+        - 또는 multitask split 의 subtask_done 이 모두 종료
+        - 또는 메시지가 지식 질문(execute=False) 이라 QA 만으로 충분
+
+        retry 트리거:
+        - action 요청인데 skill_result success=True 가 0개
+        """
+        skill_results = [e for e in events if e.get("event") == "skill_result"]
+        if any(r.get("success") for r in skill_results):
+            return True, ""
+        # multitask 처리됐으면 OK
+        if any(e.get("event") == "multitask_split" for e in events):
+            done = [e for e in events if e.get("event") == "subtask_done"]
+            split = next((e for e in events if e.get("event") == "multitask_split"), {})
+            if done and len(done) >= split.get("count", 1):
+                return True, ""
+        # action 요청인지 분류 — 지식 질문이면 retry 불요
+        try:
+            intent = self._classify_intent(original_message)
+            if not intent.get("execute"):
+                return True, ""  # QA 응답으로 충분
+        except Exception:
+            pass
+        # 여기까지 왔으면 action 인데 실행 미흡
+        if not skill_results:
+            return False, "skill 호출 자체가 없었음 (planning 단계에서 종료)"
+        return False, "모든 skill 시도가 실패"
+
+    def _chat_once(self, message: str, approval_callback=None) -> Generator[dict, None, None]:
+        """원래의 chat 본체 — 1회 시도. step retry 는 chat() 가 감싼다."""
         if not message:
             return
+
+        # ══ Multi-task 분할 ─ "1) ... 2) ... 3) ..." 형식은 각 서브태스크를
+        # 순차적으로 재귀 chat 호출하여 플래너가 개별 라우팅하도록 한다.
+        subtasks = self._maybe_split_multitask(message)
+        if subtasks:
+            yield {"event": "multitask_split", "count": len(subtasks), "tasks": subtasks}
+            self.history.append({"role": "user", "content": message})
+            for i, sub in enumerate(subtasks, 1):
+                yield {"event": "subtask_start", "index": i, "total": len(subtasks), "task": sub}
+                # 재귀 호출: 각 서브태스크는 독립적으로 planning → execute → validate
+                yield from self.chat(sub, approval_callback=approval_callback)
+                yield {"event": "subtask_done", "index": i, "total": len(subtasks)}
+            return
+
         self.history.append({"role": "user", "content": message})
 
         # History 압축 — 12턴 초과 시 오래된 6턴 LLM 요약 (4층 전략 간소화)
@@ -401,7 +547,17 @@ class BastionAgent:
             self.history.append({"role": "assistant", "content": analysis})
             return
 
-        # 1-b. 멀티스텝 Skill 선택 (Tool Calling → JSON fallback)
+        # ══ ReAct 루프 진입 (Step 1) ══════════════════════════════════════════
+        # 액션 vs 지식 질문 1차 분류 — 지식이면 QA 로 빠르게 종료
+        intent_quick = self._classify_intent(message)
+        if intent_quick.get("execute") or self._is_action_request(message):
+            yield from self._chat_react(message, rag_ctx, prev_ctx, exp_ctx, approval_callback)
+            return
+        # 지식 질문은 ReAct 거치지 않고 QA 단축
+        yield from self._qa_with_extraction(message)
+        return
+
+        # ── 이하 LEGACY (사용 안 함, ReAct 가 대체) ─────────────────────────────
         skill_steps = self._select_skills_multi(message, rag_ctx, prev_ctx, exp_ctx)
 
         # LLM이 target을 잘못 지정했을 수 있으므로 _infer_target_vm으로 보정
@@ -413,44 +569,45 @@ class BastionAgent:
                     skill_steps[i] = (name, params)
 
         if not skill_steps:
-            # 1-c. 동적 Playbook 생성 (등록된 Playbook·Skill 매칭 없을 때)
-            dyn_steps = self._generate_dynamic_playbook(message)
-            if dyn_steps:
-                yield {"event": "stage", "stage": "executing"}
-                pb_results = []
-                for evt in self._run_dynamic_steps(dyn_steps, "동적 Playbook"):
-                    yield evt
-                    if evt.get("event") == "step_done":
-                        pb_results.append(evt)
-                yield {"event": "stage", "stage": "validating"}
-                analysis = yield from self._stream_analysis_events(message, pb_results)
-                self.evidence_db.add(
-                    playbook_id="dynamic", success=all(r.get("success") for r in pb_results),
-                    output="\n".join(r.get("output", "") for r in pb_results)[:3000],
-                    analysis=analysis, stage="dynamic_playbook", session_id=self.session_id,
-                    **self._test_meta,
-                )
-                self.history.append({"role": "assistant", "content": analysis})
-                return
+            # 1-c. LLM intent classifier — Tool Calling 실패 시 LLM에게 직접 물어봄:
+            #       "이 요청은 인프라 실행이 필요한가, 아니면 지식 답변인가?"
+            #       regex 대신 모델 자체의 판단력 사용 (모델 독립적).
+            intent = self._classify_intent(message)
 
-            # 1-d. shell 자동 fallback — 실행 가능한 작업이면 Q&A 대신 shell로
-            if self._should_execute(message):
-                target = self._infer_target_vm(message)
-                command = self._generate_shell_command(message, target)
+            if intent.get("execute"):
+                target = intent.get("target_vm") or "attacker"
+                command = intent.get("command", "").strip()
+                if not command:
+                    command = self._generate_shell_command(message, target)
                 if command:
                     skill_steps = [("shell", {"target": target, "command": command})]
                     # → STAGE 2로 진행
                 else:
-                    # 명령어 생성 실패 → Q&A
-                    yield {"event": "stage", "stage": "qa"}
-                    response = yield from self._stream_qa_events(message)
-                    self.history.append({"role": "assistant", "content": response})
+                    # 명령어 생성 실패 → 동적 Playbook 시도
+                    dyn_steps = self._generate_dynamic_playbook(message)
+                    if dyn_steps:
+                        yield {"event": "stage", "stage": "executing"}
+                        pb_results = []
+                        for evt in self._run_dynamic_steps(dyn_steps, "동적 Playbook"):
+                            yield evt
+                            if evt.get("event") == "step_done":
+                                pb_results.append(evt)
+                        yield {"event": "stage", "stage": "validating"}
+                        analysis = yield from self._stream_analysis_events(message, pb_results)
+                        self.evidence_db.add(
+                            playbook_id="dynamic", success=all(r.get("success") for r in pb_results),
+                            output="\n".join(r.get("output", "") for r in pb_results)[:3000],
+                            analysis=analysis, stage="dynamic_playbook", session_id=self.session_id,
+                            **self._test_meta,
+                        )
+                        self.history.append({"role": "assistant", "content": analysis})
+                        return
+                    # 최후 — Q&A (후속 w21 처리 통합)
+                    yield from self._qa_with_extraction(message)
                     return
             else:
-                # 순수 Q&A
-                yield {"event": "stage", "stage": "qa"}
-                response = yield from self._stream_qa_events(message)
-                self.history.append({"role": "assistant", "content": response})
+                # 순수 Q&A — LLM이 "지식 질문"으로 판정
+                yield from self._qa_with_extraction(message)
                 return
 
         # ══ STAGE 2: EXECUTING — 멀티스텝 Skill ═══════════════════════════
@@ -462,6 +619,7 @@ class BastionAgent:
 
         all_results = []
         for skill_name, params in skill_steps:
+            self._retry_history = []  # 스텝별 retry 히스토리 초기화
             # 파라미터 자동완성 (role→IP)
             params = self._enrich_params(skill_name, params)
 
@@ -483,15 +641,60 @@ class BastionAgent:
                                      "success": False, "output": f"pre-check failed: {pre_msg}"})
                 continue
 
-            yield {"event": "skill_start", "skill": skill_name, "params": params}
-            result = execute_skill(skill_name, params, self.vm_ips, self.ollama_url, self.model)
+            # ── 실행 + 자기 수정 루프 (최대 MAX_RETRY 회) ──
+            MAX_RETRY = 2
+            attempt = 0
+            while attempt <= MAX_RETRY:
+                attempt += 1
+                yield {"event": "skill_start", "skill": skill_name, "params": params,
+                       "attempt": attempt}
+                result = execute_skill(skill_name, params, self.vm_ips, self.ollama_url, self.model)
 
-            output = str(result.get("output", ""))
-            success = result.get("success", False)
-            exit_code = result.get("exit_code", -1 if not success else 0)
+                output = str(result.get("output", ""))
+                stderr = str(result.get("stderr", ""))
+                success = result.get("success", False)
+                exit_code = result.get("exit_code", -1 if not success else 0)
 
-            yield {"event": "skill_result", "skill": skill_name,
-                   "success": success, "output": output[:1000]}
+                yield {"event": "skill_result", "skill": skill_name,
+                       "success": success, "output": output[:1000],
+                       "attempt": attempt}
+
+                # ── w20 개선: skill 성공이어도 output이 요청을 만족하는지 LLM 검증 ──
+                # 성공이더라도 output이 엉뚱하거나 비어있으면 soft-fail로 처리해 재시도 유도.
+                # MAX_RETRY 초과 시엔 검증 건너뛰고 종료 (무한 retry 방지).
+                if success and attempt <= MAX_RETRY:
+                    if not self._verify_output_satisfies(message, output):
+                        yield {"event": "verify_miss", "skill": skill_name,
+                               "attempt": attempt,
+                               "reason": "output이 요청을 만족하지 않음"}
+                        success = False
+                        # stderr가 비어있다면 "결과 부적합"을 stderr에 기록해 diagnose가 참고
+                        if not stderr:
+                            stderr = "output이 요청 의도를 만족하지 못함 (semantic mismatch)"
+
+                if success or attempt > MAX_RETRY:
+                    break
+
+                # ── 실패 → LLM에 에러를 보여주고 수정된 명령/파라미터 요청 ──
+                correction = self._diagnose_and_correct(
+                    message, skill_name, params, output, stderr, exit_code
+                )
+                if not correction:
+                    break  # LLM이 수정 불가 판단
+
+                yield {"event": "self_correct", "skill": skill_name,
+                       "attempt": attempt + 1,
+                       "diagnosis": correction.get("diagnosis", ""),
+                       "action": correction.get("action", "")}
+
+                # 수정된 파라미터로 교체
+                new_skill = correction.get("skill", skill_name)
+                new_params = correction.get("params", params)
+                if new_skill in SKILLS:
+                    skill_name = new_skill
+                    params = self._enrich_params(skill_name, new_params)
+                else:
+                    break
 
             self.evidence_db.add(
                 skill=skill_name, params=params, success=success,
@@ -500,9 +703,10 @@ class BastionAgent:
                 **self._test_meta,
             )
             all_results.append({"skill": skill_name, "params": params,
-                                 "success": success, "output": output})
+                                 "success": success, "output": output,
+                                 "attempts": attempt})
 
-            # Experience Learning — 실행 결과를 카테고리 수준으로 일반화하여 축적
+            # Experience Learning
             self.experience.record(
                 message=message, skill=skill_name,
                 target_vm=params.get("target", ""),
@@ -621,10 +825,20 @@ class BastionAgent:
     # ── PLANNING helpers ────────────────────────────────────────────────────
 
     # 구체적 명령어 패턴 — 이 패턴이 포함되면 Playbook 대신 Skill로 라우팅
+    # 단어 경계(\b)로 부분 매치 방지 (예: "Rule-based"의 "sed" 오탐)
     _CONCRETE_CMD_PATTERNS = re.compile(
-        r'(curl\s|nmap\s|grep\s|sed\s|awk\s|systemctl\s|auditctl\s|chage\s|chmod\s|'
-        r'docker\s|nft\s|hydra\s|nikto\s|sqlmap\s|ping\s|dig\s|nc\s|netcat\s|'
-        r'python3\s|cat\s|echo\s|ls\s|find\s|tail\s|head\s|mkdir\s|useradd\s|usermod\s)',
+        r'(\bcurl\s|\bnmap\s|\bgrep\s|\bsed\s|\bawk\s|\bsystemctl\s|\bauditctl\s|'
+        r'\bchage\s|\bchmod\s|\bdocker\s|\bnft\s|\bhydra\s|\bnikto\s|\bsqlmap\s|'
+        r'\bping\s|\bdig\s|\bnc\s|\bnetcat\s|\bpython3\s|\bcat\s|\becho\s|'
+        r'\bls\s|\bfind\s|\btail\s|\bhead\s|\bmkdir\s|\buseradd\s|\busermod\s|'
+        # 확장 (w19 개선): 추가 시스템·감사·네트워크 명령
+        r'\btcpdump\s|\btshark\s|\bss\s-|\bnetstat\s|\bip\s+(a|r|link|addr|route)|'
+        r'\bjournalctl\s|\bausearch\s|\bdmesg\b|\blast\s|\bwho\s|\bwhoami\b|'
+        r'\brpm\s|\bdpkg\s|\bapt\s|\byum\s|\bdnf\s|\bpip\s|\bnpm\s|\bsnap\s|'
+        r'\bfirewall-cmd\s|\biptables\s|\bufw\s|'
+        r'\bwazuh-control\b|\bwazuh-logtest\b|\bwazuh-analysisd\b|\bossec-control\b|'
+        r'\bsuricata\b|\bsuricatasc\b|'
+        r'\bkubectl\s|\bhelm\s|\bminikube\s|\bk9s\b)',
         re.IGNORECASE
     )
 
@@ -633,7 +847,53 @@ class BastionAgent:
         r'(확인해줘|설정해줘|스캔해줘|실행해줘|점검해줘|테스트해줘|수행해줘|'
         r'조회해줘|추가해줘|삭제해줘|생성해줘|저장해줘|분석해줘|검색해줘|'
         r'활성화해줘|비활성화해줘|시작해줘|중지해줘|'
+        r'시도해줘|시도하라|시도해|공격해|공격하라|해킹해|침투해|침투하라|'
+        r'삽입해|삽입하라|주입해|주입하라|전송해|전송하라|'
+        r'우회해|우회하라|획득해|획득하라|추출해줘|추출하라|'
+        r'덤프해|덤프하라|크래킹|브루트포스|'
+        r'페이로드|익스플로잇|취약점을?\s*확인|엔드포인트.*요청|'
+        # 확장 (w19 개선): 지시·존댓말·명령형·완료형
+        r'~?하시오|하시라|해보시오|해보세요|해보기|만드시오|만들어보|'
+        r'수정하|수정하시오|변경하|변경하시오|교체하|업데이트하|'
+        r'재시작|재시작하|재시작해|리로드|로드하|'
+        r'존재 여부|상태 확인|상태를 확인|접속 (가능|확인)|응답 (확인|코드)|'
+        r'(룰|규칙|파일|계정|서비스|프로세스|포트|세션)이?\s*(있는지|존재|활성|실행)|'
+        r'(룰|규칙|파일|계정)을?\s*(추가|생성|작성|배포)|'
+        # 확장: 실행 부사구
+        r'에 접속|에서 실행|에서 확인|에서 수행|에 대해 (실행|수행|점검|공격|검증|분석)|'
         r'확인하|설정하|스캔하|실행하|점검하|시오)',
+        re.IGNORECASE
+    )
+
+    # ── w19 개선: 인프라·자산·verify 힌트 감지 패턴 ────────────────────────
+    # 본 과정 인프라의 *구체적* 언급 — 이것이 있으면 QA가 아닌 실행 의도가 강함
+    _INFRA_MENTIONS = re.compile(
+        r'(10\.20\.30\.\d+|'               # 실습 대역
+        r':\d{2,5}\b|'                      # 포트
+        r'/etc/|/var/|/opt/|/tmp/|/home/|/root/|/proc/|/sys/|/dev/|'  # 시스템 경로
+        r'\bcron\b|\bsystemd\b|\bauditd\b|\brsyslog\b|\bnftables\b|'
+        r'\bmodsec|\bWAF\b|\bIPS\b|\bIDS\b|\bSIEM\b|'
+        r'\bossec\b|\bwazuh\b|\bsuricata\b|\bfail2ban\b|'
+        r'(access|auth|error|system|kern)\.log|'
+        r'authorized_keys|crontab|sshd_config|ossec\.conf|local_rules|'
+        r'eve\.json|alerts\.json|ossec\.log|'
+        # 한국어 인프라 용어
+        r'방화벽|침입(차단|탐지)|에이전트의?|데몬|서비스|프로세스|포트|세션|룰셋|'
+        r'(보안|인증|시스템|네트워크|커널|방화벽)\s*(룰|규칙|로그|로그인|설정))',
+        re.IGNORECASE
+    )
+
+    # Verify 가능한 요구 — "출력", "응답", "상태", "확인 가능" 등
+    _VERIFIABLE_ASK = re.compile(
+        r'(출력|결과|응답|응답\s*코드|상태|상태\s*확인|'
+        r'\bresponse\b|\boutput\b|\bstatus\b|\bexit[\s_-]?code\b|'
+        r'활성\s*여부|실행\s*여부|존재\s*여부|로그에\s*(기록|남|출력)|'
+        r'확인\s*(가능|하시오|하라)|검증\s*(가능|하시오)|'
+        r'응답\s*(헤더|본문|문자열)|(종료|반환)\s*(코드|값)|'
+        # 추가: 존재성·행동 동사형 verify
+        r'존재하는지|있는지|실행되는지|활성화(되|됐)는지|'
+        r'기록되는지|기록됐는지|발생하는지|발생했는지|생성됐는지|추가됐는지|삭제됐는지|'
+        r'적용(되|됐)는지|반영(되|됐)는지|동작하는지|동작했는지)',
         re.IGNORECASE
     )
 
@@ -645,6 +905,663 @@ class BastionAgent:
         (re.compile(r'siem|wazuh|alerts|알림|에이전트.*목록|ossec|로그.*분석', re.I), "siem"),
         (re.compile(r'manager|ollama|LLM|python3.*스크립트|AI|가드레일|PII', re.I), "manager"),
     ]
+
+    def _diagnose_and_correct(self, original_request: str,
+                              skill_name: str, params: dict,
+                              output: str, stderr: str, exit_code: int) -> dict | None:
+        """실패한 실행의 출력을 LLM에 보여주고 수정된 접근을 생성.
+
+        Claude Code의 핵심 능력: 에러를 관찰 → 원인 진단 → 수정된 명령 생성.
+        이것을 Bastion에 이식.
+
+        반환: {"skill": "...", "params": {...}, "diagnosis": "...", "action": "..."} 또는 None
+        """
+        # 이전 실패 이력을 컨텍스트로 축적 (같은 요청의 시도 히스토리)
+        if not hasattr(self, '_retry_history'):
+            self._retry_history = []
+        self._retry_history.append({
+            "skill": skill_name,
+            "params": {k: str(v)[:100] for k, v in params.items()},
+            "output": output[-200:],
+            "stderr": stderr[-200:],
+            "exit_code": exit_code,
+        })
+
+        error_context = f"stdout: {output[-500:]}" if output else ""
+        if stderr:
+            error_context += f"\nstderr: {stderr[-300:]}"
+        if not error_context.strip():
+            error_context = f"exit_code={exit_code}, 출력 없음"
+
+        # 이전 시도 이력 포함
+        history_ctx = ""
+        if len(self._retry_history) > 1:
+            history_ctx = "\n이전 시도 이력:\n"
+            for i, h in enumerate(self._retry_history[:-1], 1):
+                history_ctx += f"  시도 {i}: {h['skill']}({h['params'].get('command','')[:60]}) → 실패: {h['output'][:80]}\n"
+            history_ctx += "위 시도들과 다른 접근을 해야 함.\n"
+
+        prompt = (
+            f"보안 에이전트가 작업을 실행했으나 실패했다. 에러를 분석하고 **반드시** 수정된 접근을 제시하라.\n\n"
+            f"원래 요청: {original_request}\n"
+            f"실행한 Skill: {skill_name}\n"
+            f"파라미터: {json.dumps(params, ensure_ascii=False)}\n"
+            f"결과 (실패):\n{error_context}\n"
+            f"{history_ctx}\n"
+            f"다음 JSON만 출력 (코드블록 금지):\n"
+            f'{{"diagnosis": "실패 원인 한 줄", "action": "수정 내용 한 줄", '
+            f'"skill": "사용할 skill명", "params": {{수정된 파라미터}}}}\n\n'
+            f"**원칙**: 포기하지 말고 반드시 다른 접근을 시도하라. null 반환은 **완전히 불가능한 극소수 경우**에만.\n"
+            f"애매하거나 판단이 서지 않으면 **정보 수집용 탐색 명령**(ls·find·cat·systemctl status·journalctl 등)으로 대체 시도하라.\n\n"
+            f"수정 전략 (순서대로 고려):\n"
+            f"- 경로가 틀렸으면 대안 경로 시도 (/var/log ↔ /var/ossec/logs 등)\n"
+            f"- 권한 문제면 sudo 추가\n"
+            f"- 명령어 구문 오류면 수정\n"
+            f"- 대상 VM이 잘못됐으면 올바른 VM 지정\n"
+            f"- 파일이 없으면 find·locate로 먼저 탐색\n"
+            f"- 서비스가 안 돌면 systemctl status로 확인 후 시작\n"
+            f"- 커맨드가 실패하면 같은 목적의 다른 도구 사용 (curl↔wget, ss↔netstat 등)\n"
+            f"- **어떤 경우에도 원래 요청의 핵심 정보를 얻는 방향으로 재시도**"
+        )
+        try:
+            r = httpx.post(f"{self.ollama_url}/api/chat", json={
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": False, "format": "json",
+                "options": {"temperature": 0.1, "num_predict": 300},
+            }, timeout=20.0)
+            content = r.json().get("message", {}).get("content", "")
+            if not content or content.strip() == "null":
+                return None
+            parsed = json.loads(content)
+            if not isinstance(parsed, dict) or "skill" not in parsed:
+                return None
+            return {
+                "skill": str(parsed.get("skill", skill_name)),
+                "params": parsed.get("params", params) if isinstance(parsed.get("params"), dict) else params,
+                "diagnosis": str(parsed.get("diagnosis", "")),
+                "action": str(parsed.get("action", "")),
+            }
+        except Exception:
+            return None
+
+    # w21 개선: QA 응답에서 실행 가능한 셸 명령 추출 (파괴적 명령 차단)
+    _QA_CODE_BLOCK = re.compile(r'```(?:bash|sh|shell)?\s*\n([\s\S]*?)\n```', re.IGNORECASE)
+    _QA_INLINE_CMD = re.compile(
+        r'(?:^|\n)\s*(?:[\$#]\s*|\d+\.\s*)?'
+        r'(\b(?:curl|nmap|grep|sed|awk|systemctl|auditctl|chmod|docker|nft|hydra|nikto|sqlmap|'
+        r'ping|dig|nc|netcat|python3|cat|echo|ls|find|tail|head|mkdir|useradd|usermod|'
+        r'tcpdump|tshark|ss|netstat|ip\s+(?:a|r|link|addr|route)|journalctl|ausearch|dmesg|'
+        r'rpm|dpkg|apt|yum|dnf|pip|npm|snap|firewall-cmd|iptables|ufw|'
+        r'wazuh-control|wazuh-logtest|suricata|suricatasc|kubectl|helm|'
+        r'ossec-control|ossec-analysisd)'
+        r'[^\n]{1,300}?)\s*$',
+        re.MULTILINE | re.IGNORECASE
+    )
+    # 파괴적 명령 차단 — 실행 거부
+    _DESTRUCTIVE = re.compile(
+        r'\b(rm\s+-rf?\s+/|rm\s+-rf?\s+~|dd\s+if=|mkfs|fdisk|'
+        r':(){ :|:& };:|>\s*/dev/sda|shutdown|reboot|halt|poweroff|'
+        r'chmod\s+777\s+/|userdel\s+-r|'
+        r'systemctl\s+(?:stop|disable)\s+(?:ssh|sshd|network)|'
+        r'iptables\s+-F|nft\s+flush\s+ruleset|kill\s+-9\s+1\b)',
+        re.IGNORECASE
+    )
+
+    def _extract_commands_from_qa(self, text: str) -> list[str]:
+        """QA 응답에서 실행 가능한 셸 명령 블록을 추출. 파괴적 명령은 제외."""
+        if not text:
+            return []
+        cmds = []
+        # 1순위: 코드 블록
+        for block in self._QA_CODE_BLOCK.findall(text):
+            for line in block.split('\n'):
+                line = line.strip().lstrip('$# ').strip()
+                if not line or line.startswith('#'):
+                    continue
+                if self._DESTRUCTIVE.search(line):
+                    continue
+                # 너무 긴 or 너무 짧은 라인 제외
+                if 8 <= len(line) <= 400:
+                    cmds.append(line)
+        # 2순위: 인라인 명령 (코드 블록이 없거나 부족할 때)
+        if len(cmds) < 2:
+            for m in self._QA_INLINE_CMD.finditer(text):
+                line = m.group(1).strip()
+                if self._DESTRUCTIVE.search(line):
+                    continue
+                if 8 <= len(line) <= 400 and line not in cmds:
+                    cmds.append(line)
+        # 중복 제거 (순서 유지) + 상위 3개
+        seen = set()
+        unique = []
+        for c in cmds:
+            if c not in seen:
+                seen.add(c)
+                unique.append(c)
+        # w23 개선: 정규식 실패 시 SubAgent(작은 LLM)로 추출 시도
+        if not unique and len(text) > 120:
+            sub_cmds = self._subagent_extract_commands(text)
+            if sub_cmds:
+                unique = sub_cmds
+        return unique[:3]
+
+    def _subagent_extract_commands(self, text: str) -> list[str]:
+        """w23: 작은 모델(gemma3:4b 등 SUBAGENT_MODEL)로 설명형 QA 응답에서 실행 가능한
+        명령을 추출. 정규식이 놓친 케이스 구제용 fallback.
+
+        - 응답이 짧거나 명령이 없으면 빈 리스트 반환
+        - 파괴적 명령은 제외
+        - 모델 호출 실패 시 조용히 빈 리스트 (무해)
+        """
+        try:
+            from bastion import LLM_SUBAGENT_MODEL
+            sub_model = LLM_SUBAGENT_MODEL
+        except Exception:
+            sub_model = "gemma3:4b"
+
+        prompt = (
+            "다음 설명 텍스트에서 Linux 셸로 바로 실행 가능한 명령만 최대 3줄 뽑아내라.\n"
+            "규칙:\n"
+            "- 각 줄 하나의 명령, 파이프/리다이렉트 허용\n"
+            "- rm -rf, shutdown, mkfs 등 파괴적 명령은 제외\n"
+            "- 플레이스홀더(<>, {}) 있으면 그 라인은 제외\n"
+            "- 명령이 하나도 없거나 모두 설명문이면 정확히 'none' 출력\n"
+            "- 코드블록 기호, 번호, 주석 없이 명령 자체만 출력\n\n"
+            f"텍스트:\n{text[-2000:]}\n\n"
+            "명령 (최대 3줄):"
+        )
+        try:
+            r = httpx.post(f"{self.ollama_url}/api/chat", json={
+                "model": sub_model,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": False,
+                "options": {"temperature": 0.1, "num_predict": 200},
+            }, timeout=15.0)
+            content = r.json().get("message", {}).get("content", "").strip()
+        except Exception:
+            return []
+
+        if not content:
+            return []
+        low = content.lower().strip()
+        if low == "none" or low.startswith("none"):
+            return []
+
+        cmds = []
+        for line in content.split("\n"):
+            line = line.strip().lstrip("0123456789.-*>`$# ").strip()
+            if not line or line.startswith("#"):
+                continue
+            if self._DESTRUCTIVE.search(line):
+                continue
+            # 플레이스홀더 포함 라인 제외
+            if "<" in line and ">" in line:
+                continue
+            if 8 <= len(line) <= 400 and line not in cmds:
+                cmds.append(line)
+            if len(cmds) >= 3:
+                break
+        return cmds
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # ReAct 루프 — Step 1, 2, 4, 6 통합 (의도 명시 + tool 결과 피드백 + self-verify)
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def _is_action_request(self, message: str) -> bool:
+        """간단 휴리스틱 — 명령형 한국어 또는 인프라 키워드가 있으면 action."""
+        if not message:
+            return False
+        if self._CONCRETE_CMD_PATTERNS.search(message):
+            return True
+        if self._EXEC_KEYWORDS.search(message):
+            return True
+        if self._INFRA_MENTIONS.search(message) and self._VERIFIABLE_ASK.search(message):
+            return True
+        return False
+
+    def _build_react_system_prompt(self) -> str:
+        """ReAct 루프용 시스템 프롬프트 — Step 2 (목표 명시) + Step 4 (todo 추적) 포함."""
+        skill_list = "\n".join(
+            f"  - {name}: {s['description']} (target: {s.get('target_vm','auto')})"
+            for name, s in SKILLS.items()
+        )
+        vm_info = "\n".join(f"  {r} = {ip}" for r, ip in self.vm_ips.items())
+        verify_block = ""
+        ctx = getattr(self, "_verify_context", {}) or {}
+        if ctx.get("intent") or ctx.get("success_criteria"):
+            crit = "\n".join(f"    - {c}" for c in ctx.get("success_criteria", []))
+            meth = "\n".join(f"    - {m}" for m in ctx.get("acceptable_methods", []))
+            neg = "\n".join(f"    - {n}" for n in ctx.get("negative_signs", []))
+            verify_block = (
+                "\n## 채점 기준 (작업 종료 시 이걸로 평가됨)\n"
+                f"의도: {ctx.get('intent','')}\n"
+                f"성공 기준 (하나 이상 충족 필요):\n{crit}\n"
+            )
+            if meth:
+                verify_block += f"허용 방법 (등가 인정):\n{meth}\n"
+            if neg:
+                verify_block += f"피해야 할 신호:\n{neg}\n"
+        return (
+            "너는 Bastion 보안 운영 에이전트다. ReAct 패턴으로 작업한다.\n"
+            "\n"
+            "## 작업 흐름\n"
+            "1. 첫 turn: 사용자 요청을 한 줄로 요약하고 (= GOAL), 성공 신호(SUCCESS) 와 처리할 todo 리스트를 명시한 다음 첫 도구 호출.\n"
+            "2. 매 turn: 이전 도구 결과를 보고 다음 도구를 호출하거나, 모든 todo 가 끝났고 GOAL 충족됐으면 도구 호출 없이 종합 답변 작성.\n"
+            "3. 도구 호출 시: 정확한 skill 이름과 필수 파라미터 모두 채워서. 결과는 자동으로 다음 turn 에 보인다.\n"
+            "4. 종료 조건: tool_calls 없는 응답 = 작업 끝. 이때 응답에 \"GOAL 충족됨: ...\" 명시.\n"
+            "\n"
+            "## 사용 가능한 Skill (function tools)\n"
+            f"{skill_list}\n"
+            "\n"
+            "## VM 인프라\n"
+            f"{vm_info}\n"
+            "  attacker: 공격 도구 (nmap, nikto, sqlmap, curl, msfvenom, hydra)\n"
+            "  secu:     방화벽/IPS (nftables, Suricata)\n"
+            "  web:      Apache + ModSecurity, JuiceShop:3000, DVWA:8080\n"
+            "  siem:     Wazuh Manager, OpenCTI:8080\n"
+            "  manager:  Bastion 자체 + Ollama 프록시\n"
+            "\n"
+            "## 핵심 원칙\n"
+            "- 개념 설명·표·체크리스트만 출력 금지. 반드시 실제 도구를 호출해서 결과를 받아야 한다.\n"
+            "- shell 도구의 command 는 비대화형(non-interactive)으로. < /dev/null, --noinput, -y 등 자동 응답.\n"
+            "- 도구 호출 결과가 부적합하면 같은 도구 다시 호출하지 말고 다른 접근으로.\n"
+            "- 작업 종료 전 반드시 GOAL 와 SUCCESS 기준에 비추어 자체 평가.\n"
+            f"{verify_block}"
+        )
+
+    def _chat_react(self, message: str, rag_ctx: str, prev_ctx: str, exp_ctx: str,
+                    approval_callback=None) -> Generator[dict, None, None]:
+        """ReAct 루프: LLM ↔ tool 결과 교환. 1회 plan 모델 폐기.
+
+        매 turn:
+          1) LLM 호출 (tools 포함) → tool_calls 또는 final content
+          2) tool_calls 있으면 실행 → tool_result 를 messages 에 push → 다음 turn
+          3) tool_calls 없으면 self-verify → 충족이면 종료, 미흡이면 1회 재촉
+        """
+        sys_prompt = self._build_react_system_prompt()
+        # 메시지 빌드. 컨텍스트(rag/prev/exp)는 system 에 추가.
+        ctx_lines = []
+        if rag_ctx:
+            ctx_lines.append(f"## 참고 자료 (RAG)\n{rag_ctx}")
+        if prev_ctx:
+            ctx_lines.append(f"## 최근 실행 컨텍스트\n{prev_ctx}")
+        if exp_ctx:
+            ctx_lines.append(f"## 학습된 패턴\n{exp_ctx}")
+        if ctx_lines:
+            sys_prompt = sys_prompt + "\n\n" + "\n\n".join(ctx_lines)
+
+        msgs: list[dict] = [
+            {"role": "system", "content": sys_prompt},
+            {"role": "user", "content": message},
+        ]
+
+        try:
+            tools_spec = skills_to_ollama_tools()
+        except Exception:
+            tools_spec = []
+
+        all_tool_outputs: list[dict] = []
+        MAX_TURNS = 6
+        SELF_VERIFY_RETRY = 1
+        self_verified_attempted = 0
+
+        yield {"event": "stage", "stage": "planning"}
+
+        last_assistant_content = ""
+        for turn in range(MAX_TURNS):
+            # ─ LLM 호출 ─
+            try:
+                r = httpx.post(
+                    f"{self.ollama_url}/api/chat",
+                    json={
+                        "model": self.model,
+                        "messages": msgs,
+                        "tools": tools_spec,
+                        "stream": False,
+                        "options": {"temperature": 0.2, "num_predict": 1500},
+                    },
+                    timeout=180.0,
+                )
+                resp = r.json()
+            except Exception as e:
+                yield {"event": "error", "stage": "react", "error": str(e)}
+                break
+
+            response_msg = resp.get("message", {}) or {}
+            content = response_msg.get("content", "") or ""
+            tool_calls = response_msg.get("tool_calls", []) or []
+
+            # 토큰 청크로 stream 출력
+            for i in range(0, len(content), 100):
+                yield {"event": "stream_token", "token": content[i:i + 100]}
+
+            # assistant turn 저장
+            assistant_msg: dict = {"role": "assistant", "content": content}
+            if tool_calls:
+                assistant_msg["tool_calls"] = tool_calls
+            msgs.append(assistant_msg)
+            last_assistant_content = content
+
+            # ─ tool_calls 없음 → 종료 후보 ─
+            if not tool_calls:
+                # Step 6 self-verify (한 번만)
+                if (self_verified_attempted < SELF_VERIFY_RETRY and
+                    (turn > 0 or all_tool_outputs)):  # 도구 한 번이라도 돌렸을 때만 의미 있음
+                    ok, why = self._self_verify_completion(message, all_tool_outputs, content)
+                    if not ok:
+                        self_verified_attempted += 1
+                        yield {"event": "self_verify_fail", "reason": why}
+                        msgs.append({"role": "user", "content": (
+                            f"[자체 검증 — 미흡] {why}\n"
+                            f"채점 기준이 아직 충족되지 않았다. "
+                            f"필요한 도구를 추가로 호출해 작업을 완성하라. "
+                            f"개념 설명·표만 출력하지 말고 실제 명령을 실행하라."
+                        )})
+                        continue
+                break  # end_turn
+
+            # ─ tool_calls 처리 ─
+            if turn == 0:
+                yield {"event": "stage", "stage": "executing"}
+
+            for tc in tool_calls:
+                fn = tc.get("function", {}) or {}
+                skill_name = fn.get("name", "")
+                args = fn.get("arguments", {})
+                if isinstance(args, str):
+                    try:
+                        args = json.loads(args)
+                    except Exception:
+                        args = {}
+                if not isinstance(args, dict):
+                    args = {}
+
+                if skill_name not in SKILLS:
+                    msgs.append({"role": "tool", "content": f"[error] unknown skill: {skill_name}"})
+                    continue
+
+                params = self._enrich_params(skill_name, args)
+                # shell target 추론 보정
+                if skill_name == "shell" and params.get("target") not in self.vm_ips:
+                    params["target"] = self._infer_target_vm(message)
+                    params = self._enrich_params(skill_name, params)
+
+                # 위험 평가 + 승인
+                risk = self._assess_risk(skill_name, params)
+                if risk == "high":
+                    yield {"event": "risk_warning", "skill": skill_name, "risk": risk}
+                sk_def = SKILLS.get(skill_name, {})
+                if (sk_def.get("requires_approval") or risk == "high") and approval_callback:
+                    if not approval_callback(skill_name, skill_name, params):
+                        yield {"event": "skill_skip", "skill": skill_name, "reason": "denied"}
+                        msgs.append({"role": "tool", "content": "[error] approval denied"})
+                        continue
+
+                # Pre-check
+                pre_ok, pre_msg = self._pre_check(skill_name, params)
+                if not pre_ok:
+                    yield {"event": "precheck_fail", "skill": skill_name, "message": pre_msg}
+                    msgs.append({"role": "tool",
+                                 "content": f"[precheck-fail] {pre_msg}"})
+                    continue
+
+                # 실제 실행
+                yield {"event": "skill_start", "skill": skill_name, "params": params, "attempt": 1}
+                try:
+                    result = execute_skill(skill_name, params, self.vm_ips,
+                                           self.ollama_url, self.model)
+                except Exception as e:
+                    result = {"success": False, "output": str(e), "stderr": str(e),
+                              "exit_code": -1}
+
+                output = str(result.get("output", ""))
+                stderr = str(result.get("stderr", ""))
+                success = result.get("success", False)
+                exit_code = result.get("exit_code", -1 if not success else 0)
+
+                yield {"event": "skill_result", "skill": skill_name,
+                       "success": success, "output": output[:1000], "attempt": 1}
+
+                # 다음 turn 의 LLM 입력
+                tool_msg_content = (
+                    f"[skill={skill_name} success={success} exit={exit_code}]\n"
+                    f"stdout (앞 1500자):\n{output[:1500]}"
+                )
+                if stderr:
+                    tool_msg_content += f"\n\nstderr (앞 500자):\n{stderr[:500]}"
+                msgs.append({"role": "tool", "content": tool_msg_content})
+
+                all_tool_outputs.append({
+                    "skill": skill_name, "params": params,
+                    "success": success, "output": output,
+                    "exit_code": exit_code,
+                })
+
+                # Evidence DB
+                self.evidence_db.add(
+                    skill=skill_name, params=params, success=success,
+                    exit_code=exit_code, output=output,
+                    stage="skill", session_id=self.session_id,
+                    **self._test_meta,
+                )
+                # Experience
+                self.experience.record(
+                    message=message, skill=skill_name,
+                    target_vm=params.get("target", ""),
+                    command=params.get("command", ""),
+                    success=success,
+                )
+                # Asset 갱신
+                if skill_name in ("probe_host", "probe_all", "check_suricata",
+                                  "check_wazuh", "check_modsecurity"):
+                    self._update_assets_from_result(skill_name, params, success)
+
+            # 다음 turn 으로
+
+        # ── VALIDATING ─────────────────────────────────────────────────────
+        yield {"event": "stage", "stage": "validating"}
+
+        # 마지막 LLM content 가 비었으면 종합 답변 1회 생성
+        if not last_assistant_content.strip() and all_tool_outputs:
+            try:
+                r = httpx.post(
+                    f"{self.ollama_url}/api/chat",
+                    json={
+                        "model": self.model,
+                        "messages": msgs + [{"role": "user", "content":
+                            "위 결과를 종합해서 사용자 요청에 대한 최종 답을 한 단락으로 작성하라."}],
+                        "stream": False,
+                        "options": {"temperature": 0.0, "num_predict": 600},
+                    },
+                    timeout=60.0,
+                )
+                last_assistant_content = r.json().get("message", {}).get("content", "") or ""
+                if last_assistant_content:
+                    for i in range(0, len(last_assistant_content), 100):
+                        yield {"event": "stream_token",
+                               "token": last_assistant_content[i:i + 100]}
+            except Exception:
+                pass
+
+        self.history.append({"role": "assistant", "content": last_assistant_content})
+
+        # Experience → Playbook 자동 승격
+        try:
+            stats = self.experience.stats()
+            if stats.get("total_patterns", 0) % 10 == 0 and stats.get("total_patterns", 0) > 0:
+                promoted = self.experience.promote_to_playbook()
+                if promoted:
+                    yield {"event": "message",
+                           "message": f"경험 → Playbook 승격: {', '.join(promoted)}"}
+        except Exception:
+            pass
+
+    def _self_verify_completion(self, original_message: str,
+                                tool_outputs: list[dict],
+                                final_content: str) -> tuple[bool, str]:
+        """end_turn 전 self-verify (Step 6).
+
+        verify_context.success_criteria 에 비추어 LLM 이 자체 평가.
+        반환: (충족 여부, 사유)
+        """
+        ctx = getattr(self, "_verify_context", {}) or {}
+        criteria = ctx.get("success_criteria") or []
+        intent = ctx.get("intent", "")
+        # verify_context 가 없으면 일반 휴리스틱 — skill 한 번이라도 success 면 OK
+        if not (criteria or intent):
+            ok = any(t.get("success") for t in tool_outputs)
+            return ok, "" if ok else "도구 실행 성공 사례 없음"
+
+        # tool_outputs 를 한 줄씩 요약
+        tool_summary = "\n".join(
+            f"- {t['skill']} (success={t['success']}): {str(t['output'])[:200]}"
+            for t in tool_outputs[-5:]
+        ) or "(도구 호출 없음)"
+
+        prompt = (
+            "ReAct agent 의 작업 완료 여부를 채점 기준에 따라 평가하라.\n"
+            "JSON 한 줄만 출력 (코드블록 금지):\n"
+            '{"satisfied": true|false, "reason": "한 줄"}\n\n'
+            f"## 사용자 요청\n{original_message[:600]}\n\n"
+            f"## 채점 의도\n{intent}\n\n"
+            f"## 성공 기준 (하나 이상 충족 필요)\n"
+            + "\n".join(f"- {c}" for c in criteria) + "\n\n"
+            f"## 도구 실행 요약\n{tool_summary}\n\n"
+            f"## 최종 답변\n{final_content[:1500]}\n\n"
+            "기준 충족 여부 평가 — 도구 출력에 기준이 충족됐거나, "
+            "도구 결과가 의도와 일치하면 satisfied=true. "
+            "도구가 한 번도 안 돌았거나 답변이 개념 설명뿐이면 satisfied=false."
+        )
+        try:
+            r = httpx.post(
+                f"{self.ollama_url}/api/chat",
+                json={
+                    "model": self.model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "stream": False,
+                    "format": "json",
+                    "options": {"temperature": 0.0, "num_predict": 200},
+                },
+                timeout=30.0,
+            )
+            content = r.json().get("message", {}).get("content", "")
+            parsed = json.loads(content) if content else {}
+            return bool(parsed.get("satisfied")), str(parsed.get("reason", "") or "")
+        except Exception:
+            # 안전 default — 도구 한 번이라도 success 면 OK
+            ok = any(t.get("success") for t in tool_outputs)
+            return ok, "" if ok else "self-verify LLM 호출 실패, 도구 성공 사례 없음"
+
+    def _qa_with_extraction(self, message: str) -> Generator[dict, None, None]:
+        """QA 응답 후 명령을 추출해 실행 시도. 추출 실패 시 ask_user 이벤트로 HITL 유도.
+
+        흐름:
+          1. QA stage → LLM 응답 수집
+          2-a. 추출 성공 → executing으로 재투입
+          2-b. 추출 실패·설명형 응답 → ask_user 이벤트 (사람 답변 필요)
+        """
+        yield {"event": "stage", "stage": "qa"}
+        response = yield from self._stream_qa_events(message)
+
+        commands = self._extract_commands_from_qa(response or "")
+        if commands:
+            yield {"event": "qa_to_exec", "extracted": len(commands),
+                   "preview": commands[0][:80]}
+            yield {"event": "stage", "stage": "executing"}
+            target = self._infer_target_vm(message)
+            for i, cmd in enumerate(commands, 1):
+                params = self._enrich_params("shell", {"target": target, "command": cmd})
+                yield {"event": "skill_start", "skill": "shell", "params": params,
+                       "attempt": 1, "from_qa": True, "idx": i}
+                try:
+                    result = execute_skill("shell", params, self.vm_ips, self.ollama_url, self.model)
+                except Exception as e:
+                    yield {"event": "skill_result", "skill": "shell", "success": False,
+                           "output": f"exec error: {e}", "attempt": 1}
+                    continue
+                output = str(result.get("output", ""))
+                success = result.get("success", False)
+                yield {"event": "skill_result", "skill": "shell",
+                       "success": success, "output": output[:800], "attempt": 1}
+                self.evidence_db.add(
+                    skill="shell", params=params, success=success,
+                    output=output[:2000], stage="qa_extract", session_id=self.session_id,
+                    **self._test_meta,
+                )
+            yield {"event": "stage", "stage": "validating"}
+        else:
+            # w22 개선: 명령 추출 실패 → 사람에게 구체적 질문 (HITL)
+            if len(response or "") > 80:   # 의미 있는 응답이 있었을 때만
+                question = self._build_ask_user_question(message, response)
+                yield {"event": "ask_user", "question": question,
+                       "context": response[-500:] if response else ""}
+
+        self.history.append({"role": "assistant", "content": response})
+
+    def _build_ask_user_question(self, message: str, response: str) -> str:
+        """사람에게 물어볼 구체적 질문 생성. 모호성 유형에 따라 질문 템플릿 선택."""
+        msg_low = (message or "").lower()
+        resp_low = (response or "").lower()
+
+        missing_target = not any(
+            tok in message for tok in ("attacker", "secu", "web", "siem", "manager",
+                                         "10.20.30.", "192.168.0.")
+        )
+        looks_theoretical = any(
+            kw in resp_low for kw in ("개념", "정의", "의미", "원리", "이론")
+        )
+
+        if missing_target:
+            return (
+                "이 요청을 어느 VM에서 어떤 명령으로 실행해야 할까요? "
+                "예: 'siem VM에서 systemctl status ossec' 또는 "
+                "'web VM에서 curl -I http://10.20.30.80'. "
+                "모호하면 'skip'으로 답해주세요."
+            )
+        if looks_theoretical:
+            return (
+                "이 요청은 이론·개념 설명으로 해석되어 실행을 보류했습니다. "
+                "실제 검증이 필요하다면 실행할 구체 명령 1줄을 알려주세요. "
+                "(예: 'grep certified /var/log/suricata/eve.json'). "
+                "이론 답변으로 충분하면 'skip'."
+            )
+        return (
+            "이 작업을 실행하려면 추가 정보가 필요합니다. "
+            "구체 명령 한 줄 또는 'skip'으로 답해주세요."
+        )
+
+    def _verify_output_satisfies(self, request: str, output: str) -> bool:
+        """w20 개선: skill이 성공했어도 output이 원래 요청을 만족하는지 LLM이 판정.
+
+        - satisfied=True → 재시도 불필요 (정상 종료)
+        - satisfied=False → soft-fail 처리하여 _diagnose_and_correct 로 재시도
+        - 에러/빈 응답 → True (보수적: 무의미한 재시도 방지)
+
+        비용: skill 성공 건당 LLM 1회 추가 (~5-10s). MAX_RETRY 초과 시엔 호출 안 함.
+        """
+        if not output or not output.strip():
+            return False  # 빈 output은 확실한 실패
+        prompt = (
+            "보안 에이전트가 작업을 수행한 결과를 평가하라.\n"
+            "output이 '요청된 정보 또는 작업 결과'를 담고 있으면 satisfied=true,\n"
+            "엉뚱한 결과·오류 메시지·주제 무관 내용이면 satisfied=false.\n\n"
+            f"요청: {request[:300]}\n\n"
+            f"결과 (tail 800자):\n{output[-800:]}\n\n"
+            '정확히 JSON만 출력: {"satisfied": true|false, "reason": "한 줄 근거"}'
+        )
+        try:
+            r = httpx.post(f"{self.ollama_url}/api/chat", json={
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": False, "format": "json",
+                "options": {"temperature": 0.0, "num_predict": 100},
+            }, timeout=15.0)
+            content = r.json().get("message", {}).get("content", "")
+            parsed = json.loads(content) if content else {}
+            return bool(parsed.get("satisfied", True))  # 기본 True (보수적)
+        except Exception:
+            return True  # 에러 시 보수적 — 무한 retry 방지
 
     def _generate_shell_command(self, message: str, target_vm: str) -> str:
         """자연어 요청을 셸 명령어로 변환. LLM이 적절한 명령어를 생성한다."""
@@ -682,30 +1599,120 @@ class BastionAgent:
                 return response
         except Exception:
             pass
+
+        # w24 개선: Manager 모델 실패 시 SubAgent(작은 모델) 재시도
+        # — 작은 모델이 더 직설적인 1줄 명령을 낼 때가 있음 (과도한 안전 필터 적응 유발)
+        try:
+            from bastion import LLM_SUBAGENT_MODEL
+            sub_model = LLM_SUBAGENT_MODEL
+        except Exception:
+            sub_model = "gemma3:4b"
+
+        sub_prompt = (
+            f"요청을 {vm_info}에서 실행할 Linux 셸 명령 딱 1줄로 변환.\n"
+            "설명·주석·코드블록 없이 명령만 출력. 없으면 'none'.\n"
+            f"요청: {message}\n명령:"
+        )
+        try:
+            r = httpx.post(f"{self.ollama_url}/api/generate", json={
+                "model": sub_model, "prompt": sub_prompt, "stream": False,
+                "options": {"temperature": 0.0, "num_predict": 120},
+            }, timeout=12.0)
+            response = r.json().get("response", "").strip()
+            import re as _re
+            response = _re.sub(r'^```\w*\n?', '', response)
+            response = _re.sub(r'\n?```$', '', response)
+            response = response.strip().split('\n')[0]
+            if response and not response.startswith('#') and response.lower() != "none":
+                if not self._DESTRUCTIVE.search(response):
+                    return response
+        except Exception:
+            pass
         return ""
 
-    def _should_execute(self, message: str) -> bool:
-        """메시지가 실행 가능한 작업인지 판단."""
-        # 구체적 명령어가 포함되면 무조건 실행
+    def _classify_intent(self, message: str) -> dict:
+        """LLM에게 요청의 의도를 분류시킨다 (regex 대신 모델 판단력 사용).
+
+        반환: {"execute": bool, "target_vm": "role", "command": "shell cmd 또는 빈 문자열"}
+        - execute=True → 인프라 실행 필요. target_vm + command 포함.
+        - execute=False → 순수 지식/개념 질문. 도구 없이 답변.
+
+        모델 독립적 — 프롬프트 기반이므로 모델이 바뀌어도 동작.
+        """
+        # ── w19 개선: 빠른 경로 확장 ──
+        # 1. 구체적 명령어 포함 → 즉시 실행
         if self._CONCRETE_CMD_PATTERNS.search(message):
-            return True
-        # 실행 키워드가 포함되면 실행
+            target = self._infer_target_vm(message)
+            return {"execute": True, "target_vm": target, "command": ""}
+
+        # 2. 실행 키워드 (강한 한국어 지시형) → 즉시 실행
         if self._EXEC_KEYWORDS.search(message):
-            return True
-        return False
+            target = self._infer_target_vm(message)
+            return {"execute": True, "target_vm": target, "command": ""}
+
+        # 3. 인프라 자산 언급 + verify 요구가 동시에 있으면 실행
+        #    (예: "web에서 access.log에 403 응답이 기록됐는지 확인")
+        has_infra = bool(self._INFRA_MENTIONS.search(message))
+        has_verify = bool(self._VERIFIABLE_ASK.search(message))
+        if has_infra and has_verify:
+            target = self._infer_target_vm(message)
+            return {"execute": True, "target_vm": target, "command": ""}
+
+        vm_info = ", ".join(f"{r}={ip}" for r, ip in self.vm_ips.items())
+        prompt = (
+            "사용자 요청을 분석해 실행 여부를 판단하라.\n\n"
+            "판단 기준:\n"
+            "  • 서버/시스템에 접속·명령 실행·상태 조회가 필요하면 execute=true\n"
+            "  • 개념/이론/정의/비교/설계 설명만 필요하면 execute=false\n"
+            "  • 애매하면 execute=true (실행 우선)\n\n"
+            f"현재 인프라: {vm_info}\n"
+            "VM 역할: attacker(공격도구), secu(방화벽/IPS), web(웹서버/WAF), siem(SIEM/로그), manager(LLM/관리)\n\n"
+            f"요청: {message}\n\n"
+            '정확히 다음 JSON만 출력 (코드블록 금지):\n'
+            '{"execute": true|false, "target_vm": "role", "command": "실행할 셸 명령어(없으면 빈 문자열)"}'
+        )
+        try:
+            r = httpx.post(f"{self.ollama_url}/api/chat", json={
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": False, "format": "json",
+                "options": {"temperature": 0.0, "num_predict": 600},
+            }, timeout=20.0)
+            content = r.json().get("message", {}).get("content", "")
+            parsed = json.loads(content) if content else {}
+            execute = bool(parsed.get("execute", False))
+            target = str(parsed.get("target_vm", "attacker")).strip()
+            command = str(parsed.get("command", "")).strip()
+
+            # ── w19 개선: 오버라이드 층 ──
+            # LLM이 execute=False라고 답했더라도, 메시지에 *인프라 자산*이 있거나
+            # *verify 가능한 요구*가 있으면 False→True로 승격한다.
+            # 근거: 랩 스텝 대부분은 인프라 상태 변경/조회가 수반되며,
+            #       LLM이 일부 추상 질문 스타일을 QA로 오분류하는 경향이 있음.
+            if not execute:
+                if self._INFRA_MENTIONS.search(message) or self._VERIFIABLE_ASK.search(message):
+                    execute = True
+                    target = target or self._infer_target_vm(message)
+
+            return {"execute": execute, "target_vm": target, "command": command}
+        except Exception:
+            # LLM 호출 실패 시 안전 기본값: 실행으로 판정 (실행 우선 원칙)
+            return {"execute": True, "target_vm": self._infer_target_vm(message), "command": ""}
+
+    def _should_execute(self, message: str) -> bool:
+        """(하위 호환용) _classify_intent 래퍼."""
+        return self._classify_intent(message).get("execute", False)
 
     def _infer_target_vm(self, message: str) -> str:
-        """메시지에서 대상 VM role을 추론."""
+        """메시지에서 대상 VM role을 추론 (keyword fallback — LLM 호출 아님)."""
         msg_lower = message.lower()
-        # 명시적 VM 언급 확인
         for role in ["attacker", "secu", "web", "siem", "manager"]:
             if role in msg_lower:
                 return role
-        # 키워드 패턴 매칭
         for pattern, role in self._VM_ROUTE_RULES:
             if pattern.search(message):
                 return role
-        return "attacker"  # 기본값
+        return "attacker"
 
     def _select_playbook(self, message: str) -> str | None:
         """LLM으로 정적 Playbook 매칭.
@@ -812,16 +1819,42 @@ class BastionAgent:
 
         return []
 
+    _QA_ONLY_PATTERNS = re.compile(
+        r"(설명해|정리해|비교|분석해|분석하라|정의하|개념|원리|차이|방법론|프레임워크|"
+        r"모델을?\s*활용|이론|역사|트렌드|동향|요약|백서|보고서\s*작성|"
+        r"예시\s*코드|예시를?\s*보여|샘플을?\s*보여|무엇인가|무엇입니까|"
+        r"어떻게\s*(구성|설계|작동|동작)|왜\s*|장단점|비교표)",
+        re.IGNORECASE,
+    )
+
     def _generate_dynamic_playbook(self, message: str) -> list[dict]:
-        """LLM이 요청 분석 → 동적 Playbook 스텝 생성 (format:json)."""
+        """LLM이 요청 분석 → 동적 Playbook 스텝 생성 (format:json).
+
+        개념/방법론/설명/분석 류 요청은 빈 배열을 반환하여 Q&A로 라우팅.
+        """
+        # Fast-path: Q&A 전용 패턴은 바로 []를 돌려 dynamic playbook을 건너뜀
+        if self._QA_ONLY_PATTERNS.search(message) and not self._CONCRETE_CMD_PATTERNS.search(message):
+            return []
+
         skill_list = "\n".join(
             f"- {name}: {s['description']}"
             for name, s in SKILLS.items()
         )
         prompt = (
-            f"사용자 요청을 분석하고 실행할 작업 단계를 JSON 배열로 생성하세요.\n"
-            f"각 단계 형식: {{\"name\": \"단계 설명\", \"skill\": \"skill명\", \"params\": {{}}}}\n"
-            f"Skill이 필요 없으면 빈 배열 [] 반환.\n\n"
+            f"사용자 요청을 분석하여 실제 인프라에서 실행해야 할 명령/작업 단계만 JSON 배열로 생성하세요.\n"
+            f"각 단계 형식: {{\"name\": \"단계 설명\", \"skill\": \"skill명\", \"params\": {{...}}}}\n\n"
+            f"중요 규칙 — 다음의 경우 반드시 빈 배열 [] 을 반환:\n"
+            f"  • 개념/용어/방법론/프레임워크/표준 설명 요청 (예: 'STIX란', 'Diamond Model 분석')\n"
+            f"  • 비교/정리/분류/요약 요청 (예: 'IDS와 IPS 비교')\n"
+            f"  • 예시 코드/샘플 구조 작성 요청 (코드 작성은 LLM이 직접 답변)\n"
+            f"  • 설계/아키텍처/정책 문서 작성 요청\n"
+            f"  • 지식 질문 (무엇인가, 왜, 어떻게 동작)\n\n"
+            f"실행이 정말 필요한 경우에만 (스캔, 설정 변경, 서비스 재시작, 파일 조작, 네트워크 점검) 단계를 생성하세요.\n\n"
+            f"params 필수 규칙:\n"
+            f"  • skill=\"shell\"  → params에 반드시 \"command\"(실제 실행 셸 명령)와 \"target\"(VM role: attacker/secu/web/siem/manager)을 포함.\n"
+            f"    예: {{\"skill\":\"shell\",\"params\":{{\"target\":\"manager\",\"command\":\"cat /proc/meminfo | head -5\"}}}}\n"
+            f"  • command가 없거나 빈 문자열인 단계는 절대 생성 금지 (플래너가 거부함).\n"
+            f"  • /proc 탐색, ps, netstat, ss, lsmod 같은 로컬 탐색은 target=\"manager\"를 사용.\n\n"
             f"사용 가능한 Skill:\n{skill_list}\n\n"
             f"요청: {message}"
         )
@@ -841,8 +1874,15 @@ class BastionAgent:
             if items is not None:
                 valid = []
                 for step in items:
-                    if isinstance(step, dict) and step.get("skill") in SKILLS:
-                        valid.append(step)
+                    if not isinstance(step, dict) or step.get("skill") not in SKILLS:
+                        continue
+                    # shell은 빈 command 거부 — "echo ok" default로 폴백되는 것 방지
+                    if step["skill"] == "shell":
+                        params = step.get("params") or {}
+                        cmd = str(params.get("command", "")).strip()
+                        if not cmd:
+                            continue
+                    valid.append(step)
                 return valid
         except Exception:
             pass
@@ -850,7 +1890,7 @@ class BastionAgent:
 
     def _run_dynamic_steps(self, steps: list[dict],
                            title: str = "동적 Playbook") -> Generator[dict, None, None]:
-        """동적으로 생성된 스텝 실행."""
+        """동적으로 생성된 스텝 실행 — 실패 시 자기 수정 루프 포함."""
         yield {"event": "playbook_start", "title": title, "total_steps": len(steps)}
         passed = 0
         for i, step in enumerate(steps, 1):
@@ -858,10 +1898,45 @@ class BastionAgent:
             params = self._enrich_params(skill_name, step.get("params", {}))
             name = step.get("name", skill_name)
 
-            yield {"event": "step_start", "step": i, "name": name}
-            result = execute_skill(skill_name, params, self.vm_ips, self.ollama_url, self.model)
-            success = result.get("success", False)
-            output = str(result.get("output", ""))
+            MAX_RETRY = 2
+            attempt = 0
+            success = False
+            output = ""
+            while attempt <= MAX_RETRY:
+                attempt += 1
+                yield {"event": "step_start", "step": i, "name": name, "attempt": attempt}
+                result = execute_skill(skill_name, params, self.vm_ips, self.ollama_url, self.model)
+                success = result.get("success", False)
+                output = str(result.get("output", ""))
+                stderr = str(result.get("stderr", ""))
+
+                # w20 개선: skill 성공이어도 output이 요청을 만족하지 못하면 soft-fail
+                if success and attempt <= MAX_RETRY:
+                    if not self._verify_output_satisfies(name, output):
+                        yield {"event": "verify_miss", "step": i, "attempt": attempt}
+                        success = False
+                        if not stderr:
+                            stderr = "output이 요청 의도를 만족하지 못함 (semantic mismatch)"
+
+                if success or attempt > MAX_RETRY:
+                    break
+
+                # 자기 수정
+                correction = self._diagnose_and_correct(
+                    name, skill_name, params, output, stderr,
+                    result.get("exit_code", -1)
+                )
+                if not correction:
+                    break
+                yield {"event": "self_correct", "step": i, "attempt": attempt + 1,
+                       "diagnosis": correction.get("diagnosis", "")}
+                new_skill = correction.get("skill", skill_name)
+                if new_skill in SKILLS:
+                    skill_name = new_skill
+                    params = self._enrich_params(skill_name, correction.get("params", params))
+                else:
+                    break
+
             if success:
                 passed += 1
             self.evidence_db.add(
@@ -869,7 +1944,6 @@ class BastionAgent:
                 output=output, stage="dynamic", session_id=self.session_id,
                 **self._test_meta,
             )
-            # Experience Learning
             self.experience.record(
                 message=name, skill=skill_name,
                 target_vm=params.get("target", ""),
@@ -877,7 +1951,7 @@ class BastionAgent:
                 success=success,
             )
             yield {"event": "step_done", "step": i, "name": name,
-                   "success": success, "output": output}
+                   "success": success, "output": output, "attempts": attempt}
         yield {"event": "playbook_done", "passed": passed, "total": len(steps)}
 
     # ── 파라미터 자동완성 ────────────────────────────────────────────────────
