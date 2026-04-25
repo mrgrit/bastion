@@ -140,6 +140,42 @@ def evidence(limit: int = 20):
     return agent.get_evidence(limit)
 
 
+# ── Audit log — 중요 시스템 작업 증적 (append-only, hash chain) ────────────
+
+@app.get("/audit")
+def audit_recent(limit: int = 50, session_id: str = "", user_id: str = "",
+                 course: str = "", outcome: str = "", since: str = ""):
+    """최근 audit log. 필터 가능."""
+    from bastion.audit import get_audit_log
+    log = get_audit_log()
+    return {"audit": log.recent(limit=limit,
+                                session_id=session_id, user_id=user_id,
+                                course=course, outcome=outcome, since=since)}
+
+
+@app.get("/audit/{request_id}")
+def audit_get(request_id: str):
+    """특정 request 전체 audit 조회 (사용자 지시·LLM turns·skill 흐름·결정 모두)."""
+    from bastion.audit import get_audit_log
+    rec = get_audit_log().get(request_id)
+    if not rec:
+        raise HTTPException(404, f"audit record not found: {request_id}")
+    return rec
+
+
+@app.get("/audit/_stats")
+def audit_stats():
+    from bastion.audit import get_audit_log
+    return get_audit_log().stats()
+
+
+@app.get("/audit/_verify-chain")
+def audit_verify_chain(start_id: int = 1):
+    """hash chain 무결성 검증 — 변조 시도 발견 시 깨진 첫 row 반환."""
+    from bastion.audit import get_audit_log
+    return get_audit_log().verify_chain(start_id=start_id)
+
+
 @app.get("/assets")
 def assets():
     return agent.evidence_db.get_assets()

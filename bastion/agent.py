@@ -405,14 +405,63 @@ class BastionAgent:
         return subtasks if len(subtasks) >= 3 else []
 
     def chat(self, message: str, approval_callback=None) -> Generator[dict, None, None]:
-        """자연어 메시지 처리 — step 단위 retry 래퍼.
+        """자연어 메시지 처리 — step 단위 retry 래퍼 + audit log.
 
         1차 시도가 skill 실행 없이 종료되거나(=skills=[]) 모든 skill 실패로 끝나면
         피드백 포함한 더 강한 prompt 로 1회 재시도. action 요청에 한해서.
+        Audit log 에 1 chat = 1 row 로 전체 흐름 (사용자 지시·LLM turns·승인 결정·
+        skill 실행 결과·최종 답변·hash chain) 영구 기록.
         """
         original = sanitize_text(message)
         if not original:
             return
+
+        # ── Audit 시작 ─────────────────────────────────────────────────────
+        import uuid as _uuid
+        import time as _time
+        request_id = _uuid.uuid4().hex
+        ts_start = _time.strftime("%Y-%m-%dT%H:%M:%S")
+        t0 = _time.time()
+        audit_turns: list[dict] = []
+        audit_skills: list[dict] = []
+        audit_lookup: dict = {}
+        audit_judge: dict = {}
+        audit_final_answer = ""
+
+        def _audit_record_turn(evt: dict):
+            ev = evt.get("event", "")
+            nonlocal audit_lookup, audit_final_answer
+            if ev == "lookup_decision":
+                audit_lookup = {
+                    "decision": evt.get("decision"),
+                    "playbook_id": evt.get("playbook_id"),
+                    "confidence": evt.get("confidence"),
+                    "reason": evt.get("reason"),
+                }
+            elif ev == "skill_start":
+                audit_skills.append({
+                    "skill": evt.get("skill"),
+                    "params": evt.get("params"),
+                    "attempt": evt.get("attempt", 1),
+                    "started": True,
+                })
+            elif ev == "skill_result":
+                if audit_skills:
+                    audit_skills[-1].update({
+                        "success": evt.get("success"),
+                        "output_head": str(evt.get("output", ""))[:300],
+                    })
+            elif ev == "risk_warning":
+                if audit_skills:
+                    audit_skills[-1]["risk"] = evt.get("risk")
+            elif ev == "skill_skip":
+                if audit_skills:
+                    audit_skills[-1]["skipped_reason"] = evt.get("reason")
+            elif ev == "self_verify_fail":
+                audit_judge = {"self_verify": "fail", "reason": evt.get("reason")}
+            elif ev == "stream_token":
+                audit_final_answer += evt.get("token", "")
+        # ── /Audit 시작 ────────────────────────────────────────────────────
         # Step 3: api.py 가 주입한 채점 기준을 메시지 앞에 prepend → 같은 기준으로 작업
         verify_ctx = getattr(self, "_verify_context", {}) or {}
         if verify_ctx.get("intent") or verify_ctx.get("success_criteria"):
@@ -433,25 +482,65 @@ class BastionAgent:
             original = criteria_block + original
         MAX_STEP_RETRY = 1
         cur_message = original
-        for step_attempt in range(MAX_STEP_RETRY + 1):
-            events_buf: list[dict] = []
-            for evt in self._chat_once(cur_message, approval_callback):
-                events_buf.append(evt)
-                yield evt
-            if step_attempt >= MAX_STEP_RETRY:
-                return
-            ok, fb = self._step_attempt_ok(original, events_buf)
-            if ok:
-                return
-            yield {"event": "step_retry", "attempt": step_attempt + 2,
-                   "feedback": fb}
-            cur_message = (
-                f"[자기 수정 — 이전 시도가 부족함]\n"
-                f"사유: {fb}\n\n"
-                f"원래 요청: {original}\n\n"
-                f"이번엔 반드시 실제 쉘 명령을 실행해서 stdout 을 받아내고, "
-                f"그 결과를 근거로 답하라. 개념 설명·표·체크리스트만 출력 금지."
-            )
+        outcome = "fail"
+        try:
+            for step_attempt in range(MAX_STEP_RETRY + 1):
+                events_buf: list[dict] = []
+                for evt in self._chat_once(cur_message, approval_callback):
+                    events_buf.append(evt)
+                    _audit_record_turn(evt)
+                    yield evt
+                if step_attempt >= MAX_STEP_RETRY:
+                    ok, _ = self._step_attempt_ok(original, events_buf)
+                    outcome = "success" if ok else "fail"
+                    break
+                ok, fb = self._step_attempt_ok(original, events_buf)
+                if ok:
+                    outcome = "success"
+                    break
+                yield {"event": "step_retry", "attempt": step_attempt + 2,
+                       "feedback": fb}
+                cur_message = (
+                    f"[자기 수정 — 이전 시도가 부족함]\n"
+                    f"사유: {fb}\n\n"
+                    f"원래 요청: {original}\n\n"
+                    f"이번엔 반드시 실제 쉘 명령을 실행해서 stdout 을 받아내고, "
+                    f"그 결과를 근거로 답하라. 개념 설명·표·체크리스트만 출력 금지."
+                )
+        finally:
+            # ── Audit 기록 (항상, 에러나도) ───────────────────────────────────
+            try:
+                from bastion.audit import get_audit_log
+                duration_ms = int((_time.time() - t0) * 1000)
+                test_meta = getattr(self, "_test_meta", {}) or {}
+                verify_ctx = getattr(self, "_verify_context", {}) or {}
+                get_audit_log().append(
+                    request_id=request_id,
+                    session_id=self.session_id,
+                    user_id=test_meta.get("user_id", ""),
+                    source_ip=test_meta.get("source_ip", ""),
+                    ts_start=ts_start,
+                    ts_end=_time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    duration_ms=duration_ms,
+                    user_prompt=message,                     # 원본 (cropped 안 함)
+                    final_answer=audit_final_answer,         # 전문
+                    approval_mode=getattr(self, "approval_mode", "normal"),
+                    course=test_meta.get("course", ""),
+                    lab_id=test_meta.get("lab_id", ""),
+                    step_order=int(test_meta.get("step_order", 0) or 0),
+                    verify_intent=verify_ctx.get("intent", ""),
+                    lookup=audit_lookup,
+                    turns=audit_turns,                       # _chat_once 가 채울 수 있음
+                    skill_calls=audit_skills,
+                    judge=audit_judge,
+                    outcome=outcome,
+                    model_used=self.model,
+                    bastion_version="kg-v1",
+                    test_meta=test_meta,
+                )
+            except Exception as _e:
+                # audit 실패가 chat 자체를 막지 않게
+                pass
 
     def _step_attempt_ok(self, original_message: str, events: list[dict]) -> tuple[bool, str]:
         """step 시도가 충분히 수행됐는지 판정.
