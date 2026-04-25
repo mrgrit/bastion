@@ -1,0 +1,16 @@
+playbook_id: security_audit
+title: 보안 감사 — 전체 인프라 보안 설정 점검
+description: 방화벽 룰, IDS 상태, WAF 설정, SIEM 연동, 로그 수집을 순차 점검하고 결과를 요약
+steps:
+  - name: 방화벽 룰셋 점검
+    skill: configure_nftables
+    params:
+      action: list
+  - name: Suricata IDS 상태
+    skill: check_suricata
+  - name: ModSecurity WAF 상태
+    skill: check_modsecurity
+  - name: Wazuh SIEM 상태
+    skill: check_wazuh
+  - name: 인프라 전체 상태
+    skill: probe_all

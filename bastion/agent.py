@@ -1202,6 +1202,8 @@ class BastionAgent:
             tools_spec = []
 
         all_tool_outputs: list[dict] = []
+        # KG-3: turn 별 LLM thinking + content 수집 → playbook reasoning 으로 박제
+        turn_traces: list[dict] = []
         MAX_TURNS = 6
         SELF_VERIFY_RETRY = 1
         self_verified_attempted = 0
@@ -1230,7 +1232,18 @@ class BastionAgent:
 
             response_msg = resp.get("message", {}) or {}
             content = response_msg.get("content", "") or ""
+            thinking = response_msg.get("thinking", "") or ""  # gpt-oss/qwen 등 분리 필드
             tool_calls = response_msg.get("tool_calls", []) or []
+
+            # KG-3 trace 누적
+            turn_traces.append({
+                "turn": turn,
+                "content": content,
+                "thinking": thinking,
+                "tool_calls": [{"skill": (tc.get("function") or {}).get("name", ""),
+                                "args": (tc.get("function") or {}).get("arguments", {})}
+                               for tc in tool_calls],
+            })
 
             # 토큰 청크로 stream 출력
             for i in range(0, len(content), 100):
@@ -1386,6 +1399,18 @@ class BastionAgent:
 
         self.history.append({"role": "assistant", "content": last_assistant_content})
 
+        # KG-3: ReAct trace → Playbook + Experience 노드 등록
+        try:
+            self._persist_react_run_to_graph(
+                message=message,
+                turn_traces=turn_traces,
+                tool_outputs=all_tool_outputs,
+                final_content=last_assistant_content,
+            )
+        except Exception as _e:
+            # 그래프 실패가 retest/실행 자체를 막아서는 안 됨
+            yield {"event": "graph_persist_error", "error": str(_e)[:200]}
+
         # Experience → Playbook 자동 승격
         try:
             stats = self.experience.stats()
@@ -1396,6 +1421,182 @@ class BastionAgent:
                            "message": f"경험 → Playbook 승격: {', '.join(promoted)}"}
         except Exception:
             pass
+
+    def _persist_react_run_to_graph(self, message: str,
+                                    turn_traces: list[dict],
+                                    tool_outputs: list[dict],
+                                    final_content: str) -> None:
+        """ReAct 한 사이클의 결과를 KnowledgeGraph 에 기록.
+
+        - tool 한 번도 안 돌았으면 skip (학습 가치 적음)
+        - Playbook 노드: 첫 NEW 결정이면 생성, 이미 매칭된 playbook_id 가 있으면 exec_history 만 갱신
+        - Experience 노드: 매번 생성, derived_from(→playbook), uses(→skill), targets(→asset)
+
+        실제 결정 로직(reuse/adapt/new) 은 KG-4 에서. 여기서는 일단 매번 새 playbook 생성
+        (KG-4 가 lookup 으로 redirect). 디스크 + 그래프 동시 갱신.
+        """
+        if not tool_outputs:
+            return  # tool 안 쓴 Q&A 는 그래프 학습에서 제외
+
+        try:
+            from bastion.graph import get_graph
+            from bastion.playbook import (
+                write_playbook, update_exec_history, _slugify,
+            )
+            from bastion.experience import CATEGORY_RULES
+        except Exception:
+            return
+
+        g = get_graph()
+
+        # 카테고리 분류 (concept 엣지용)
+        category = None
+        for pat, cat in CATEGORY_RULES:
+            if pat.search(message):
+                category = cat
+                break
+
+        # 사용된 skill 집합
+        used_skills = sorted({t["skill"] for t in tool_outputs if t.get("skill")})
+        # 대상 VM
+        used_targets = sorted({(t.get("params") or {}).get("target", "")
+                               for t in tool_outputs}) - {""}
+        # 성공 여부
+        any_success = any(t.get("success") for t in tool_outputs)
+
+        # ─ Playbook 후보 ID — KG-4 가 매칭하기 전 임시 hash 기반 ─
+        # message + skill 시퀀스 가 같으면 동일 task 로 묶임
+        import hashlib
+        sig_str = (message[:200] + "|" + ",".join(used_skills)).encode("utf-8", "ignore")
+        sig = hashlib.sha1(sig_str).hexdigest()[:10]
+        slug = _slugify(message[:50]) or "untitled"
+        pb_id = f"pb-auto-{slug}-{sig}"
+
+        # ─ playbook reasoning 합성 (turn_traces 에서) ─
+        first_turn_text = (turn_traces[0].get("content", "") if turn_traces else "")[:1500]
+        last_turn_text = (turn_traces[-1].get("content", "") if turn_traces else "")[:1500]
+        # thinking 우선, 없으면 content 사용
+        decomp_src = (turn_traces[0].get("thinking", "") or first_turn_text)[:1500]
+        why_src = (turn_traces[-1].get("thinking", "") or last_turn_text)[:1500]
+
+        # ─ plan 작성 (각 tool_output 을 step 으로) ─
+        plan = []
+        for i, t in enumerate(tool_outputs, 1):
+            # 해당 turn 의 thinking 매칭 (실행 순서 ≈ turn 순서)
+            turn_idx = min(i - 1, len(turn_traces) - 1)
+            step_thinking = (turn_traces[turn_idx].get("thinking", "") or
+                             turn_traces[turn_idx].get("content", ""))[:600]
+            plan.append({
+                "step": i,
+                "intent": (turn_traces[turn_idx].get("content", "")[:120] or t.get("skill", "")),
+                "skill": t.get("skill", ""),
+                "params": t.get("params", {}),
+                "thinking": step_thinking,
+                "success_signal": "exit_code 0 + stdout 비어있지 않음",
+                "on_error": [],
+            })
+
+        # 기존 playbook 있으면 exec_history 만 갱신, 없으면 신규 작성
+        existing = g.get_node(pb_id)
+        if existing:
+            try:
+                update_exec_history(pb_id.replace("pb-", "", 1), any_success)
+            except Exception:
+                pass
+        else:
+            pb_dict = {
+                "playbook_id": pb_id.replace("pb-", "", 1),
+                "name": message[:80].strip(),
+                "description": message[:200].strip(),
+                "version": 1,
+                "risk_level": "low",
+                "reasoning": {
+                    "task_decomposition": decomp_src,
+                    "considered_alternatives": [],
+                    "why_this_approach": why_src,
+                    "assumptions": [],
+                    "known_risks": [],
+                },
+                "plan": plan,
+                "exec_history": {
+                    "total": 1,
+                    "success": 1 if any_success else 0,
+                    "recent_5": ["pass" if any_success else "fail"],
+                },
+                "known_pitfalls": [],
+                "related_concepts": [category] if category else [],
+                "_auto_generated": True,
+            }
+            try:
+                write_playbook(pb_dict)
+            except Exception:
+                pass
+
+            # Playbook 노드
+            g.add_node(pb_id, "Playbook", pb_dict["name"],
+                       content=pb_dict,
+                       meta={"version": 1, "risk_level": "low",
+                             "auto_generated": True,
+                             "exec_total": 1,
+                             "exec_success": 1 if any_success else 0})
+
+            # uses → Skill
+            for sk in used_skills:
+                if sk:
+                    g.add_node(f"skill-{sk}", "Skill", sk,
+                               content={"description": ""}, meta={})  # skill 노드 보장
+                    g.add_edge(pb_id, f"skill-{sk}", "uses")
+            # targets → Asset
+            for tgt in used_targets:
+                if tgt:
+                    asset_id = f"asset-vm-{tgt}"
+                    g.add_node(asset_id, "Asset", f"{tgt} VM",
+                               content={"role": tgt, "kind": "vm"},
+                               meta={"kind": "vm", "role": tgt})
+                    g.add_edge(pb_id, asset_id, "targets")
+            # handles → Concept
+            if category:
+                concept_id = f"concept-{category}"
+                g.add_node(concept_id, "Concept", category,
+                           content={"kind": "category"}, meta={"kind": "ops_category"})
+                g.add_edge(pb_id, concept_id, "handles")
+
+        # ─ Experience 노드 (매번 생성) ─
+        import time as _t
+        exp_id = f"exp-{_t.strftime('%Y%m%d-%H%M%S')}-{sig}"
+        exp_content = {
+            "task_summary": message[:200],
+            "playbook_id": pb_id,
+            "tool_outputs": [
+                {"skill": t.get("skill"), "success": t.get("success"),
+                 "exit_code": t.get("exit_code"),
+                 "output_head": str(t.get("output", ""))[:300]}
+                for t in tool_outputs
+            ],
+            "final_content": final_content[:600],
+            "outcome": "success" if any_success else "fail",
+            "category": category,
+            "test_meta": getattr(self, "_test_meta", {}),
+        }
+        g.add_node(exp_id, "Experience",
+                   f"{category or 'task'}: {message[:60]}",
+                   content=exp_content,
+                   meta={"outcome": exp_content["outcome"],
+                         "category": category,
+                         "tools_count": len(tool_outputs)})
+        # derived_from → Playbook
+        g.add_edge(exp_id, pb_id, "derived_from")
+        # uses → Skill (실제 사용된 것)
+        for sk in used_skills:
+            if sk:
+                g.add_edge(exp_id, f"skill-{sk}", "uses")
+        # targets → Asset
+        for tgt in used_targets:
+            if tgt:
+                g.add_edge(exp_id, f"asset-vm-{tgt}", "targets")
+        # handles → Concept
+        if category:
+            g.add_edge(exp_id, f"concept-{category}", "handles")
 
     def _self_verify_completion(self, original_message: str,
                                 tool_outputs: list[dict],

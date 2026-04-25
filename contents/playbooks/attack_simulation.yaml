@@ -1,0 +1,24 @@
+playbook_id: attack_simulation
+title: 공격 시뮬레이션 — Red Team 기본 공격 체인
+description: 정찰 → 포트 스캔 → 웹 취약점 → SQL Injection 시도 → 결과 분석
+steps:
+  - name: 포트 스캔
+    skill: scan_ports
+    params:
+      target: 10.20.30.80
+  - name: 웹 취약점 스캔
+    skill: web_scan
+    params:
+      url: http://10.20.30.80
+  - name: SQL Injection 시도
+    skill: attack_simulate
+    params:
+      attack_type: sqli
+      target_url: http://10.20.30.80:3000/rest/user/login
+  - name: XSS 시도
+    skill: attack_simulate
+    params:
+      attack_type: xss
+      target_url: http://10.20.30.80:3000
+  - name: 공격 흔적 확인
+    skill: check_suricata

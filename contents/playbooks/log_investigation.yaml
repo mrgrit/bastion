@@ -1,0 +1,24 @@
+playbook_id: log_investigation
+title: 로그 조사 — 의심 활동 추적
+description: Suricata 알림, Wazuh 알림, 웹 로그를 교차 분석하여 의심 활동 타임라인 구성
+steps:
+  - name: Suricata 최근 알림
+    skill: check_suricata
+    params:
+      lines: 20
+  - name: Wazuh 최근 알림
+    skill: check_wazuh
+  - name: ModSecurity 차단 로그
+    skill: check_modsecurity
+  - name: Suricata eve.json 분석
+    skill: analyze_logs
+    params:
+      log_source: /var/log/suricata/eve.json
+      query: 최근 1시간 의심 활동 요약
+      target: secu
+  - name: Wazuh alerts 분석
+    skill: analyze_logs
+    params:
+      log_source: /var/ossec/logs/alerts/alerts.json
+      query: 고위험 알림(level 10 이상) 분석
+      target: siem

@@ -1,0 +1,22 @@
+playbook_id: wazuh_health
+title: Wazuh 종합 점검 — Manager/Agent/룰/알림 상태
+description: Wazuh Manager 서비스, 에이전트 연결, 커스텀 룰, 최근 알림을 종합 점검
+steps:
+  - name: Manager 상태
+    skill: check_wazuh
+  - name: 에이전트 목록 (API)
+    skill: wazuh_api
+    params:
+      endpoint: /agents
+  - name: 커스텀 룰 확인
+    skill: file_manage
+    params:
+      action: read
+      path: /var/ossec/etc/rules/local_rules.xml
+      target: siem
+  - name: 최근 고위험 알림 분석
+    skill: analyze_logs
+    params:
+      log_source: /var/ossec/logs/alerts/alerts.json
+      query: level 10 이상의 고위험 알림 요약
+      target: siem

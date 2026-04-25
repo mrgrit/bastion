@@ -2,15 +2,190 @@
 
 "Playbook이 법이다" — LLM이 즉흥하지 않고 등록된 Playbook의 순서대로 실행.
 LLM은 Playbook 선택과 파라미터 채우기만 담당.
+
+KG-2 확장 schema (v2):
+  playbook_id: pb-...
+  name: 한 줄 이름
+  description: 한 단락 설명
+  version: 정수 (변경마다 +1)
+  risk_level: low | med | high
+  reasoning:                          # LLM 의 의사결정 근거 (영구 박제)
+    task_decomposition: |
+      ...
+    considered_alternatives:
+      - {tool: ..., rejected_reason: ...}
+    why_this_approach: ...
+    assumptions: [...]
+    known_risks: [...]
+  plan:                               # 또는 steps (v1 호환)
+    - step: 1
+      intent: 한 줄 의도
+      skill: shell
+      params: {...}
+      thinking: |                     # 이 step 의 LLM 추론
+        ...
+      success_signal: stdout 매치 패턴
+      on_error:
+        - {pattern: regex, action: ...}
+  exec_history:                       # 자동 갱신
+    total: int
+    success: int
+    recent_5: [pass|fail, ...]
+  known_pitfalls: [...]              # compaction 산출물
+  related_concepts: [T1053, ...]     # MITRE 등
+
+v1 호환: reasoning 누락이면 자동 빈 객체로 채움. plan 대신 steps 도 OK.
 """
 from __future__ import annotations
 import os
 import glob
+import time
+import re
+import yaml
 from typing import Any, Generator
 
-import yaml
-
 from bastion.skills import execute_skill, SKILLS
+
+
+# ── 확장 schema 헬퍼 ────────────────────────────────────────────────────
+
+
+PLAYBOOK_SCHEMA_VERSION = 2
+
+
+def _slugify(text: str, max_len: int = 60) -> str:
+    """한국어 + 영문 → 파일명 안전 slug."""
+    s = re.sub(r"\s+", "-", text.strip().lower())
+    s = re.sub(r"[^\w가-힣\-]", "", s)
+    s = re.sub(r"-+", "-", s).strip("-")
+    return s[:max_len] or "pb-untitled"
+
+
+def normalize_playbook(pb: dict) -> dict:
+    """v1/v2 혼재 → v2 정규화 (in-place 변형 후 반환)."""
+    if not isinstance(pb, dict):
+        return pb
+    pb.setdefault("schema_version", PLAYBOOK_SCHEMA_VERSION)
+    pb.setdefault("version", 1)
+    pb.setdefault("risk_level", "low")
+    pb.setdefault("reasoning", {})
+    if not isinstance(pb.get("reasoning"), dict):
+        pb["reasoning"] = {"why_this_approach": str(pb["reasoning"])}
+    rs = pb["reasoning"]
+    rs.setdefault("task_decomposition", "")
+    rs.setdefault("considered_alternatives", [])
+    rs.setdefault("why_this_approach", "")
+    rs.setdefault("assumptions", [])
+    rs.setdefault("known_risks", [])
+    # plan 우선, 없으면 steps fallback
+    if "plan" not in pb and "steps" in pb:
+        pb["plan"] = pb["steps"]
+    pb.setdefault("plan", [])
+    # 각 step 기본 필드
+    for i, step in enumerate(pb["plan"], 1):
+        if not isinstance(step, dict):
+            continue
+        step.setdefault("step", i)
+        step.setdefault("intent", step.get("name", ""))
+        step.setdefault("thinking", "")
+        step.setdefault("success_signal", "")
+        step.setdefault("on_error", [])
+    pb.setdefault("exec_history", {"total": 0, "success": 0, "recent_5": []})
+    pb.setdefault("known_pitfalls", [])
+    pb.setdefault("related_concepts", [])
+    return pb
+
+
+def validate_playbook(pb: dict) -> list[str]:
+    """경고 목록 반환 (빈 리스트면 OK). 강제 오류 없음 — agent 가 점진 채움."""
+    warnings = []
+    if not isinstance(pb, dict):
+        return ["not a dict"]
+    if not pb.get("playbook_id"):
+        warnings.append("missing playbook_id")
+    if not pb.get("name") and not pb.get("title"):
+        warnings.append("missing name")
+    if not pb.get("plan") and not pb.get("steps"):
+        warnings.append("no plan/steps")
+    rs = pb.get("reasoning") or {}
+    if isinstance(rs, dict):
+        if not rs.get("why_this_approach") and not rs.get("task_decomposition"):
+            warnings.append("reasoning empty (왜 이 방법인지 미기록)")
+    for step in pb.get("plan") or pb.get("steps") or []:
+        if isinstance(step, dict):
+            if not step.get("skill"):
+                warnings.append(f"step {step.get('step', '?')}: skill 누락")
+            if not step.get("thinking") and not step.get("intent"):
+                warnings.append(f"step {step.get('step', '?')}: thinking/intent 누락")
+    return warnings
+
+
+def write_playbook(pb: dict, playbooks_dir: str = "") -> str:
+    """playbook dict → YAML 저장. 파일명 = playbook_id 기반.
+
+    이미 존재하면 version+=1, supersedes 메타 추가 후 새 파일로 저장.
+    반환: 저장된 파일 경로.
+    """
+    pb = normalize_playbook(dict(pb))
+    if not pb.get("playbook_id"):
+        pb["playbook_id"] = "pb-" + _slugify(pb.get("name") or pb.get("title") or "untitled")
+    if not playbooks_dir:
+        playbooks_dir = PLAYBOOKS_DIR
+    os.makedirs(playbooks_dir, exist_ok=True)
+    fname = pb["playbook_id"] + ".yaml"
+    fpath = os.path.join(playbooks_dir, fname)
+    # 기존 파일 있으면 version 증가
+    if os.path.isfile(fpath):
+        try:
+            old = yaml.safe_load(open(fpath, encoding="utf-8")) or {}
+            pb["version"] = int(old.get("version", 1)) + 1
+            pb["supersedes_version"] = old.get("version", 1)
+        except Exception:
+            pass
+    pb["last_updated"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+    with open(fpath, "w", encoding="utf-8") as fh:
+        yaml.safe_dump(pb, fh, allow_unicode=True, sort_keys=False,
+                       default_flow_style=False, width=120)
+    return fpath
+
+
+def update_exec_history(playbook_id: str, success: bool,
+                        playbooks_dir: str = "") -> None:
+    """실행 후 exec_history 갱신 — recent_5 슬라이딩 윈도우 + total/success 카운트."""
+    if not playbooks_dir:
+        playbooks_dir = PLAYBOOKS_DIR
+    fpath = os.path.join(playbooks_dir, playbook_id + ".yaml")
+    if not os.path.isfile(fpath):
+        # playbook_id 가 prefix 형태면 파일 검색
+        for f in glob.glob(os.path.join(playbooks_dir, "*.yaml")):
+            try:
+                pb = yaml.safe_load(open(f, encoding="utf-8")) or {}
+                if pb.get("playbook_id") == playbook_id:
+                    fpath = f
+                    break
+            except Exception:
+                continue
+        if not os.path.isfile(fpath):
+            return
+    try:
+        pb = yaml.safe_load(open(fpath, encoding="utf-8")) or {}
+    except Exception:
+        return
+    pb = normalize_playbook(pb)
+    eh = pb["exec_history"]
+    eh["total"] = int(eh.get("total", 0)) + 1
+    if success:
+        eh["success"] = int(eh.get("success", 0)) + 1
+    recent = list(eh.get("recent_5", []))[-4:]
+    recent.append("pass" if success else "fail")
+    eh["recent_5"] = recent
+    pb["last_updated"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+    with open(fpath, "w", encoding="utf-8") as fh:
+        yaml.safe_dump(pb, fh, allow_unicode=True, sort_keys=False,
+                       default_flow_style=False, width=120)
+
+
+# ── 기존 API ────────────────────────────────────────────────────────────
 
 
 def _resolve_playbooks_dir() -> str:
@@ -38,28 +213,43 @@ PLAYBOOKS_DIR = _resolve_playbooks_dir()
 
 
 def load_playbook(playbook_id: str) -> dict | None:
-    """Playbook YAML 로드"""
+    """Playbook YAML 로드 — v1 자동으로 v2 schema 로 normalize."""
     for f in glob.glob(os.path.join(PLAYBOOKS_DIR, "*.yaml")):
-        with open(f, encoding="utf-8") as fh:
-            pb = yaml.safe_load(fh)
+        try:
+            with open(f, encoding="utf-8") as fh:
+                pb = yaml.safe_load(fh)
+        except Exception:
+            continue
         if pb and pb.get("playbook_id") == playbook_id:
-            return pb
+            return normalize_playbook(pb)
     return None
 
 
 def list_playbooks() -> list[dict]:
-    """등록된 Playbook 목록"""
+    """등록된 Playbook 목록 — exec_history / version 등 메타 포함."""
     result = []
     for f in sorted(glob.glob(os.path.join(PLAYBOOKS_DIR, "*.yaml"))):
-        with open(f, encoding="utf-8") as fh:
-            pb = yaml.safe_load(fh)
-        if pb:
-            result.append({
-                "playbook_id": pb.get("playbook_id", ""),
-                "title": pb.get("title", ""),
-                "description": pb.get("description", ""),
-                "steps": len(pb.get("steps", [])),
-            })
+        try:
+            with open(f, encoding="utf-8") as fh:
+                pb = yaml.safe_load(fh)
+        except Exception:
+            continue
+        if not pb:
+            continue
+        pb = normalize_playbook(pb)
+        eh = pb.get("exec_history") or {}
+        result.append({
+            "playbook_id": pb.get("playbook_id", ""),
+            "title": pb.get("title", "") or pb.get("name", ""),
+            "description": pb.get("description", ""),
+            "version": pb.get("version", 1),
+            "risk_level": pb.get("risk_level", "low"),
+            "steps": len(pb.get("plan") or pb.get("steps") or []),
+            "exec_total": eh.get("total", 0),
+            "exec_success": eh.get("success", 0),
+            "has_reasoning": bool((pb.get("reasoning") or {}).get("why_this_approach")
+                                  or (pb.get("reasoning") or {}).get("task_decomposition")),
+        })
     return result
 
 
