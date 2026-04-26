@@ -922,10 +922,48 @@ class BastionAgent:
                 except Exception:
                     pass  # history 기록 실패는 작업 실행을 막지 않음
 
+                # 5f) Anchor 자동 매칭 — skill output 에서 IP/hash/domain 추출 후
+                # match_repeat_iocs 호출. 매칭되면 repeat_ioc_match 이벤트.
+                try:
+                    iocs = self._extract_iocs(output or "")
+                    if iocs:
+                        hits = self.history_layer.match_repeat_iocs(iocs)
+                        if hits:
+                            yield {"event": "repeat_ioc_match",
+                                   "skill": skill_name,
+                                   "matches": [{"ioc": h["ioc"],
+                                                 "anchor_label": h["label"],
+                                                 "anchor_kind": h["kind"]}
+                                                for h in hits[:5]]}
+                except Exception:
+                    pass
+
             # Asset 상태 업데이트 (probe 계열)
             if skill_name in ("probe_host", "probe_all", "check_suricata",
                               "check_wazuh", "check_modsecurity"):
                 self._update_assets_from_result(skill_name, params, success)
+                # 5a) Asset autoscan — probe 결과 → asset 노드 자동 등록
+                try:
+                    from bastion.asset_domain import autoscan_register
+                    target = params.get("target", "")
+                    if target and skill_name in ("probe_host", "probe_all"):
+                        result = {"role": target, "ip": "",
+                                  "uptime": (output or "")[:200]}
+                        # output 에서 ip/os 단순 추출
+                        import re as _re
+                        m = _re.search(r'\b(\d+\.\d+\.\d+\.\d+)\b', output or "")
+                        if m:
+                            result["ip"] = m.group(1)
+                        m = _re.search(r'(?:Linux|Ubuntu|Debian|CentOS|RHEL|Windows)\s*[\d.]*',
+                                       output or "", _re.I)
+                        if m:
+                            result["os"] = m.group(0)
+                        autoscan_register(result, vm_role=target)
+                        yield {"event": "asset_autoregistered",
+                               "asset_id": f"asset:host:{target}",
+                               "ip": result.get("ip", "")}
+                except Exception:
+                    pass
 
         # ══ STAGE 3: VALIDATING ════════════════════════════════════════════
         yield {"event": "stage", "stage": "validating"}
@@ -2669,6 +2707,43 @@ class BastionAgent:
             if r_ip == ip:
                 return role
         return ip  # 못 찾으면 IP 그대로
+
+    # IoC 추출 — 5f Anchor 자동 매칭용. IP/SHA256/도메인 패턴.
+    _IOC_IP_RE = __import__("re").compile(r'\b(?:\d{1,3}\.){3}\d{1,3}\b')
+    _IOC_SHA256_RE = __import__("re").compile(r'\b[a-f0-9]{64}\b')
+    _IOC_DOMAIN_RE = __import__("re").compile(
+        r'\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+'
+        r'(?:com|net|org|io|kr|cn|ru|tk|ml|ga|cf|gq|info|biz|xyz|top|click|example)\b',
+        __import__("re").IGNORECASE)
+    # 사내망 IP / 흔한 false-positive 제외
+    _IOC_BLACKLIST = {"0.0.0.0", "127.0.0.1", "255.255.255.255",
+                      "10.20.30.1", "10.20.30.80", "10.20.30.100",
+                      "10.20.30.200", "10.20.30.201"}
+
+    def _extract_iocs(self, text: str) -> list[str]:
+        """text 에서 외부 IP / SHA256 / 도메인 패턴 추출. 사내·흔한 토큰 제외."""
+        if not text:
+            return []
+        iocs: list[str] = []
+        seen: set[str] = set()
+        for m in self._IOC_IP_RE.findall(text):
+            if m in self._IOC_BLACKLIST: continue
+            # RFC1918 사내 IP 제외 (10.x, 172.16-31.x, 192.168.x)
+            parts = m.split('.')
+            if len(parts) == 4 and parts[0] == '10': continue
+            if len(parts) == 4 and parts[0] == '192' and parts[1] == '168': continue
+            if (len(parts) == 4 and parts[0] == '172'
+                    and 16 <= int(parts[1]) <= 31): continue
+            if m in seen: continue
+            iocs.append(m); seen.add(m)
+        for m in self._IOC_SHA256_RE.findall(text):
+            if m in seen: continue
+            iocs.append(m); seen.add(m)
+        for m in self._IOC_DOMAIN_RE.findall(text)[:10]:
+            if m.lower() in ("example.com", "localhost"): continue
+            if m in seen: continue
+            iocs.append(m); seen.add(m)
+        return iocs[:20]  # 한 응답당 최대 20개
 
     def _update_assets_from_result(self, skill_name: str, params: dict, success: bool):
         """Skill 실행 결과로 Asset 상태 업데이트."""
