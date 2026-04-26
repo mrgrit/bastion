@@ -383,6 +383,74 @@ def history_changelog(target_kind: str, target_id: str):
     return {"changelog": _history().changelog(target_kind, target_id)}
 
 
+@app.get("/history/graph-view")
+def history_graph_view(limit: int = 200):
+    """KG UI 통합용 — Anchor + Narrative 를 graph-compatible 노드 형태로 반환.
+    Event 는 너무 많을 수 있어 graph 노드로 노출하지 않고 detail panel 에서 timeline 으로 표시.
+    """
+    h = _history()
+    nodes: list[dict] = []
+    edges: list[dict] = []
+    next_eid = 1
+    # Narratives
+    with h._conn() as c:
+        for r in c.execute(
+            "SELECT * FROM history_narratives ORDER BY started_at DESC LIMIT ?",
+            (limit,)
+        ).fetchall():
+            d = dict(r)
+            nodes.append({
+                "id": d["id"],
+                "type": "Narrative",
+                "name": d["title"],
+                "meta": {"status": d["status"], "started_at": d["started_at"],
+                         "ended_at": d["ended_at"], "summary": d["summary"]},
+                "updated_at": d["started_at"],
+            })
+        # Anchors
+        for r in c.execute(
+            "SELECT * FROM history_anchors ORDER BY created_at DESC LIMIT ?",
+            (limit,)
+        ).fetchall():
+            d = dict(r)
+            nodes.append({
+                "id": d["id"],
+                "type": "Anchor",
+                "name": d["label"],
+                "meta": {"kind": d["kind"], "body": d["body"][:300],
+                         "valid_from": d["valid_from"], "valid_until": d["valid_until"]},
+                "updated_at": d["created_at"],
+            })
+            # Anchor → related_ids 엣지
+            try:
+                rel = json.loads(d["related_ids"] or "[]")
+            except Exception:
+                rel = []
+            for target in rel:
+                edges.append({"id": next_eid, "src": d["id"], "dst": target,
+                              "type": "relates_to", "weight": 1.0})
+                next_eid += 1
+        # Narrative → contained Events 카운트 (참고)
+        for n in nodes:
+            if n["type"] != "Narrative":
+                continue
+            cnt = c.execute(
+                "SELECT COUNT(*) FROM history_events WHERE narrative_id=?",
+                (n["id"],)
+            ).fetchone()[0]
+            n["meta"]["event_count"] = cnt
+    return {"nodes": nodes, "edges": edges}
+
+
+@app.get("/history/asset-timeline/{asset_id}")
+def history_asset_timeline(asset_id: str, limit: int = 200):
+    """Asset 노드 detail panel 용 — 해당 자산의 timeline + narratives + anchors + changelog."""
+    h = _history()
+    pkg = h.handoff(asset_id)
+    pkg["limit"] = limit
+    return pkg
+
+
 @app.get("/assets")
 def assets():
     return agent.evidence_db.get_assets()
