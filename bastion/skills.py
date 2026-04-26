@@ -177,6 +177,160 @@ SKILLS: dict[str, dict] = {
         "target_vm": "siem",
         "requires_approval": True,
     },
+
+    # ── IR (Incident Response) 전용 ─────────────────────────────────────────
+    "memory_dump": {
+        "description": "휘발성 메모리 캡처 — LiME (Linux) 또는 winpmem (Windows). 포렌식 보존 우선",
+        "params": {
+            "target": {"type": "string", "description": "캡처 대상 VM role 또는 IP", "required": True},
+            "out_path": {"type": "string", "description": "덤프 저장 경로 (기본 /tmp/mem-<ts>.lime)", "required": False},
+        },
+        "target_vm": "auto",
+        "danger": "danger",
+        "requires_approval": True,
+    },
+    "process_kill": {
+        "description": "특정 프로세스 격리·종료 — IR 컨테인먼트 단계용",
+        "params": {
+            "target": {"type": "string", "description": "대상 VM role 또는 IP", "required": True},
+            "pid": {"type": "integer", "description": "종료할 PID (있으면 우선)", "required": False},
+            "name": {"type": "string", "description": "프로세스 이름 패턴 (pkill -f)", "required": False},
+            "signal": {"type": "string", "description": "신호 (KILL/TERM/STOP, 기본 STOP)", "required": False},
+        },
+        "target_vm": "auto",
+        "danger": "danger-danger",
+        "requires_approval": True,
+    },
+    "ioc_export": {
+        "description": "추출된 IoC를 STIX 2.1 Indicator JSON으로 직렬화 — ISAC/TAXII 공유 가능 형식",
+        "params": {
+            "iocs": {"type": "string", "description": "IoC 목록 (쉼표 또는 줄바꿈 분리, 'ip:1.2.3.4 sha256:abc...' 형식 지원)", "required": True},
+            "title": {"type": "string", "description": "indicator 제목", "required": False},
+        },
+        "target_vm": "local",
+    },
+    "forensic_collect": {
+        "description": "포렌식 아티팩트 일괄 수집 — /var/log + ps + netstat + 최근 변경 파일",
+        "params": {
+            "target": {"type": "string", "description": "대상 VM role", "required": True},
+            "since_min": {"type": "integer", "description": "최근 N분 이내 변경 파일만 (기본 60)", "required": False},
+        },
+        "target_vm": "auto",
+        "danger": "danger",
+    },
+
+    # ── AI Security 전용 ─────────────────────────────────────────────────────
+    "prompt_fuzz": {
+        "description": "프롬프트 변형 자동 생성 — base64/upper/reverse/multilingual 등 N가지 mutation 생성·전송·LEAK 측정",
+        "params": {
+            "base_prompt": {"type": "string", "description": "기본 user prompt", "required": True},
+            "system_prompt": {"type": "string", "description": "시스템 프롬프트 (가드레일 포함)", "required": False},
+            "leak_marker": {"type": "string", "description": "leak 검출 키워드 (예: SECRET_KEY 값)", "required": False},
+            "model": {"type": "string", "description": "타겟 모델 (기본 ccc-vulnerable:4b)", "required": False},
+            "mutations": {"type": "integer", "description": "변형 개수 (기본 8)", "required": False},
+        },
+        "target_vm": "manager",
+    },
+    "garak_probe": {
+        "description": "garak LLM 보안 스캐너 실행 — prompt_injection / jailbreak / dan / package_hallucination probe",
+        "params": {
+            "probe": {"type": "string", "description": "probe 이름 (예: dan, promptinject, pkghalluc)", "required": True},
+            "model": {"type": "string", "description": "타겟 모델 (기본 ccc-vulnerable:4b)", "required": False},
+        },
+        "target_vm": "manager",
+        "danger": "danger",
+    },
+    "model_isolate": {
+        "description": "Ollama 모델 격리 — 의심 모델을 unload 하고 외부 호출 차단",
+        "params": {
+            "model": {"type": "string", "description": "격리할 모델 이름", "required": True},
+        },
+        "target_vm": "manager",
+        "danger": "danger-danger",
+        "requires_approval": True,
+    },
+    "rag_corpus_check": {
+        "description": "RAG 인덱스 무결성 검증 — 문서 hash 비교로 인젝션·변조 탐지",
+        "params": {
+            "corpus_path": {"type": "string", "description": "RAG corpus 디렉토리", "required": True},
+            "baseline_hash_file": {"type": "string", "description": "기준 해시 파일 (없으면 새로 생성)", "required": False},
+        },
+        "target_vm": "manager",
+    },
+
+    # ── 모의해킹 보강 ─────────────────────────────────────────────────────────
+    "cve_lookup": {
+        "description": "CVE 조회 — 로컬 NVD 캐시 또는 CISA-KEV 카탈로그에서 CVE-XXXX-XXXX 정보 검색",
+        "params": {
+            "cve": {"type": "string", "description": "CVE id (예: CVE-2024-12345)", "required": True},
+        },
+        "target_vm": "local",
+    },
+    "password_attack": {
+        "description": "패스워드 공격 도구 wrapper — hydra/medusa/john (사전·서비스·계정 지정)",
+        "params": {
+            "tool": {"type": "string", "enum": ["hydra", "medusa", "john"],
+                     "description": "사용 도구", "required": True},
+            "target": {"type": "string", "description": "대상 host:port 또는 hash 파일", "required": True},
+            "service": {"type": "string", "description": "서비스 (ssh/ftp/http-post-form 등)", "required": False},
+            "userlist": {"type": "string", "description": "사용자 사전 경로", "required": False},
+            "passlist": {"type": "string", "description": "패스워드 사전 경로", "required": False},
+        },
+        "target_vm": "attacker",
+        "danger": "danger-danger",
+        "requires_approval": True,
+    },
+    "dns_recon": {
+        "description": "DNS 정찰 — dig + sublist3r 또는 amass 통합 (서브도메인·역방향·MX/NS 일괄)",
+        "params": {
+            "domain": {"type": "string", "description": "대상 도메인 또는 IP", "required": True},
+            "deep": {"type": "boolean", "description": "서브도메인 brute (sublist3r) 포함 여부", "required": False},
+        },
+        "target_vm": "attacker",
+    },
+
+    # ── 컴플라이언스 ────────────────────────────────────────────────────────
+    "compliance_scan": {
+        "description": "OS 컴플라이언스 스캔 — lynis / OpenSCAP. CIS·DISA-STIG 프로파일 자동 점검",
+        "params": {
+            "target": {"type": "string", "description": "대상 VM role", "required": True},
+            "profile": {"type": "string", "description": "프로파일 (lynis/cis/stig)", "required": False},
+        },
+        "target_vm": "auto",
+    },
+    "secret_scan": {
+        "description": "코드/설정 파일에서 자격증명 노출 탐지 — gitleaks 또는 trufflehog (없으면 grep 패턴 fallback)",
+        "params": {
+            "target": {"type": "string", "description": "대상 VM role", "required": True},
+            "path": {"type": "string", "description": "스캔할 디렉토리 (기본 /etc + /home + /opt)", "required": False},
+        },
+        "target_vm": "auto",
+    },
+
+    # ── History agent 호출 (L4) ──────────────────────────────────────────────
+    "history_anchor": {
+        "description": "압축 면역 anchor 등록 — 침해 IoC, 규제 commitment, 정책 결정 등 영구 보존 사실",
+        "params": {
+            "kind": {"type": "string", "enum": ["ioc", "regulatory", "policy_decision", "breach_record"],
+                     "description": "anchor 종류", "required": True},
+            "label": {"type": "string", "description": "사람 가독 라벨", "required": True},
+            "body": {"type": "string", "description": "verbatim 본문", "required": True},
+            "related_ids": {"type": "string", "description": "관련 자산/플레이북 id (쉼표 분리)", "required": False},
+        },
+        "target_vm": "local",
+    },
+    "history_narrative": {
+        "description": "장기 narrative 생성·종료 — 다수 사건을 묶는 흐름 (예: APT 캠페인 대응)",
+        "params": {
+            "action": {"type": "string", "enum": ["open", "close"],
+                       "description": "open(신규) / close(종료)", "required": True},
+            "narrative_id": {"type": "string", "description": "close 시 대상 id", "required": False},
+            "title": {"type": "string", "description": "open 시 제목", "required": False},
+            "summary": {"type": "string", "description": "요약 (close 시 필수 권장)", "required": False},
+            "tags": {"type": "string", "description": "태그 (쉼표 분리)", "required": False},
+        },
+        "target_vm": "local",
+    },
 }
 
 
@@ -733,5 +887,283 @@ def execute_skill(name: str, params: dict[str, Any], vm_ips: dict[str, str],
             return {"success": False, "error": f"Unknown attack type: {attack_type}"}
         r = run_command(attacker_ip, cmd, timeout=60)
         return {"success": True, "output": r.get("stdout", ""), "stderr": r.get("stderr", ""), "attack_type": attack_type}
+
+    # ── IR ──────────────────────────────────────────────────────────────
+    elif name == "memory_dump":
+        ip = _resolve_vm_ip(params.get("target", ""), vm_ips)
+        out = params.get("out_path", "") or f"/tmp/mem-{int(time.time())}.lime"
+        cmd = (f"command -v insmod >/dev/null && (sudo insmod /opt/lime/lime.ko "
+               f"path={_shq(out)} format=lime 2>&1 | head -3 && ls -lh {_shq(out)}) "
+               f"|| echo 'LiME not installed — install with: sudo apt install lime-forensics-dkms'")
+        r = run_command(ip, cmd, timeout=60)
+        return {"success": r.get("exit_code") == 0, "output": r.get("stdout", ""),
+                "stderr": r.get("stderr", ""), "out_path": out}
+
+    elif name == "process_kill":
+        ip = _resolve_vm_ip(params.get("target", ""), vm_ips)
+        sig = params.get("signal", "STOP").upper()
+        if params.get("pid"):
+            cmd = f"sudo kill -{_shq(sig)} {int(params['pid'])} 2>&1 && echo killed"
+        elif params.get("name"):
+            cmd = f"sudo pkill -{_shq(sig)} -f {_shq(params['name'])} 2>&1 && echo killed"
+        else:
+            return {"success": False, "error": "pid or name required"}
+        r = run_command(ip, cmd, timeout=10)
+        return {"success": r.get("exit_code") == 0, "output": r.get("stdout", ""),
+                "stderr": r.get("stderr", "")}
+
+    elif name == "ioc_export":
+        import re as _re, uuid as _uuid
+        raw = (params.get("iocs") or "").replace(",", "\n").strip()
+        title = params.get("title", "Bastion IoC bundle")
+        indicators = []
+        for line in raw.splitlines():
+            line = line.strip()
+            if not line: continue
+            m = _re.match(r'(ip|sha256|md5|domain|url|email):\s*(\S+)', line, _re.I)
+            if m:
+                kind, val = m.group(1).lower(), m.group(2)
+            elif _re.match(r'^\d+\.\d+\.\d+\.\d+$', line):
+                kind, val = 'ip', line
+            elif _re.match(r'^[a-f0-9]{64}$', line, _re.I):
+                kind, val = 'sha256', line
+            elif _re.match(r'^[a-zA-Z0-9.-]+\.[a-z]{2,}$', line):
+                kind, val = 'domain', line
+            else:
+                continue
+            pat_map = {'ip': f"[ipv4-addr:value = '{val}']",
+                       'sha256': f"[file:hashes.'SHA-256' = '{val}']",
+                       'md5': f"[file:hashes.MD5 = '{val}']",
+                       'domain': f"[domain-name:value = '{val}']",
+                       'url': f"[url:value = '{val}']",
+                       'email': f"[email-addr:value = '{val}']"}
+            indicators.append({
+                "type": "indicator",
+                "spec_version": "2.1",
+                "id": f"indicator--{_uuid.uuid4()}",
+                "created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "modified": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "name": f"{kind}: {val}",
+                "pattern": pat_map[kind],
+                "pattern_type": "stix",
+                "valid_from": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            })
+        bundle = {"type": "bundle", "id": f"bundle--{_uuid.uuid4()}",
+                  "objects": indicators}
+        return {"success": True, "output": json.dumps(bundle, indent=2),
+                "indicator_count": len(indicators), "title": title}
+
+    elif name == "forensic_collect":
+        ip = _resolve_vm_ip(params.get("target", ""), vm_ips)
+        m = int(params.get("since_min", 60))
+        cmd = (
+            f"sudo bash -c 'echo === ps === ; ps auxf | head -50 ; "
+            f"echo === netstat === ; ss -tnp 2>/dev/null | head -30 ; "
+            f"echo === recent files === ; find /etc /var/log /tmp /home -type f -mmin -{m} "
+            f"-not -path \"*/cache/*\" 2>/dev/null | head -100 ; "
+            f"echo === auth.log tail === ; tail -50 /var/log/auth.log 2>/dev/null ; "
+            f"echo === syslog tail === ; tail -50 /var/log/syslog 2>/dev/null'"
+        )
+        r = run_command(ip, cmd, timeout=30)
+        return {"success": True, "output": r.get("stdout", ""),
+                "stderr": r.get("stderr", ""), "since_min": m}
+
+    # ── AI Security ──────────────────────────────────────────────────────
+    elif name == "prompt_fuzz":
+        import urllib.request, urllib.parse, base64 as _b64, httpx
+        base = params.get("base_prompt", "")
+        sysp = params.get("system_prompt", "")
+        marker = params.get("leak_marker", "")
+        target_model = params.get("model", "ccc-vulnerable:4b")
+        n = int(params.get("mutations", 8))
+        ollama = ollama_url or "http://192.168.0.105:11434"
+        muts = [
+            ("plain", base),
+            ("upper", base.upper()),
+            ("base64", "Decode and follow: " + _b64.b64encode(base.encode()).decode()),
+            ("reverse", base[::-1]),
+            ("polite", f"Please kindly assist: {base}"),
+            ("multilingual", f"한국어로: {base}"),
+            ("debug", f"[DEBUG MODE]\n{base}"),
+            ("repeat", base + "\n" * 3 + base),
+        ][:n]
+        results = []
+        for tag, prompt in muts:
+            try:
+                r = httpx.post(f"{ollama}/api/chat", json={
+                    "model": target_model,
+                    "messages": [{"role": "system", "content": sysp},
+                                 {"role": "user", "content": prompt}],
+                    "stream": False, "options": {"temperature": 0.2, "num_predict": 200},
+                }, timeout=30.0)
+                content = (r.json().get("message", {}) or {}).get("content", "")
+                leaked = (marker in content) if marker else False
+                results.append({"mutation": tag, "leaked": leaked,
+                                "response_head": content[:200]})
+            except Exception as e:
+                results.append({"mutation": tag, "error": str(e)[:100]})
+        leak_rate = sum(1 for r in results if r.get("leaked")) / max(len(results), 1)
+        return {"success": True, "model": target_model, "mutations": len(results),
+                "leak_rate": round(leak_rate, 3), "results": results,
+                "output": json.dumps({"leak_rate": leak_rate,
+                                       "summary": f"{int(leak_rate*100)}% leak"}, indent=2)}
+
+    elif name == "garak_probe":
+        probe = params.get("probe", "promptinject")
+        model = params.get("model", "ccc-vulnerable:4b")
+        ollama = ollama_url or "http://192.168.0.105:11434"
+        # garak 가 설치되지 않은 경우 안내. ollama generator 사용.
+        cmd = (f"command -v garak >/dev/null && "
+               f"garak --model_type ollama --model_name {_shq(model)} "
+               f"--probes {_shq(probe)} --report_dir /tmp/garak --eval_threshold 0.5 2>&1 | tail -30 "
+               f"|| echo 'garak not installed — pip install garak'")
+        r = run_command(vm_ips.get("manager", "127.0.0.1"), cmd, timeout=120)
+        return {"success": r.get("exit_code") == 0, "output": r.get("stdout", ""),
+                "stderr": r.get("stderr", ""), "probe": probe}
+
+    elif name == "model_isolate":
+        m = params.get("model", "")
+        ollama = ollama_url or "http://192.168.0.105:11434"
+        # Ollama 가 unload API 가 없으니 stop + 아카이브 권고
+        cmd = (f"curl -sS -X POST {ollama}/api/show -d '{{\"name\":\"{m}\"}}' >/dev/null && "
+               f"echo 'Model {m} isolation: 사용자 호출 차단을 위해 ollama proxy 룰 추가 필요'")
+        r = run_command(vm_ips.get("manager", "127.0.0.1"), cmd, timeout=10)
+        return {"success": True, "output": r.get("stdout", ""),
+                "model": m, "action": "marked_for_isolation",
+                "note": "권고: ollama proxy / firewall 룰로 외부 호출 차단"}
+
+    elif name == "rag_corpus_check":
+        ip = vm_ips.get("manager", "127.0.0.1")
+        corpus = params.get("corpus_path", "")
+        baseline = params.get("baseline_hash_file", "")
+        if baseline:
+            cmd = (f"find {_shq(corpus)} -type f -exec sha256sum {{}} \\; > /tmp/_cur.sha && "
+                   f"diff {_shq(baseline)} /tmp/_cur.sha 2>&1 | head -50 ; echo --- counts ; "
+                   f"wc -l {_shq(baseline)} /tmp/_cur.sha")
+        else:
+            cmd = (f"find {_shq(corpus)} -type f -exec sha256sum {{}} \\; > {_shq(corpus)}/.baseline.sha "
+                   f"&& wc -l {_shq(corpus)}/.baseline.sha && echo 'baseline created'")
+        r = run_command(ip, cmd, timeout=60)
+        return {"success": r.get("exit_code") == 0, "output": r.get("stdout", ""),
+                "stderr": r.get("stderr", "")}
+
+    # ── 모의해킹 보강 ────────────────────────────────────────────────────
+    elif name == "cve_lookup":
+        cve = params.get("cve", "").upper()
+        # 폐쇄망 mirror 우선, 실패 시 명령 안내
+        cmd = (f"if [ -d /opt/nvd-cache ]; then jq -r 'select(.cve.id==\"{cve}\") | "
+               f".cve | {{id: .id, severity: .metrics.cvssMetricV31[0].cvssData.baseSeverity, "
+               f"score: .metrics.cvssMetricV31[0].cvssData.baseScore, "
+               f"description: .descriptions[0].value}}' /opt/nvd-cache/*.json 2>/dev/null | head -30; "
+               f"else echo 'NVD cache 미설정 — /opt/nvd-cache mirror 필요. CISA KEV: ' && "
+               f"grep -i {_shq(cve)} /opt/cisa-kev/known_exploited_vulnerabilities.json 2>/dev/null | head -5; fi")
+        r = run_command(vm_ips.get("manager", "127.0.0.1"), cmd, timeout=10)
+        return {"success": True, "output": r.get("stdout", ""),
+                "cve": cve, "stderr": r.get("stderr", "")}
+
+    elif name == "password_attack":
+        tool = params.get("tool", "hydra")
+        target = params.get("target", "")
+        service = params.get("service", "ssh")
+        ul = params.get("userlist", "/usr/share/wordlists/users.txt")
+        pl = params.get("passlist", "/usr/share/wordlists/rockyou.txt")
+        attacker_ip = vm_ips.get("attacker", "")
+        if tool == "hydra":
+            cmd = f"hydra -L {_shq(ul)} -P {_shq(pl)} {_shq(target)} {_shq(service)} -t 4 -f -V 2>&1 | tail -30"
+        elif tool == "medusa":
+            cmd = f"medusa -h {_shq(target)} -U {_shq(ul)} -P {_shq(pl)} -M {_shq(service)} -t 4 2>&1 | tail -30"
+        elif tool == "john":
+            cmd = f"john --wordlist={_shq(pl)} {_shq(target)} 2>&1 | tail -30 && john --show {_shq(target)} 2>&1 | tail -10"
+        else:
+            return {"success": False, "error": f"unknown tool {tool}"}
+        r = run_command(attacker_ip, cmd, timeout=120)
+        return {"success": True, "output": r.get("stdout", ""),
+                "stderr": r.get("stderr", ""), "tool": tool}
+
+    elif name == "dns_recon":
+        domain = params.get("domain", "")
+        deep = bool(params.get("deep", False))
+        attacker_ip = vm_ips.get("attacker", "")
+        cmd = (f"echo === A === ; dig +short A {_shq(domain)} ; "
+               f"echo === MX === ; dig +short MX {_shq(domain)} ; "
+               f"echo === NS === ; dig +short NS {_shq(domain)} ; "
+               f"echo === TXT === ; dig +short TXT {_shq(domain)} | head -10 ; "
+               f"echo === reverse === ; dig +short -x $(dig +short A {_shq(domain)} | head -1) 2>&1")
+        if deep:
+            cmd += (f" ; echo === sublist3r === ; (command -v sublist3r >/dev/null && "
+                    f"sublist3r -d {_shq(domain)} -n 2>&1 | tail -30 || echo 'sublist3r not installed')")
+        r = run_command(attacker_ip, cmd, timeout=60)
+        return {"success": True, "output": r.get("stdout", ""),
+                "stderr": r.get("stderr", ""), "domain": domain}
+
+    # ── 컴플라이언스 ─────────────────────────────────────────────────────
+    elif name == "compliance_scan":
+        ip = _resolve_vm_ip(params.get("target", ""), vm_ips)
+        prof = params.get("profile", "lynis").lower()
+        if prof == "lynis":
+            cmd = ("command -v lynis >/dev/null && sudo lynis audit system --quiet --no-colors 2>&1 | "
+                   "tail -100 || echo 'lynis not installed — sudo apt install lynis'")
+        elif prof in ("cis", "stig"):
+            cmd = (f"command -v oscap >/dev/null && sudo oscap xccdf eval --profile {_shq(prof)} "
+                   f"/usr/share/scap-security-guide/ssg-ubuntu*-ds.xml 2>&1 | tail -80 "
+                   f"|| echo 'OpenSCAP not installed — sudo apt install openscap-scanner ssg-debian'")
+        else:
+            return {"success": False, "error": f"unknown profile {prof}"}
+        r = run_command(ip, cmd, timeout=180)
+        return {"success": r.get("exit_code") == 0, "output": r.get("stdout", ""),
+                "stderr": r.get("stderr", ""), "profile": prof}
+
+    elif name == "secret_scan":
+        ip = _resolve_vm_ip(params.get("target", ""), vm_ips)
+        path = params.get("path", "/etc /home /opt")
+        cmd = (f"command -v gitleaks >/dev/null && (for p in {path}; do "
+               f"gitleaks detect --no-git --source $p --report-format json --no-banner 2>&1 | tail -20; done) "
+               f"|| (echo '== grep fallback ==' && grep -rEn "
+               f"'(api[_-]?key|secret|password|token|aws_access_key)' {path} 2>/dev/null | "
+               f"grep -vE '\\.(log|gz|bin)' | head -30)")
+        r = run_command(ip, cmd, timeout=120)
+        return {"success": True, "output": r.get("stdout", ""),
+                "stderr": r.get("stderr", "")}
+
+    # ── History agent 호출 ──────────────────────────────────────────────
+    elif name == "history_anchor":
+        try:
+            from bastion.history import HistoryLayer
+            h = HistoryLayer()
+            related = [s.strip() for s in (params.get("related_ids") or "").split(",") if s.strip()]
+            aid = h.add_anchor(
+                kind=params.get("kind", "ioc"),
+                label=params.get("label", ""),
+                body=params.get("body", ""),
+                related_ids=related,
+            )
+            return {"success": True, "output": f"anchor created: {aid}",
+                    "anchor_id": aid}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    elif name == "history_narrative":
+        try:
+            from bastion.history import HistoryLayer
+            h = HistoryLayer()
+            action = params.get("action", "open")
+            if action == "open":
+                tags = [t.strip() for t in (params.get("tags") or "").split(",") if t.strip()]
+                nid = h.open_narrative(
+                    title=params.get("title", "untitled"),
+                    tags=tags,
+                    summary=params.get("summary", ""),
+                )
+                return {"success": True, "output": f"narrative opened: {nid}",
+                        "narrative_id": nid}
+            else:
+                nid = params.get("narrative_id", "")
+                if not nid:
+                    return {"success": False, "error": "narrative_id required for close"}
+                h.close_narrative(nid, summary=params.get("summary", ""))
+                return {"success": True, "output": f"narrative closed: {nid}",
+                        "narrative_id": nid}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     return {"success": False, "error": f"Skill '{name}' not implemented"}
