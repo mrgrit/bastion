@@ -1540,9 +1540,12 @@ class BastionAgent:
         ]
 
         try:
-            tools_spec = skills_to_ollama_tools()
+            tools_spec = self._select_relevant_tools(message, max_n=12)
         except Exception:
-            tools_spec = []
+            try:
+                tools_spec = skills_to_ollama_tools()
+            except Exception:
+                tools_spec = []
 
         all_tool_outputs: list[dict] = []
         # KG-3: turn 별 LLM thinking + content 수집 → playbook reasoning 으로 박제
@@ -2814,6 +2817,93 @@ class BastionAgent:
     _IOC_BLACKLIST = {"0.0.0.0", "127.0.0.1", "255.255.255.255",
                       "10.20.30.1", "10.20.30.80", "10.20.30.100",
                       "10.20.30.200", "10.20.30.201"}
+
+    # 항상 포함하는 core skill — 어떤 step 이라도 fallback 으로 자주 쓰임
+    _CORE_SKILLS = {"shell", "file_manage", "probe_host", "probe_all", "ollama_query"}
+
+    # skill → 트리거 키워드 (자동 필터링용). 카테고리 trigger + 도구명 변형.
+    _SKILL_TRIGGERS: dict[str, list[str]] = {
+        # Recon
+        "scan_ports": ["nmap", "포트", "port scan", "open port", "service version"],
+        "dns_recon": ["dns", "subdomain", "서브도메인", "sublist3r", "amass", "dig", "nslookup"],
+        "web_scan": ["nikto", "nikto", "web 스캔", "web scan", "directory", "bruteforce dir"],
+        "cve_lookup": ["cve", "cve-", "kev", "취약점 정보", "vulnerability lookup", "nvd"],
+        # Detect/SIEM
+        "check_suricata": ["suricata", "ids 알림", "fast.log", "ids 상태"],
+        "check_wazuh": ["wazuh", "siem", "ossec", "alerts.json", "agent 상태"],
+        "check_modsecurity": ["modsecurity", "modsec", "waf 상태", "audit_log"],
+        "analyze_logs": ["로그 분석", "log analysis", "/var/log", "tail", "syslog"],
+        "wazuh_api": ["wazuh api", "ossec api", "agents endpoint"],
+        # Defend
+        "configure_nftables": ["nftables", "방화벽", "firewall rule", "iptables", "차단 룰"],
+        "deploy_rule": ["배포", "deploy rule", "suricata rule", "wazuh rule", "ips 룰"],
+        "enroll_wazuh_agent": ["wazuh agent", "에이전트 등록", "agent enroll"],
+        # Attack
+        "attack_simulate": ["sqli", "xss", "csrf", "공격 시뮬", "exploit", "payload"],
+        "password_attack": ["hydra", "medusa", "john", "패스워드", "password attack", "brute force"],
+        # IR/Forensic
+        "memory_dump": ["메모리 덤프", "memory dump", "lime", "winpmem", "휘발성"],
+        "process_kill": ["프로세스 격리", "process kill", "containment", "ir 격리"],
+        "ioc_export": ["ioc 추출", "stix", "indicator", "ioc export"],
+        "forensic_collect": ["포렌식", "forensic", "아티팩트 수집", "/var/log + ps"],
+        # AI Sec
+        "prompt_fuzz": ["prompt injection", "프롬프트 인젝션", "prompt fuzz", "jailbreak test"],
+        "garak_probe": ["garak", "llm 보안 스캔", "package_hallucination", "dan"],
+        "model_isolate": ["모델 격리", "model isolate", "ollama unload"],
+        "rag_corpus_check": ["rag 무결성", "rag poison", "corpus check", "문서 hash"],
+        # Compliance
+        "compliance_scan": ["lynis", "openscap", "cis", "stig", "compliance"],
+        "secret_scan": ["gitleaks", "trufflehog", "시크릿 스캔", "secret leak"],
+        # History
+        "history_anchor": ["anchor 등록", "압축 면역", "보존 사실", "ioc anchor", "장기 보존"],
+        "history_narrative": ["narrative 시작", "apt 캠페인", "장기 사건", "사건 묶음"],
+        # Generic
+        "http_request": ["http 요청", "curl", "post", "rest api", "endpoint"],
+        "docker_manage": ["docker", "container", "compose", "image", "ps"],
+    }
+
+    def _select_relevant_tools(self, message: str, max_n: int = 12) -> list[dict]:
+        """step message 에 가장 관련된 top-N 도구만 spec 으로 반환.
+
+        문제: 33 도구 spec = ~19KB → derestricted 모델이 처리 부담.
+        해결: SKILL_CATEGORIES trigger + 도구별 키워드 매칭 점수로 top-N 선정.
+        core skill (shell/file_manage/probe_*/ollama_query) 는 항상 포함.
+
+        반환: skills_to_ollama_tools() 와 동일 형식 (subset).
+        """
+        from bastion.skills import SKILLS, skills_to_ollama_tools
+        msg_low = (message or "").lower()
+        scored: dict[str, int] = {}
+        for sname in SKILLS:
+            sc = 0
+            # 1. 도구명 자체 등장
+            if sname.replace("_", " ") in msg_low or sname in msg_low:
+                sc += 10
+            # 2. 트리거 키워드 매칭
+            for kw in self._SKILL_TRIGGERS.get(sname, []):
+                if kw.lower() in msg_low:
+                    sc += 3
+            scored[sname] = sc
+
+        # core 는 항상 포함
+        chosen = set(self._CORE_SKILLS)
+        # 점수 > 0 인 것 + core 합쳐 top-N
+        ranked = sorted(scored.items(), key=lambda x: -x[1])
+        for sname, sc in ranked:
+            if len(chosen) >= max_n:
+                break
+            if sc > 0:
+                chosen.add(sname)
+
+        # 부족하면 core 외 임의로 채움 (안정성)
+        if len(chosen) < max_n:
+            for sname in SKILLS:
+                if len(chosen) >= max_n:
+                    break
+                chosen.add(sname)
+
+        all_tools = skills_to_ollama_tools()
+        return [t for t in all_tools if t.get("function", {}).get("name") in chosen]
 
     def _extract_iocs(self, text: str) -> list[str]:
         """text 에서 외부 IP / SHA256 / 도메인 패턴 추출. 사내·흔한 토큰 제외."""
