@@ -27,7 +27,7 @@ import httpx
 from bastion.playbook import list_playbooks, load_playbook, run_playbook
 from bastion.prompt import build_system_prompt, build_planning_prompt
 from bastion.rag import build_index, format_context
-from bastion.skills import SKILLS, execute_skill, preview_skill, skills_to_ollama_tools
+from bastion.skills import SKILLS, SKILL_CATEGORIES, execute_skill, preview_skill, skills_to_ollama_tools
 
 
 # ── 입력 정제 ──────────────────────────────────────────────────────────────
@@ -1368,10 +1368,26 @@ class BastionAgent:
 
     def _build_react_system_prompt(self) -> str:
         """ReAct 루프용 시스템 프롬프트 — Step 2 (목표 명시) + Step 4 (todo 추적) 포함."""
-        skill_list = "\n".join(
-            f"  - {name}: {s['description']} (target: {s.get('target_vm','auto')})"
-            for name, s in SKILLS.items()
-        )
+        # 카테고리별 그룹핑 — 33 skills 가 평면 나열되면 LLM 이 익숙한 9개만 호출하는 recall 문제 발생.
+        # 카테고리 헤더 + trigger 키워드로 신규 IR/AI/Pentest/Compliance/History skill 호출 유도.
+        cat_lines = []
+        seen = set()
+        for cat_name, meta in SKILL_CATEGORIES.items():
+            cat_lines.append(f"\n  ▼ {cat_name} — 트리거: {meta['trigger']}")
+            for sname in meta["skills"]:
+                s = SKILLS.get(sname)
+                if not s:
+                    continue
+                cat_lines.append(f"    - {sname}: {s['description']} (target: {s.get('target_vm','auto')})")
+                seen.add(sname)
+        # 카테고리에 분류 안 된 skill 도 누락 없이
+        leftover = [n for n in SKILLS if n not in seen]
+        if leftover:
+            cat_lines.append("\n  ▼ 기타")
+            for n in leftover:
+                s = SKILLS[n]
+                cat_lines.append(f"    - {n}: {s['description']} (target: {s.get('target_vm','auto')})")
+        skill_list = "\n".join(cat_lines)
         vm_info = "\n".join(f"  {r} = {ip}" for r, ip in self.vm_ips.items())
         verify_block = ""
         ctx = getattr(self, "_verify_context", {}) or {}
@@ -1398,7 +1414,27 @@ class BastionAgent:
             "4. 종료 조건: tool_calls 없는 응답 = 작업 끝. 이때 응답에 \"GOAL 충족됨: ...\" 명시.\n"
             "\n"
             "## 사용 가능한 Skill (function tools)\n"
+            "※ 9개 일반 skill (shell/ollama_query/probe_*/file_manage/docker_manage 등) 만 의존하지 말고,\n"
+            "   step 키워드가 IR/포렌식/AI 보안/모의해킹/컴플라이언스/장기기억 카테고리에 해당하면\n"
+            "   해당 카테고리의 전용 skill 을 우선 호출할 것. shell 로 동등 동작이 가능해도 전용 skill 사용.\n"
             f"{skill_list}\n"
+            "\n"
+            "## Skill 선택 휴리스틱 (★ recall 강화)\n"
+            "  · 'IoC 추출/STIX 공유'         → ioc_export\n"
+            "  · '메모리 덤프/휘발성 보존'     → memory_dump (LiME/winpmem)\n"
+            "  · '프로세스 격리/IR 컨테인먼트' → process_kill\n"
+            "  · '/var/log + ps + netstat 일괄 수집/포렌식 아티팩트' → forensic_collect\n"
+            "  · '프롬프트 인젝션/jailbreak 테스트' → prompt_fuzz 또는 garak_probe\n"
+            "  · 'Ollama 모델 격리/unload'      → model_isolate\n"
+            "  · 'RAG 인덱스 변조/무결성'       → rag_corpus_check\n"
+            "  · 'CVE-XXXX-XXXX 조회'           → cve_lookup\n"
+            "  · 'hydra/medusa/john/패스워드 사전 공격' → password_attack\n"
+            "  · 'sublist3r/amass/서브도메인'   → dns_recon\n"
+            "  · 'lynis/OpenSCAP/CIS/STIG 점검' → compliance_scan\n"
+            "  · 'gitleaks/trufflehog/시크릿 스캔' → secret_scan\n"
+            "  · '5년+ 보존 사실/규제 commitment/IoC anchor' → history_anchor\n"
+            "  · 'APT 캠페인/장기 narrative 시작·종료'      → history_narrative\n"
+            "  · 위 키워드 하나라도 매칭되면 fallback 으로 shell 쓰지 말 것.\n"
             "\n"
             "## VM 인프라\n"
             f"{vm_info}\n"

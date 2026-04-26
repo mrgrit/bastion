@@ -10,6 +10,46 @@ from typing import Any
 from bastion import run_command, health_check, INTERNAL_IPS
 
 
+# ── Skill 카테고리 — system prompt 에서 그룹핑에 사용 ──────────────
+SKILL_CATEGORIES: dict[str, dict] = {
+    "정찰 (Recon)": {
+        "skills": ["probe_host", "probe_all", "scan_ports", "dns_recon", "web_scan", "cve_lookup"],
+        "trigger": "포트/서비스/도메인/취약점/배너/CVE 식별, 초기 정찰",
+    },
+    "탐지·SIEM (Detect)": {
+        "skills": ["check_suricata", "check_wazuh", "check_modsecurity", "analyze_logs", "wazuh_api"],
+        "trigger": "알림/로그/IDS/WAF/SIEM 상태·이벤트 조회",
+    },
+    "방어·룰 (Defend)": {
+        "skills": ["configure_nftables", "deploy_rule", "enroll_wazuh_agent"],
+        "trigger": "방화벽 차단·허용, IDS/SIEM 룰 배포, 에이전트 등록",
+    },
+    "공격·모의해킹 (Attack)": {
+        "skills": ["attack_simulate", "password_attack", "web_scan"],
+        "trigger": "SQLi/XSS/brute-force/패스워드 공격·시뮬레이션 (실습 RED)",
+    },
+    "IR·포렌식 (IR/Forensic)": {
+        "skills": ["forensic_collect", "memory_dump", "process_kill", "ioc_export"],
+        "trigger": "침해 후 증거 보존·격리·IoC 추출 (포렌식·격리·STIX 공유)",
+    },
+    "AI 보안 (AI Sec)": {
+        "skills": ["prompt_fuzz", "garak_probe", "model_isolate", "rag_corpus_check"],
+        "trigger": "프롬프트 인젝션·jailbreak·모델 격리·RAG 무결성",
+    },
+    "컴플라이언스 (Compliance)": {
+        "skills": ["compliance_scan", "secret_scan"],
+        "trigger": "CIS/STIG/lynis 점검, 코드 내 시크릿 노출 탐지",
+    },
+    "장기기억 (History)": {
+        "skills": ["history_anchor", "history_narrative"],
+        "trigger": "5년+ 보존 사실/IoC anchor, APT 캠페인 등 narrative 시작·종료",
+    },
+    "범용 (Generic)": {
+        "skills": ["shell", "file_manage", "http_request", "docker_manage", "ollama_query"],
+        "trigger": "위 카테고리에 적합 skill 없을 때 fallback",
+    },
+}
+
 # ── Skill 정의 ─────────────────────────────────
 
 SKILLS: dict[str, dict] = {
