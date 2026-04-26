@@ -71,6 +71,10 @@ LLM_MANAGER_MODEL_UNSAFE = os.getenv("LLM_MANAGER_MODEL_UNSAFE", "gurubot/gpt-os
 ATTACK_COURSES = {
     "attack-ai", "attack-adv-ai",
     "battle-ai", "battle-adv-ai",
+    # 공격 액션이 많은 과목도 lab-context preamble 필요 (SQLi/XSS/exploit step 거부 차단)
+    "web-vuln-ai", "physical-pentest-ai",
+    # AI 보안 공격 카테고리 (prompt injection / model jailbreak)
+    "ai-security-ai",
 }
 
 _vm_ips = _get_vm_ips()
@@ -80,8 +84,16 @@ _model_swap_lock = threading.Lock()
 
 
 def _resolve_manager_model(course: str) -> str:
-    """course 기반 manager LLM 선택. 공격/대전 계열만 derestricted."""
-    return LLM_MANAGER_MODEL_UNSAFE if course in ATTACK_COURSES else LLM_MANAGER_MODEL
+    """course 기반 manager LLM 선택. 공격/대전 계열만 derestricted.
+
+    LLM_FAST_ATTACK=1 면 attack 도 일반 모델 사용 (derestricted 가 너무 느릴 때).
+    attack_mode preamble + first_turn_retry 가 거부 패턴 잡아줌.
+    """
+    if course in ATTACK_COURSES:
+        if os.getenv("LLM_FAST_ATTACK", "").lower() in ("1","true","yes"):
+            return LLM_MANAGER_MODEL  # 빠른 일반 모델 + attack_mode preamble 의존
+        return LLM_MANAGER_MODEL_UNSAFE
+    return LLM_MANAGER_MODEL
 
 app = FastAPI(
     title="Bastion API",
@@ -818,18 +830,22 @@ def chat(req: ChatRequest):
 
     # course 기반 manager LLM 선택 (공격/대전만 derestricted)
     target_model = _resolve_manager_model(req.course)
+    is_attack = req.course in ATTACK_COURSES
 
     def event_generator():
         with _model_swap_lock:
             original = agent.model
+            original_attack = getattr(agent, "attack_mode", False)
             agent.model = target_model
+            agent.attack_mode = is_attack
             try:
                 if target_model != original:
-                    yield json.dumps({"event": "model_routing", "course": req.course, "model": target_model}, ensure_ascii=False) + "\n"
+                    yield json.dumps({"event": "model_routing", "course": req.course, "model": target_model, "attack_mode": is_attack}, ensure_ascii=False) + "\n"
                 for evt in agent.chat(req.message, approval_callback=approval_callback):
                     yield json.dumps(evt, ensure_ascii=False) + "\n"
             finally:
                 agent.model = original
+                agent.attack_mode = original_attack
                 agent._test_meta = {}
 
     if req.stream:
@@ -840,13 +856,16 @@ def chat(req: ChatRequest):
     else:
         with _model_swap_lock:
             original = agent.model
+            original_attack = getattr(agent, "attack_mode", False)
             agent.model = target_model
+            agent.attack_mode = is_attack
             try:
                 events = list(agent.chat(req.message, approval_callback=approval_callback))
                 if target_model != original:
-                    events.insert(0, {"event": "model_routing", "course": req.course, "model": target_model})
+                    events.insert(0, {"event": "model_routing", "course": req.course, "model": target_model, "attack_mode": is_attack})
             finally:
                 agent.model = original
+                agent.attack_mode = original_attack
                 agent._test_meta = {}
         return {"events": events}
 
