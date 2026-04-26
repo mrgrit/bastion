@@ -1660,8 +1660,12 @@ class BastionAgent:
                         )
                     msgs.append({"role": "user", "content": (
                         f"[강제 재촉] 첫 turn 에 도구 호출이 없었다.{refusal_hint}"
-                        f"반드시 첫 응답에서 적절한 skill 의 tool_call 1개 이상 발생시켜라. "
-                        f"개념 설명·\"이론적으로\"·\"가상의\" 답변 금지. 실제 명령 실행."
+                        f"이번 응답은 자연어 설명 절대 금지. 도구 1개를 직접 호출해라.\n"
+                        f"가장 흔한 호출 예시 (그대로 베끼되 command 만 바꿔라):\n"
+                        f"  shell(target=\"attacker\", command=\"<요청에 부합하는 1줄 명령>\")\n"
+                        f"또는 분석·설명만 필요하면:\n"
+                        f"  qa(question=\"<요청 한 줄 요약>\", target=\"manager\")\n"
+                        f"개념 설명·이론적으로·가상의 등은 답변에 포함시키지 말고 도구 결과로 답하라."
                     )})
                     continue
 
