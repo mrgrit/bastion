@@ -451,6 +451,201 @@ def history_asset_timeline(asset_id: str, limit: int = 200):
     return pkg
 
 
+# ── Asset domain ─────────────────────────────────────────────────────────
+
+class AssetRegisterBody(BaseModel):
+    asset_id: str
+    name: str
+    kind: str = "host"   # host/application/model/data_store/network_device/...
+    ip: str = ""
+    os: str = ""
+    services: list[str] = []
+    meta: dict = {}
+
+
+@app.post("/assets/register")
+def assets_register(body: AssetRegisterBody):
+    from bastion.asset_domain import register_asset
+    return register_asset(
+        asset_id=body.asset_id, name=body.name, kind=body.kind,
+        ip=body.ip, os=body.os, services=body.services, meta=body.meta,
+    )
+
+
+@app.get("/assets/list")
+def assets_list(kind: str = "", limit: int = 200):
+    from bastion.asset_domain import list_assets
+    return {"assets": list_assets(kind=kind, limit=limit)}
+
+
+class AssetLinkBody(BaseModel):
+    src: str
+    dst: str
+    edge_type: str = "connects_to"  # ARCH_EDGES 중 하나
+    meta: dict = {}
+
+
+@app.post("/assets/link")
+def assets_link(body: AssetLinkBody):
+    from bastion.asset_domain import link_assets
+    return link_assets(body.src, body.dst, body.edge_type, body.meta)
+
+
+# ── Architecture ─────────────────────────────────────────────────────────
+
+@app.get("/architecture/topology")
+def arch_topology(root: str = "", max_depth: int = 3):
+    from bastion.asset_domain import architecture_topology
+    return architecture_topology(root_asset=root, max_depth=max_depth)
+
+
+@app.get("/architecture/flow")
+def arch_flow(src: str, dst: str):
+    from bastion.asset_domain import architecture_packet_flow
+    return architecture_packet_flow(src, dst)
+
+
+# ── Work domain — Strategic ───────────────────────────────────────────────
+
+class MissionBody(BaseModel):
+    title: str
+    statement: str
+    owner: str = "CISO"
+
+
+@app.post("/work/mission")
+def work_mission(body: MissionBody):
+    from bastion.work_domain import add_mission
+    return {"mission_id": add_mission(body.title, body.statement, body.owner)}
+
+
+class VisionBody(BaseModel):
+    title: str
+    horizon_year: int
+    statement: str
+    mission_id: str = ""
+
+
+@app.post("/work/vision")
+def work_vision(body: VisionBody):
+    from bastion.work_domain import add_vision
+    return {"vision_id": add_vision(body.title, body.horizon_year,
+                                     body.statement, body.mission_id)}
+
+
+class GoalBody(BaseModel):
+    title: str
+    due: str
+    vision_id: str = ""
+    description: str = ""
+
+
+@app.post("/work/goal")
+def work_goal(body: GoalBody):
+    from bastion.work_domain import add_goal
+    return {"goal_id": add_goal(body.title, body.due, body.vision_id,
+                                 body.description)}
+
+
+class StrategyBody(BaseModel):
+    title: str
+    goal_id: str
+    approach: str = ""
+
+
+@app.post("/work/strategy")
+def work_strategy(body: StrategyBody):
+    from bastion.work_domain import add_strategy
+    return {"strategy_id": add_strategy(body.title, body.goal_id, body.approach)}
+
+
+class KpiBody(BaseModel):
+    name: str
+    target: float
+    unit: str = ""
+    measures: str = ""
+    goal_id: str = ""
+    strategy_id: str = ""
+
+
+@app.post("/work/kpi")
+def work_kpi(body: KpiBody):
+    from bastion.work_domain import add_kpi
+    return {"kpi_id": add_kpi(body.name, body.target, body.unit,
+                                body.measures, body.goal_id, body.strategy_id)}
+
+
+class KpiRecordBody(BaseModel):
+    kpi_id: str
+    value: float
+    ts: str = ""
+    note: str = ""
+
+
+@app.post("/work/kpi/record")
+def work_kpi_record(body: KpiRecordBody):
+    from bastion.work_domain import record_kpi
+    return record_kpi(body.kpi_id, body.value, body.ts, body.note)
+
+
+# ── Work domain — Tactical ──────────────────────────────────────────────
+
+class PlanBody(BaseModel):
+    title: str
+    period: str
+    owner: str = ""
+    strategy_id: str = ""
+    goal_id: str = ""
+    description: str = ""
+
+
+@app.post("/work/plan")
+def work_plan(body: PlanBody):
+    from bastion.work_domain import add_plan
+    return {"plan_id": add_plan(body.title, body.period, body.owner,
+                                  body.strategy_id, body.goal_id,
+                                  body.description)}
+
+
+class TodoBody(BaseModel):
+    title: str
+    due: str
+    plan_id: str = ""
+    assignee: str = ""
+    description: str = ""
+
+
+@app.post("/work/todo")
+def work_todo(body: TodoBody):
+    from bastion.work_domain import add_todo
+    return {"todo_id": add_todo(body.title, body.due, body.plan_id,
+                                  body.assignee, body.description)}
+
+
+class StatusBody(BaseModel):
+    node_id: str
+    status: str   # open/in_progress/completed/blocked/cancelled
+    note: str = ""
+
+
+@app.post("/work/status")
+def work_status(body: StatusBody):
+    from bastion.work_domain import update_status
+    return update_status(body.node_id, body.status, body.note)
+
+
+@app.get("/work/trace/{node_id}")
+def work_trace(node_id: str, max_depth: int = 8):
+    from bastion.work_domain import trace_to_mission
+    return trace_to_mission(node_id, max_depth)
+
+
+@app.get("/work/dashboard")
+def work_dashboard():
+    from bastion.work_domain import strategic_dashboard
+    return strategic_dashboard()
+
+
 @app.get("/assets")
 def assets():
     return agent.evidence_db.get_assets()

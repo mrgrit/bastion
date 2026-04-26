@@ -39,11 +39,35 @@ import time
 from typing import Any, Iterable
 
 
-NODE_TYPES = {"Playbook", "Experience", "Skill", "Error", "Recovery",
-              "Asset", "Concept", "Insight"}
-EDGE_TYPES = {"uses", "handles", "targets", "supersedes", "depends_on",
-              "often_chains", "derived_from", "encountered",
-              "recovered_by", "applied_in", "parent_of", "abstracts"}
+NODE_TYPES = {
+    # Operational tier (PE-KG-H)
+    "Playbook", "Experience", "Skill", "Error", "Recovery",
+    "Concept", "Insight",
+    # History layer (operational 시계열)
+    "Narrative", "Anchor",
+    # Asset domain
+    "Asset",
+    # Work domain — Strategic
+    "Mission", "Vision", "Goal", "Strategy", "KPI",
+    # Work domain — Tactical
+    "Plan", "Todo",
+}
+EDGE_TYPES = {
+    # 기존 (operational + KG-4 결정)
+    "uses", "handles", "targets", "supersedes", "depends_on",
+    "often_chains", "derived_from", "encountered",
+    "recovered_by", "applied_in", "parent_of", "abstracts",
+    # KG-4 결정 로직
+    "reuse", "adapt", "generalize", "refute",
+    # History layer
+    "precedes", "follows", "belongs_to", "relates_to",
+    # Asset / Architecture
+    "connects_to", "data_flows_to", "hosts", "manages",
+    "trusts", "monitors",
+    # Work hierarchy
+    "realizes", "measures", "contributes_to", "blocks",
+    "owned_by", "scheduled_for", "derives_from",
+}
 
 
 def _resolve_db_path(db_path: str = "") -> str:
