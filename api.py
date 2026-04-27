@@ -363,6 +363,32 @@ def history_list_anchors(kind: str = "", label_like: str = "", limit: int = 50):
     )}
 
 
+# ── Knowledge / Concept 등록 (외부 지식 채널 P15) ──────────────────────────
+
+class ConceptBody(BaseModel):
+    """외부 표준·CVE·기법 등 Concept 노드 등록.
+    P15 외부 지식 채널 (CISA KEV/MITRE ATT&CK/OWASP/NIST CSF/CWE/ISO 등) 통합용.
+    """
+    concept_id: str            # concept:cve:CVE-2024-XXXX, concept:mitre:T1041 등
+    name: str                  # CVE-2024-XXXX, T1041 등
+    description: str = ""
+    source: str = ""           # CISA-KEV, MITRE-ATTCK, OWASP-2021, NIST-CSF-2.0 등
+    properties: dict = {}      # source-specific 메타
+
+
+@app.post("/knowledge/concept")
+def knowledge_add_concept(body: ConceptBody):
+    """Concept 노드 직접 등록 (anchor 가 아닌 graph 핵심 객체).
+    재실행 시 같은 concept_id 면 update (idempotent).
+    """
+    from bastion.graph import get_graph
+    g = get_graph()
+    content = {"description": body.description, **body.properties}
+    meta = {"source": body.source, "kind": "external_knowledge"}
+    g.add_node(body.concept_id, "Concept", body.name, content=content, meta=meta)
+    return {"concept_id": body.concept_id, "type": "Concept"}
+
+
 class IocCheckBody(BaseModel):
     iocs: list[str]
 

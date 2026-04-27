@@ -1121,6 +1121,55 @@ def run_command(ip: str, script: str, timeout: int = 60) -> dict:
         return {"exit_code": -1, "stdout": "", "stderr": str(e)}
 
 
+def audit_start(ip: str, session_id: str, lab_id: str = "", student_id: str = "") -> dict:
+    """SubAgent 의 audit 세션 시작 — 학생 lab 명령 캡처 활성.
+
+    로컬 IP 일 경우는 SubAgent 가 같은 호스트에 있다는 가정 (바스티온 자체).
+    호환성 위해 SubAgent 미배포 환경에서는 stub 반환.
+    """
+    try:
+        r = httpx.post(
+            f"http://{ip}:{SUBAGENT_PORT}/a2a/audit/start",
+            json={"session_id": session_id, "lab_id": lab_id, "student_id": student_id},
+            timeout=10.0,
+        )
+        if r.status_code == 200:
+            return r.json()
+        return {"status": "error", "detail": f"http {r.status_code}: {r.text[:200]}"}
+    except Exception as e:
+        return {"status": "unavailable", "detail": str(e)}
+
+
+def audit_run(ip: str, session_id: str, script: str, timeout: int = 30) -> dict:
+    """audit 세션 안에서 명령 실행 — SubAgent 가 자동 transcript 누적."""
+    try:
+        r = httpx.post(
+            f"http://{ip}:{SUBAGENT_PORT}/a2a/audit/run",
+            json={"session_id": session_id, "script": script, "timeout_s": timeout},
+            timeout=float(timeout + 5),
+        )
+        if r.status_code == 200:
+            return r.json()
+        return {"status": "error", "exit_code": -1, "stdout": "", "stderr": f"http {r.status_code}"}
+    except Exception as e:
+        return {"status": "error", "exit_code": -1, "stdout": "", "stderr": str(e)}
+
+
+def audit_stop(ip: str, session_id: str) -> dict:
+    """audit 세션 종료 — SubAgent 가 캡처한 transcript 반환."""
+    try:
+        r = httpx.post(
+            f"http://{ip}:{SUBAGENT_PORT}/a2a/audit/stop",
+            json={"session_id": session_id},
+            timeout=10.0,
+        )
+        if r.status_code == 200:
+            return r.json()
+        return {"status": "error", "transcript": {"commands": []}}
+    except Exception as e:
+        return {"status": "unavailable", "transcript": {"commands": []}, "detail": str(e)}
+
+
 def system_status(infras: list[dict]) -> dict:
     """전체 인프라 상태 요약"""
     status = {"total": len(infras), "healthy": 0, "unreachable": 0, "details": []}
