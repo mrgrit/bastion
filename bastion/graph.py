@@ -71,7 +71,14 @@ EDGE_TYPES = {
 
 
 def _resolve_db_path(db_path: str = "") -> str:
-    """그래프 DB 경로. CCC 또는 flat 레이아웃 모두 지원."""
+    """그래프 DB 경로. CCC 또는 flat 레이아웃 모두 지원.
+
+    우선순위:
+      1) 명시 인자
+      2) BASTION_GRAPH_DB 환경변수
+      3) 기존 DB 발견 (size 큰 순) — 분기 방지
+      4) candidate path 의 첫 writable
+    """
     if db_path:
         return db_path
     env = os.getenv("BASTION_GRAPH_DB", "").strip()
@@ -79,9 +86,17 @@ def _resolve_db_path(db_path: str = "") -> str:
         return env
     here = os.path.dirname(__file__)
     candidates = [
-        os.path.normpath(os.path.join(here, "..", "..", "data", "bastion_graph.db")),  # CCC
-        os.path.normpath(os.path.join(here, "..", "data", "bastion_graph.db")),         # flat
+        os.path.normpath(os.path.join(here, "..", "..", "data", "bastion_graph.db")),  # CCC packages/bastion/bastion → ccc/data
+        os.path.normpath(os.path.join(here, "..", "..", "..", "data", "bastion_graph.db")),  # 한 단계 더 (/opt/data)
+        os.path.normpath(os.path.join(here, "..", "data", "bastion_graph.db")),         # flat (/opt/bastion/data)
+        "/home/ccc/ccc/data/bastion_graph.db",  # 명시 absolute (legacy 호환)
     ]
+    # 기존 DB 가 있으면 가장 큰 것 선택 (분기 방지 — 2026-04-28 KG drop bug)
+    existing = [(c, os.path.getsize(c)) for c in candidates if os.path.isfile(c)]
+    if existing:
+        existing.sort(key=lambda x: -x[1])
+        return existing[0][0]
+    # 없으면 첫 writable 위치
     for c in candidates:
         d = os.path.dirname(c)
         if os.path.isdir(d) or os.access(os.path.dirname(d), os.W_OK):
