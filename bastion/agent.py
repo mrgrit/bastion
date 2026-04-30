@@ -2001,16 +2001,19 @@ class BastionAgent:
                 success = result.get("success", False)
                 exit_code = result.get("exit_code", -1 if not success else 0)
 
+                # ★ R3 fix #5 (2026-04-30): output truncation 1000→2500자.
+                #   curl -i -L (Fix #2) 응답이 HTTP 헤더+상태코드+본문 일부 합쳐 1500~2000자 범위.
+                #   1000자면 본문이 잘려서 judge 가 '실행 결과 없음' 판정.
                 yield {"event": "skill_result", "skill": skill_name,
-                       "success": success, "output": output[:1000], "attempt": 1}
+                       "success": success, "output": output[:2500], "attempt": 1}
 
-                # 다음 turn 의 LLM 입력
+                # 다음 turn 의 LLM 입력 (LLM context window 여유 → 3000자까지)
                 tool_msg_content = (
                     f"[skill={skill_name} success={success} exit={exit_code}]\n"
-                    f"stdout (앞 1500자):\n{output[:1500]}"
+                    f"stdout (앞 3000자):\n{output[:3000]}"
                 )
                 if stderr:
-                    tool_msg_content += f"\n\nstderr (앞 500자):\n{stderr[:500]}"
+                    tool_msg_content += f"\n\nstderr (앞 800자):\n{stderr[:800]}"
                 msgs.append({"role": "tool", "content": tool_msg_content})
 
                 all_tool_outputs.append({
@@ -2115,8 +2118,9 @@ class BastionAgent:
                 stderr = str(result.get("stderr", ""))
                 success = result.get("success", False)
                 exit_code = result.get("exit_code", -1 if not success else 0)
+                # ★ R3 fix #5: 1000→2500자
                 yield {"event": "skill_result", "skill": "shell",
-                       "success": success, "output": output[:1000], "attempt": 1}
+                       "success": success, "output": output[:2500], "attempt": 1}
                 all_tool_outputs.append({
                     "skill": "shell", "params": params,
                     "success": success, "output": output, "exit_code": exit_code,
