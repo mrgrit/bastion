@@ -2134,9 +2134,26 @@ class BastionAgent:
         # ── VALIDATING ─────────────────────────────────────────────────────
         yield {"event": "stage", "stage": "validating"}
 
-        # 마지막 LLM content 가 비었으면 종합 답변 1회 생성
+        # ★ R3 fix #7 (2026-04-30): last_assistant_content 가 punt/tool-call-만 있는 경우도
+        #   synthesis 강제 트리거. 패턴: "다음 단계에서", "계속 진행", "will analyze",
+        #   tool call JSON 만 있고 분석 없음, "[prompt-fallback]" 마커.
+        _content_is_punt = False
+        _trim = (last_assistant_content or "").strip()
+        if _trim and all_tool_outputs:
+            _punt_markers = (
+                "다음 단계에서", "다음 단계로", "이어서 분석", "계속 진행하겠습니다",
+                "will analyze", "next step", "[prompt-fallback]", "계속해서",
+                "다음 turn 에서", "이후 분석",
+            )
+            # 길이 짧고 punt 마커 포함 OR tool call JSON 으로 시작
+            if len(_trim) < 400 and any(m in _trim for m in _punt_markers):
+                _content_is_punt = True
+            elif _trim.startswith("{") and ("\"tool\"" in _trim[:200] or "\"function\"" in _trim[:200]):
+                _content_is_punt = True
+
+        # 마지막 LLM content 가 비었거나 punt 면 종합 답변 1회 생성
         # ★ R3 fix #3 (2026-04-30): 막연한 "한 단락 작성" 대신 채점 기준·도구 출력 인용 강제.
-        if not last_assistant_content.strip() and all_tool_outputs:
+        if (not _trim or _content_is_punt) and all_tool_outputs:
             _ctx_s = getattr(self, "_verify_context", {}) or {}
             _crits_s = _ctx_s.get("success_criteria") or []
             _intent_s = _ctx_s.get("intent", "")
