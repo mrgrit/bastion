@@ -291,12 +291,81 @@ CRSEOF
 a2enmod security2 proxy proxy_http headers 2>/dev/null || true
 systemctl restart apache2
 """,
-        # ── Docker 서비스 + 웹 앱 컨테이너 ──
+        # ── Docker 서비스 + 웹 앱 컨테이너 (JuiceShop + DVWA + 5 vuln-sites) ──
+        # docker-compose 설치 (vuln-sites 배포용 — Ubuntu apt 의 docker.io 는 plugin 없음)
+        "apt-get install -y docker-compose 2>/dev/null || true",
+        # Docker daemon DNS 설정 — 컨테이너가 secu(10.20.30.1, DNS 미운영) 가 아닌 8.8.8.8 사용
+        # (이전 버그: vuln-sites docker build 시 pypi.org 해상 실패)
+        """
+mkdir -p /etc/docker
+if [ ! -f /etc/docker/daemon.json ] || ! grep -q '"dns"' /etc/docker/daemon.json; then
+    cat > /etc/docker/daemon.json << 'DOCKEREOF'
+{
+  "dns": ["8.8.8.8", "1.1.1.1"]
+}
+DOCKEREOF
+    systemctl restart docker
+fi
+""",
         """
 systemctl enable --now docker
 docker rm -f juiceshop dvwa 2>/dev/null || true
 docker run -d --restart=always --name juiceshop -p 3000:3000 bkimminich/juice-shop 2>/dev/null || true
 docker run -d --restart=always --name dvwa -p 8080:80 vulnerables/web-dvwa 2>/dev/null || true
+""",
+        # ── 5 vuln-sites 자동 배포 (NeoBank/GovPortal/MediForum/AdminConsole/AICompanion) ──
+        # 소스코드는 manager(bastion) 가 SubAgent 로 /opt/vuln-sites/ 에 사전 동기화 가정.
+        # 미동기화 시 skip — 학생 재온보딩 시 ccc-api 가 별도 deploy 단계로 처리 가능.
+        """
+if [ -d /opt/vuln-sites ] && command -v docker-compose >/dev/null 2>&1; then
+    docker network create ccc-vuln 2>/dev/null || true
+    for s in neobank govportal mediforum adminconsole aicompanion; do
+        if [ -d /opt/vuln-sites/$s ]; then
+            ( cd /opt/vuln-sites/$s && docker-compose up -d --build 2>&1 | tail -2 ) &
+        fi
+    done
+    wait
+    echo "vuln-sites 5종 deploy attempted (bg builds)"
+else
+    echo "vuln-sites skip: /opt/vuln-sites 미존재 또는 docker-compose 미설치"
+fi
+""",
+        # ── 외부 NIC 직접 접근 차단 (secu 외부 IP 통한 DNAT 만 허용) ──
+        # NAT 정책: 학생/관리자/공격자 모든 트래픽이 secu 의 외부 IP 로만 들어와야 함
+        # web 의 외부 IP (192.168.0.x) 직접 접근은 차단 → port 식별성 + 일관 정책
+        """
+# 1. inet filter input — kernel-level (non-Docker) 트래픽
+nft add table inet filter 2>/dev/null || true
+nft 'add chain inet filter input { type filter hook input priority filter; policy accept; }' 2>/dev/null || true
+add_input_rule() {
+    local rule="$1"
+    if ! nft list ruleset 2>/dev/null | grep -qF "$rule"; then
+        nft add rule inet filter input $rule
+    fi
+}
+add_input_rule 'iif lo accept'
+add_input_rule 'ct state established,related accept'
+add_input_rule 'iifname ens37 accept'
+add_input_rule 'iifname ens33 tcp dport 22 accept'
+add_input_rule 'iifname ens33 tcp dport 8002 accept'
+add_input_rule 'iifname ens33 icmp type echo-request accept'
+add_input_rule 'iifname ens33 tcp dport { 80, 3000, 3001, 3002, 3003, 3004, 3005, 8080 } drop'
+
+# 2. iptables DOCKER-USER chain — Docker published port 우회 차단
+# DOCKER-USER 가 DOCKER chain 보다 먼저 평가됨
+iptables -F DOCKER-USER 2>/dev/null || true
+iptables -A DOCKER-USER -i ens33 -s 10.20.30.0/24 -j ACCEPT
+iptables -A DOCKER-USER -i ens33 -s 192.168.0.0/24 -p tcp --dport 8002 -j ACCEPT  # SubAgent (관리망 직접)
+for p in 80 3000 3001 3002 3003 3004 3005 8080; do
+    iptables -A DOCKER-USER -i ens33 -p tcp --dport $p -j DROP
+done
+iptables -A DOCKER-USER -j RETURN
+
+# 3. 영구화
+nft list ruleset > /etc/nftables.conf
+mkdir -p /etc/iptables && iptables-save > /etc/iptables/rules.v4
+systemctl enable nftables 2>/dev/null || true
+echo "external direct access blocked — only via secu DNAT"
 """,
         # ── Apache → JuiceShop 리버스 프록시 (포트 80) ──
         """
@@ -428,7 +497,7 @@ services:
       - APP__BASE_URL=http://localhost:8080
       - APP__ADMIN__EMAIL=admin@opencti.io
       - APP__ADMIN__PASSWORD=CCC2026!
-      - APP__ADMIN__TOKEN=ccc-opencti-token-2026
+      - APP__ADMIN__TOKEN=a8f3b0c2-9d1e-4f56-8a2b-7c4d3e1f9b8a
       - REDIS__HOSTNAME=redis
       - ELASTICSEARCH__URL=http://elasticsearch:9200
       - MINIO__ENDPOINT=minio
@@ -449,7 +518,7 @@ services:
       - opencti
     environment:
       - OPENCTI_URL=http://opencti:8080
-      - OPENCTI_TOKEN=ccc-opencti-token-2026
+      - OPENCTI_TOKEN=a8f3b0c2-9d1e-4f56-8a2b-7c4d3e1f9b8a
     restart: always
 OCEOF
 
@@ -460,6 +529,45 @@ echo 'vm.max_map_count=262144' >> /etc/sysctl.conf 2>/dev/null || true
 # OpenCTI 시작 (백그라운드, 이미지 pull 오래 걸림)
 cd /opt/opencti && docker compose up -d 2>&1 | tail -10
 echo 'OpenCTI 시작됨 — http://SIEM_IP:8080 (admin@opencti.io / CCC2026!)'
+""",
+        # ── 외부 NIC 직접 접근 차단 (secu 외부 IP 통한 DNAT 만 허용) ──
+        # siem 의 :443 (Wazuh Dashboard), :8080 (OpenCTI), :1514/:1515/:55000 (Wazuh agent/API)
+        # 모두 docker published port → DOCKER-USER chain 으로 차단
+        """
+# 1. inet filter input
+nft add table inet filter 2>/dev/null || true
+nft 'add chain inet filter input { type filter hook input priority filter; policy accept; }' 2>/dev/null || true
+add_input_rule() {
+    local rule="$1"
+    if ! nft list ruleset 2>/dev/null | grep -qF "$rule"; then
+        nft add rule inet filter input $rule
+    fi
+}
+add_input_rule 'iif lo accept'
+add_input_rule 'ct state established,related accept'
+# Docker bridges trusted (siem 내부 docker network)
+for iface in $(ip -o link show | awk -F': ' '{print $2}' | grep -E '^(br-|docker)'); do
+    add_input_rule "iifname $iface accept"
+done
+add_input_rule 'iifname ens33 tcp dport 22 accept'
+add_input_rule 'iifname ens33 tcp dport 8002 accept'
+add_input_rule 'iifname ens33 icmp type echo-request accept'
+add_input_rule 'iifname ens33 ip saddr 10.20.30.0/24 accept'
+
+# 2. iptables DOCKER-USER — Docker forwarded port 차단
+iptables -F DOCKER-USER 2>/dev/null || true
+iptables -A DOCKER-USER -i ens33 -s 10.20.30.0/24 -j ACCEPT
+iptables -A DOCKER-USER -i ens33 -s 192.168.0.0/24 -p tcp --dport 8002 -j ACCEPT  # SubAgent
+for p in 443 1514 1515 8080 55000; do
+    iptables -A DOCKER-USER -i ens33 -p tcp --dport $p -j DROP
+done
+iptables -A DOCKER-USER -j RETURN
+
+# 3. 영구화
+nft list ruleset > /etc/nftables.conf
+mkdir -p /etc/iptables && iptables-save > /etc/iptables/rules.v4
+systemctl enable nftables 2>/dev/null || true
+echo "siem external direct access blocked"
 """,
     ],
     "manager": [
@@ -967,6 +1075,31 @@ timedatectl 2>/dev/null | grep -E 'Time zone|System clock synchronized|NTP servi
     # 2. 역할별 소프트웨어 설치
     role_cmds = list(ROLE_SETUP_SCRIPTS.get(role, []))
 
+    # web: vuln-sites 소스코드 업로드 (5종 docker compose) — SUBAGENT_INSTALL 후 실행 가능
+    # ccc-api 가 contents/vuln-sites/ 를 base64 tar 로 업로드 → /opt/vuln-sites/ 풀어둠.
+    # 이후 role_setup 의 docker-compose up 단계에서 사용.
+    if role == "web":
+        try:
+            import os as _os, base64 as _b64, tarfile as _tar, io as _io
+            # ccc 루트 추정 — 이 파일 기준 ../../..
+            _ccc_root = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+            _vuln_src = _os.path.join(_ccc_root, "contents", "vuln-sites")
+            if _os.path.isdir(_vuln_src):
+                _buf = _io.BytesIO()
+                with _tar.open(fileobj=_buf, mode="w:gz") as _t:
+                    _t.add(_vuln_src, arcname="vuln-sites")
+                _b64data = _b64.b64encode(_buf.getvalue()).decode()
+                _upload = (
+                    f"mkdir -p /opt/vuln-sites && "
+                    f"echo '{_b64data}' | base64 -d > /tmp/vuln-sites.tar.gz && "
+                    f"tar xzf /tmp/vuln-sites.tar.gz -C /opt/vuln-sites/ --strip-components=1 && "
+                    f"rm /tmp/vuln-sites.tar.gz && "
+                    f"echo 'vuln-sites src uploaded:' && ls /opt/vuln-sites/"
+                )
+                role_cmds.insert(0, _upload)
+        except Exception as _e:
+            results["steps"].append({"step": "vuln_sites_upload_skip", "success": True, "stdout": str(_e)[:200]})
+
     # manager: 외부 LLM 서버 있으면 Ollama 스킵, 없으면 로컬 설치
     if role == "manager":
         llm_url = gpu_url or f"http://localhost:11434"
@@ -999,13 +1132,28 @@ timedatectl 2>/dev/null | grep -E 'Time zone|System clock synchronized|NTP servi
         results["steps"].append({"step": "role_setup", **r})
         # role_setup 실패는 경고만 (SubAgent는 이미 설치됨, 계속 진행)
 
-    # 3. 내부 NIC IP 설정 — 단일 스크립트로 전달
+    # 3. 내부 NIC IP 설정 — 런타임 적용 + netplan 영구화 (reboot 시 IP 사라지는 버그 fix 2026-04-29)
     internal_script = f"""
 IFACE=$(ip -o link show | grep -v 'lo\\|docker\\|veth' | awk '{{print $2}}' | tr -d ':' | tail -1)
 if [ -n "$IFACE" ]; then
     ip addr add {internal_ip}/24 dev $IFACE 2>/dev/null || true
     ip link set $IFACE up
-    echo "Internal NIC: $IFACE = {internal_ip}"
+    # netplan 영구화 — reboot 후에도 IP 유지
+    if [ -d /etc/netplan ]; then
+        cat > /etc/netplan/90-ccc-internal.yaml << NETPLAN_EOF
+network:
+  version: 2
+  ethernets:
+    $IFACE:
+      dhcp4: false
+      addresses: [{internal_ip}/24]
+NETPLAN_EOF
+        chmod 600 /etc/netplan/90-ccc-internal.yaml
+        netplan apply 2>&1 | head -3 || true
+        echo "Internal NIC persisted via netplan: $IFACE = {internal_ip}"
+    else
+        echo "Internal NIC (runtime only): $IFACE = {internal_ip}"
+    fi
 else
     echo "WARN: second NIC not found"
 fi
@@ -1032,14 +1180,61 @@ echo "DNS set to {SECU_GW}"
         r = ssh_run(ip, user, password, [nat_script])
         results["steps"].append({"step": "nat_disable_gw_route", "gateway": SECU_GW, **r})
     else:
-        secu_script = """
-sysctl -w net.ipv4.ip_forward=1
-echo 'net.ipv4.ip_forward=1' >> /etc/sysctl.conf
-EXTERNAL=$(ip -o link show | grep -v 'lo\\|docker\\|veth' | awk '{print $2}' | tr -d ':' | head -1)
-nft add table nat 2>/dev/null || true
-nft 'add chain nat postrouting { type nat hook postrouting priority 100; }' 2>/dev/null || true
-nft add rule nat postrouting oifname "$EXTERNAL" masquerade 2>/dev/null || true
-echo "NAT masquerade on $EXTERNAL"
+        # secu — NAT masquerade + 외부 NIC port forwarding (Wazuh/OpenCTI/JuiceShop/vuln-sites)
+        web_ip = INTERNAL_IPS.get("web", "10.20.30.80")
+        siem_ip = INTERNAL_IPS.get("siem", "10.20.30.100")
+        secu_script = f"""
+# 1. ip_forward 영구화
+echo 'net.ipv4.ip_forward=1' > /etc/sysctl.d/99-ccc-secu.conf
+echo 'net.ipv4.conf.all.proxy_arp=1' >> /etc/sysctl.d/99-ccc-secu.conf
+sysctl -p /etc/sysctl.d/99-ccc-secu.conf
+
+# 2. nft table/chain idempotent 생성
+EXTERNAL=$(ip -o link show | grep -v 'lo\\|docker\\|veth' | awk '{{print $2}}' | tr -d ':' | head -1)
+nft add table ip nat 2>/dev/null || true
+nft 'add chain ip nat prerouting {{ type nat hook prerouting priority dstnat; }}' 2>/dev/null || true
+nft 'add chain ip nat postrouting {{ type nat hook postrouting priority srcnat; }}' 2>/dev/null || true
+
+# 3. 외부 NIC port forwarding (학생/관리자 외부 접근용) — 멱등 추가
+add_dnat() {{
+    local port="$1"; local target="$2"
+    if ! nft list chain ip nat prerouting 2>/dev/null | grep -q "iifname \\"$EXTERNAL\\" tcp dport $port dnat to $target"; then
+        nft add rule ip nat prerouting iifname "$EXTERNAL" tcp dport $port dnat to "$target"
+    fi
+}}
+# JuiceShop / web port 80
+add_dnat 80   "{web_ip}:80"
+# Wazuh Dashboard (HTTPS) → siem
+add_dnat 443  "{siem_ip}:443"
+# OpenCTI → siem
+add_dnat 8080 "{siem_ip}:8080"
+# Wazuh Manager Agent / API ports → siem (학생 SubAgent 등록 가능)
+add_dnat 1514 "{siem_ip}:1514"
+add_dnat 1515 "{siem_ip}:1515"
+add_dnat 55000 "{siem_ip}:55000"
+# vuln-sites (NeoBank/GovPortal/MediForum/AdminConsole/AICompanion) → web (web 에 docker 배포 가정)
+add_dnat 3001 "{web_ip}:3001"
+add_dnat 3002 "{web_ip}:3002"
+add_dnat 3003 "{web_ip}:3003"
+add_dnat 3004 "{web_ip}:3004"
+add_dnat 3005 "{web_ip}:3005"
+
+# 4. masquerade — internal → external 응답 NAT
+if ! nft list chain ip nat postrouting 2>/dev/null | grep -q "oifname \\"$EXTERNAL\\" masquerade"; then
+    nft add rule ip nat postrouting oifname "$EXTERNAL" masquerade
+fi
+# internal 응답 시 source NAT (DNAT 된 패킷 회신용)
+if ! nft list chain ip nat postrouting 2>/dev/null | grep -q "ip daddr 10.20.30.0/24 oifname"; then
+    INTERNAL=$(ip -o link show | grep -v 'lo\\|docker\\|veth' | awk '{{print $2}}' | tr -d ':' | tail -1)
+    [ -n "$INTERNAL" ] && nft add rule ip nat postrouting ip daddr 10.20.30.0/24 oifname "$INTERNAL" masquerade
+fi
+
+# 5. nft 규칙 영구화
+nft list ruleset > /etc/nftables.conf
+systemctl enable nftables 2>/dev/null || true
+
+echo "secu port forwarding: $EXTERNAL → web/siem/vuln-sites configured"
+nft list chain ip nat prerouting | grep dnat | head -15
 """
         r = ssh_run(ip, user, password, [secu_script])
         results["steps"].append({"step": "secu_nat_forward", **r})

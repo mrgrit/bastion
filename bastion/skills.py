@@ -5,6 +5,7 @@ LLM이 자연어에서 skill을 선택하고 파라미터를 채운다.
 실제 실행은 SubAgent A2A 프로토콜로.
 """
 from __future__ import annotations
+import re
 from typing import Any
 
 from bastion import run_command, health_check, INTERNAL_IPS
@@ -786,8 +787,38 @@ def execute_skill(name: str, params: dict[str, Any], vm_ips: dict[str, str],
         command = params.get("command", "echo ok")
         target = params.get("target", "attacker")
         ip = _resolve_vm_ip(target, vm_ips)
+        # ★ R3 fix (2026-04-30): attacker 측에서 bastion-internal IP (10.20.30.80) 사용 시
+        #   해당 IP 가 attacker 의 라우팅 테이블에 없어 unreachable. secu 의 외부 DNAT IP
+        #   (192.168.0.108) 또는 web 외부 IP (192.168.0.100) 로 자동 치환.
+        #   web-vuln/attack-* 카테고리에서 agent 가 lab content 의 10.20.30.80 그대로
+        #   사용하다가 timeout/empty response → fail 패턴 다수 (R3 V2 분석 결과).
+        if target == "attacker":
+            # 192.168.0.108 (secu DNAT, WAF 통과) 가 학습용으로 적합. :3001-:3005 도 모두 forwarding 됨.
+            command = command.replace("10.20.30.80", "192.168.0.108")
+            command = command.replace("http://10.20.30.100", "http://192.168.0.108")
+            command = command.replace("https://10.20.30.100", "https://192.168.0.108")
         r = run_command(ip, command, timeout=60)
-        return {"success": r.get("exit_code") == 0, "output": r.get("stdout", ""), "stderr": r.get("stderr", "")}
+        out = r.get("stdout", "") or ""
+        err = r.get("stderr", "") or ""
+        exit_code = r.get("exit_code", -1)
+
+        # ★ R3 fix #2 (2026-04-30): curl -s 단독 → 본문만 출력되어 verify 의 status/header 매칭 실패.
+        #   exit_code==0 인데 stdout 이 비정상적으로 짧으면(<60 chars) `-i -L` 옵션 추가해 재시도.
+        #   verify.semantic 은 보통 HTTP/응답코드/헤더/marker 텍스트를 success_criteria 로 검사.
+        _stripped = (command or "").strip()
+        _is_curl = _stripped.startswith("curl ") or _stripped.startswith("curl\t") or " | curl " in _stripped
+        _has_iL = (" -i" in _stripped) or (" -I" in _stripped) or _stripped.endswith(" -i") or _stripped.endswith(" -I") or (" -sIL" in _stripped) or (" -sI" in _stripped)
+        if exit_code == 0 and _is_curl and not _has_iL and len(out.strip()) < 60:
+            # 첫 단어 'curl' 다음에 -i -L 삽입 (기존 옵션 유지)
+            retry_cmd = re.sub(r"^curl\s", "curl -i -L ", _stripped, count=1)
+            r2 = run_command(ip, retry_cmd, timeout=60)
+            out2 = r2.get("stdout", "") or ""
+            if len(out2.strip()) > len(out.strip()):
+                out = out2
+                err = r2.get("stderr", "") or err
+                exit_code = r2.get("exit_code", exit_code)
+
+        return {"success": exit_code == 0, "output": out, "stderr": err, "exit_code": exit_code}
 
     elif name == "ollama_query":
         import httpx
