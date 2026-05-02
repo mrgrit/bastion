@@ -1172,9 +1172,57 @@ class BastionAgent:
 
     # ── Streaming helpers ───────────────────────────────────────────────────
 
+    def _inject_kg_context(self, messages: list[dict]) -> list[dict]:
+        """마지막 user 메시지 기반 KG 검색 결과를 system 메시지에 자동 주입.
+
+        - graph + history 검색 (Concept/Policy/Playbook/Asset/Anchor)
+        - 모델별 token budget (gemma 1500 / gpt-oss 4000) 자동 적용
+        - LRU 5분 캐시 — 같은 message 반복 시 1회만 검색
+        - silent fallback — KG 호출 실패 시 원본 messages 그대로 반환
+
+        반환: KG 블록이 첫 system 메시지 끝에 추가된 새 messages 리스트.
+              system 이 없으면 KG 블록만 첫 system 으로 prepend.
+        """
+        if not messages:
+            return messages
+        try:
+            from bastion.kg_context import get_builder
+            builder = get_builder()
+        except Exception:
+            return messages
+
+        user_msgs = [m.get("content", "") for m in messages
+                     if isinstance(m, dict) and m.get("role") == "user"]
+        if not user_msgs:
+            return messages
+        last_user = str(user_msgs[-1] or "").strip()
+        if not last_user:
+            return messages
+
+        try:
+            ctx = builder.build(last_user, model=self.model)
+            block = builder.format(ctx)
+        except Exception:
+            return messages
+        if not block:
+            return messages
+
+        out = list(messages)
+        for i, m in enumerate(out):
+            if isinstance(m, dict) and m.get("role") == "system":
+                new_content = (m.get("content", "") or "") + "\n\n---\n\n" + block
+                out[i] = {**m, "content": new_content}
+                return out
+        out.insert(0, {"role": "system", "content": block})
+        return out
+
     def _stream_llm(self, messages: list[dict],
                     max_tokens: int = 600, temperature: float = 0.3):
-        """Streaming LLM 호출 — 토큰 단위로 yield."""
+        """Streaming LLM 호출 — 토큰 단위로 yield.
+
+        호출 전 KG context 를 자동으로 system 메시지에 주입한다 (silent fallback).
+        """
+        messages = self._inject_kg_context(messages)
         try:
             with httpx.stream("POST", f"{self.ollama_url}/api/chat", json={
                 "model": self.model,
@@ -1929,6 +1977,38 @@ class BastionAgent:
                         _ctx_v = getattr(self, "_verify_context", {}) or {}
                         _crits = _ctx_v.get("success_criteria") or []
                         _crit_text = "\n".join(f"- {c}" for c in _crits[:5]) if _crits else "(없음)"
+                        # raw dump 의심 — 최종 content 길이 vs 분석 키워드 휴리스틱
+                        _is_raw_dump = (
+                            len(content or "") > 400 and (
+                                content.count("type=EXECVE") >= 3
+                                or content.count('"timestamp":') >= 3
+                                or content.count('"rule":') >= 3
+                                or content.count("DROP IN=") >= 3
+                                or content.count("eth0 ") >= 5
+                            ) and not any(k in content for k in
+                                ["MITRE", "T10", "T11", "방어", "권고", "탐지", "핵심 발견", "위협 맥락"])
+                        )
+                        if _is_raw_dump:
+                            extra = (
+                                "\n\n[★ raw dump 감지] 위 도구 출력을 그대로 답변에 dump 했다. "
+                                "이번에는 도구 호출 없이 위 결과를 토대로 분석만 작성하라:\n"
+                                "(1) **핵심 발견** — 빈도/패턴/이상치 (예: 'powershell 108회, certutil 42회')\n"
+                                "(2) **MITRE / 위협 맥락** — T1059.001 PowerShell, T1218 LOLBAS 등\n"
+                                "(3) **방어 권고** — AppLocker/WDAC, Sysmon 룰, hunting 쿼리\n"
+                                "raw 라인 다시 dump 금지. 200자 이상 분석 작성."
+                            )
+                        elif "도구 stdout 이 답변에 인용되지 않음" in (why or ""):
+                            # ★ R4 fix #1 (2026-05-02): 도구 미실행/미인용 retry. R4 fail 의 57%.
+                            extra = (
+                                "\n\n[★ 도구 미인용 감지] 답변이 '실행했다' 서술만 하고 실제 stdout 인용 없음.\n"
+                                "이번 turn 필수 행동:\n"
+                                "(a) 도구를 실제로 호출하라 (tool_calls). 답변 텍스트로 명령만 적지 말 것.\n"
+                                "(b) 도구 결과 stdout 의 1~3 줄을 답변에 ``` 블록으로 직접 quote 하라.\n"
+                                "(c) quote 한 stdout 토대로 '핵심 발견 / 의미 / 결론' 3 문장 분석.\n"
+                                "(d) 도구 호출 없으면 채점 fail 확정 — 반드시 호출 후 답해라."
+                            )
+                        else:
+                            extra = ""
                         msgs.append({"role": "user", "content": (
                             f"[자체 검증 — 미흡] {why}\n\n"
                             f"## 아직 충족 못한 채점 기준\n{_crit_text}\n\n"
@@ -1938,6 +2018,7 @@ class BastionAgent:
                             f"3. 명령만 출력하지 말고 도구 호출 (tool_calls) 로 실제 실행한다.\n"
                             f"4. 실행 결과 stdout 을 인용해 어느 기준을 충족했는지 명시한다.\n"
                             f"5. 개념 설명/표/이론은 작성 금지. 실측 결과 + 한 줄 결론만."
+                            + extra
                         )})
                         continue
                 break  # end_turn
@@ -2405,6 +2486,27 @@ class BastionAgent:
         if category:
             g.add_edge(exp_id, f"concept-{category}", "handles")
 
+        # ─ KGRecorder — structured anchor (R5 학습 loop, dedup + schema_v1) ─
+        try:
+            from bastion.kg_recorder import (
+                get_recorder, extract_mitre_ids,
+            )
+            recorder = get_recorder()
+            mitre_ids = (extract_mitre_ids(final_content)
+                         or extract_mitre_ids(message))
+            recorder.record_task_outcome(
+                task_message=message,
+                skills_used=used_skills,
+                mitre_ids=mitre_ids,
+                success=any_success,
+                evidence_excerpt=(final_content or "")[:500],
+                source="bastion-agent",
+                session_id=getattr(self, "session_id", ""),
+                asset_ids=[f"asset-vm-{t}" for t in used_targets if t],
+            )
+        except Exception:
+            pass
+
     def _self_verify_completion(self, original_message: str,
                                 tool_outputs: list[dict],
                                 final_content: str) -> tuple[bool, str]:
@@ -2416,6 +2518,28 @@ class BastionAgent:
         ctx = getattr(self, "_verify_context", {}) or {}
         criteria = ctx.get("success_criteria") or []
         intent = ctx.get("intent", "")
+
+        # ★ R4 fix #1 (2026-05-02): 도구 미실행 검출 — agent 가 답변에 도구 stdout
+        # 인용 없이 "실행했다" 서술만 한 경우. R4 fail 의 57% (33/58) 차지.
+        # 도구가 success 했고 stdout 길이 ≥ 30자인데 final_content 에 그 일부도 안 보이면 fail.
+        successful_outputs = [t for t in tool_outputs
+                              if t.get("success") and len(str(t.get("output", ""))) >= 30]
+        if successful_outputs and final_content and len(final_content) >= 100:
+            stdout_quoted = False
+            for t in successful_outputs[-3:]:  # 최근 3개만 검사
+                out = str(t.get("output", ""))
+                # 16자 이상 substring 일치 검사 (오탐 방지)
+                for chunk_start in range(0, max(1, len(out) - 16), 16):
+                    chunk = out[chunk_start:chunk_start + 16].strip()
+                    if len(chunk) >= 12 and chunk in final_content:
+                        stdout_quoted = True
+                        break
+                if stdout_quoted:
+                    break
+            if not stdout_quoted:
+                return False, ("도구 stdout 이 답변에 인용되지 않음 — 실행했다고 서술만 하고 "
+                               "실 결과 미인용. 다음 turn 에 도구 출력 일부를 직접 quote 하라.")
+
         # verify_context 가 없으면 일반 휴리스틱 — skill 한 번이라도 success 면 OK
         if not (criteria or intent):
             ok = any(t.get("success") for t in tool_outputs)
@@ -2453,6 +2577,10 @@ class BastionAgent:
             "- 도구 결과가 의도와 일치(등가 표현 인정)하면 satisfied=true.\n"
             "- 도구가 한 번도 안 돌았거나 답변이 개념 설명뿐이면 satisfied=false.\n"
             "- negative_signs 가 응답에 명시적으로 나타나면 satisfied=false.\n"
+            "- ★ 최종 답변이 grep/cat/jq 의 raw 출력만 dump (예: 'type=EXECVE ...' 또는 "
+            "'{\"timestamp\":...}' 라인이 답변 절반 이상)이고 분석·요약·MITRE 맥락이 없으면 satisfied=false. "
+            "도구는 실행됐어도 학습 효과 없음.\n"
+            "- ★ 최종 답변 길이 < 200 자거나 한 문장만 있으면 satisfied=false (분석 부재).\n"
             "- 모호하면 satisfied=true (도구가 1회라도 success).\n"
         )
         try:

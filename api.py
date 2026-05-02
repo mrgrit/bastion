@@ -283,6 +283,29 @@ def graph_delete_node(node_id: str):
     return {"deleted": deleted, "node_id": node_id}
 
 
+# ── KG metrics — agent 의 KG context/recorder 사용량 ──────────────────────
+
+@app.get("/kg/metrics")
+def kg_metrics():
+    """KG context builder + recorder 의 in-memory metrics snapshot."""
+    try:
+        from bastion.kg_metrics import get_metrics
+        return get_metrics().snapshot()
+    except Exception as e:
+        return {"error": str(e), "counters": [], "observations": []}
+
+
+@app.get("/kg/anchors/recent")
+def kg_anchors_recent(kind: str = "", limit: int = 50):
+    """최근 history_anchors — KG 업데이트 검증용 (R4 진행 중 누적 확인)."""
+    try:
+        from bastion.history import HistoryLayer
+        h = HistoryLayer()
+        return {"anchors": h.find_anchors(kind=kind, limit=limit)}
+    except Exception as e:
+        return {"error": str(e), "anchors": []}
+
+
 # ── History (L4) — 시계열·내러티브·anchor·changelog ────────────────────────
 
 def _history():
