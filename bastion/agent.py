@@ -635,6 +635,10 @@ class BastionAgent:
             except Exception:
                 pass
 
+        # KG audit trail — 매 chat 의 KG 사용/기록 흔적 (호출자 + /kg/audit 가 읽음)
+        self._last_kg_status: dict = {}
+        self._last_kg_record: dict = {}
+
     # ── Public API ──────────────────────────────────────────────────────────
 
     _MULTITASK_SPLIT = re.compile(r"(?:^|\n)\s*(\d+)[)\.]\s+", re.MULTILINE)
@@ -769,6 +773,36 @@ class BastionAgent:
                     f"그 결과를 근거로 답하라. 개념 설명·표·체크리스트만 출력 금지."
                 )
         finally:
+            # ── KG 사용 audit event emit (호출자가 매 chat 의 KG 흔적 확인 가능) ──
+            kg_ctx_status = getattr(self, "_last_kg_status", None) or {}
+            kg_rec_status = getattr(self, "_last_kg_record", None) or {}
+            kg_event = {
+                "event": "kg_status",
+                "context": {
+                    "used": bool(kg_ctx_status.get("context_used")),
+                    "hits": kg_ctx_status.get("context_hits", 0),
+                    "took_ms": kg_ctx_status.get("context_took_ms", 0),
+                    "skip_reason": kg_ctx_status.get("skip_reason", ""),
+                    "error": kg_ctx_status.get("context_error", ""),
+                },
+                "record": {
+                    "attempted": bool(kg_rec_status.get("attempted")),
+                    "success": bool(kg_rec_status.get("success")),
+                    "anchor_id": kg_rec_status.get("anchor_id", ""),
+                    "dedup": bool(kg_rec_status.get("dedup")),
+                    "error": kg_rec_status.get("error", ""),
+                },
+            }
+            try:
+                yield kg_event
+            except Exception:
+                pass
+            # 운영자 가시화 — KG 가 한쪽이라도 빠지면 stderr WARNING (silent 금지)
+            if not kg_event["context"]["used"] and not kg_event["context"]["skip_reason"] in ("no_kg_results",):
+                self._kg_warn(f"chat 종료 — KG context 미사용 (skip={kg_event['context']['skip_reason']} err={kg_event['context']['error']})")
+            if kg_event["record"]["attempted"] and not kg_event["record"]["success"] and not kg_event["record"]["dedup"]:
+                self._kg_warn(f"chat 종료 — KG record 실패 (err={kg_event['record']['error']})")
+
             # ── Audit 기록 (항상, 에러나도) ───────────────────────────────────
             try:
                 from bastion.audit import get_audit_log
@@ -1178,35 +1212,66 @@ class BastionAgent:
         - graph + history 검색 (Concept/Policy/Playbook/Asset/Anchor)
         - 모델별 token budget (gemma 1500 / gpt-oss 4000) 자동 적용
         - LRU 5분 캐시 — 같은 message 반복 시 1회만 검색
-        - silent fallback — KG 호출 실패 시 원본 messages 그대로 반환
+        - 모든 결과/스킵/실패가 self._last_kg_status 와 metric 에 기록 (audit trail)
+        - 호출 실패 시 stderr 에 명시 WARNING — silent 가 아니라 visible
 
         반환: KG 블록이 첫 system 메시지 끝에 추가된 새 messages 리스트.
               system 이 없으면 KG 블록만 첫 system 으로 prepend.
         """
+        # 매 호출마다 kg_status 초기화 (chat() 가 끝에 읽어 event emit)
+        self._last_kg_status = {
+            "context_used": False,
+            "context_hits": 0,
+            "context_took_ms": 0,
+            "context_error": "",
+            "skip_reason": "",
+        }
+
         if not messages:
+            self._last_kg_status["skip_reason"] = "empty_messages"
             return messages
         try:
             from bastion.kg_context import get_builder
             builder = get_builder()
-        except Exception:
+        except Exception as e:
+            self._last_kg_status["context_error"] = f"import_failed: {e}"
+            self._kg_warn(f"KG context import 실패 — agent 동작은 계속, KG 미참조: {e}")
+            self._kg_metric_inc("kg_context_skip", labels={"reason": "import"})
             return messages
 
         user_msgs = [m.get("content", "") for m in messages
                      if isinstance(m, dict) and m.get("role") == "user"]
         if not user_msgs:
+            self._last_kg_status["skip_reason"] = "no_user_message"
+            self._kg_metric_inc("kg_context_skip", labels={"reason": "no_user"})
             return messages
         last_user = str(user_msgs[-1] or "").strip()
         if not last_user:
+            self._last_kg_status["skip_reason"] = "empty_user_message"
+            self._kg_metric_inc("kg_context_skip", labels={"reason": "empty_user"})
             return messages
 
         try:
             ctx = builder.build(last_user, model=self.model)
             block = builder.format(ctx)
-        except Exception:
-            return messages
-        if not block:
+        except Exception as e:
+            self._last_kg_status["context_error"] = f"build_failed: {e}"
+            self._kg_warn(f"KG context build 실패 — agent 동작은 계속, KG 미참조: {e}")
+            self._kg_metric_inc("kg_context_skip", labels={"reason": "build_error"})
             return messages
 
+        # 결과 audit
+        m = ctx.get("_metrics", {}) if isinstance(ctx, dict) else {}
+        self._last_kg_status["context_hits"] = m.get("hits", 0)
+        self._last_kg_status["context_took_ms"] = m.get("took_ms", 0)
+
+        if not block:
+            self._last_kg_status["skip_reason"] = "no_kg_results"
+            self._kg_metric_inc("kg_context_skip", labels={"reason": "no_results"})
+            return messages
+
+        # KG context 실제 주입
+        self._last_kg_status["context_used"] = True
         out = list(messages)
         for i, m in enumerate(out):
             if isinstance(m, dict) and m.get("role") == "system":
@@ -1215,6 +1280,21 @@ class BastionAgent:
                 return out
         out.insert(0, {"role": "system", "content": block})
         return out
+
+    def _kg_warn(self, msg: str) -> None:
+        """KG 호출 실패 시 stderr 에 visible warning. silent 가 아니라 운영자가 봐야 함."""
+        try:
+            sys.stderr.write(f"[KG-WARN] {msg}\n")
+            sys.stderr.flush()
+        except Exception:
+            pass
+
+    def _kg_metric_inc(self, name: str, *, labels: dict | None = None) -> None:
+        try:
+            from bastion.kg_metrics import get_metrics
+            get_metrics().inc(name, labels=labels or {})
+        except Exception:
+            pass
 
     def _stream_llm(self, messages: list[dict],
                     max_tokens: int = 600, temperature: float = 0.3):
@@ -2487,6 +2567,11 @@ class BastionAgent:
             g.add_edge(exp_id, f"concept-{category}", "handles")
 
         # ─ KGRecorder — structured anchor (R5 학습 loop, dedup + schema_v1) ─
+        # audit trail: 결과를 self._last_kg_record 에 저장 → chat() 가 event emit
+        self._last_kg_record = {
+            "attempted": True, "success": False, "anchor_id": "",
+            "dedup": False, "error": "",
+        }
         try:
             from bastion.kg_recorder import (
                 get_recorder, extract_mitre_ids,
@@ -2494,7 +2579,7 @@ class BastionAgent:
             recorder = get_recorder()
             mitre_ids = (extract_mitre_ids(final_content)
                          or extract_mitre_ids(message))
-            recorder.record_task_outcome(
+            aid = recorder.record_task_outcome(
                 task_message=message,
                 skills_used=used_skills,
                 mitre_ids=mitre_ids,
@@ -2504,8 +2589,15 @@ class BastionAgent:
                 session_id=getattr(self, "session_id", ""),
                 asset_ids=[f"asset-vm-{t}" for t in used_targets if t],
             )
-        except Exception:
-            pass
+            if aid:
+                self._last_kg_record["success"] = True
+                self._last_kg_record["anchor_id"] = aid
+            else:
+                self._last_kg_record["dedup"] = True
+        except Exception as e:
+            self._last_kg_record["error"] = str(e)
+            self._kg_warn(f"KG record_task_outcome 실패 — agent 동작은 계속, anchor 미기록: {e}")
+            self._kg_metric_inc("kg_record_skip", labels={"reason": "exception"})
 
     def _self_verify_completion(self, original_message: str,
                                 tool_outputs: list[dict],

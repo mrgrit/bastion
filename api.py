@@ -102,6 +102,68 @@ app = FastAPI(
 )
 
 
+# ── 시작 banner — KG 통합이 활성화되어 있는지 stderr 에 명시 (운영자 가시화) ──
+def _startup_kg_banner() -> None:
+    """uvicorn 시작 시 KG 통합 상태를 한눈에. 한쪽이라도 빠지면 ★ 표시."""
+    sys.stderr.write("\n" + "=" * 60 + "\n")
+    sys.stderr.write("Bastion API — KG-Integrated Agent Startup\n")
+    sys.stderr.write("=" * 60 + "\n")
+    checks = []
+    try:
+        from bastion.kg_context import get_builder
+        get_builder()
+        checks.append(("kg_context module", True, ""))
+    except Exception as e:
+        checks.append(("kg_context module", False, str(e)))
+    try:
+        from bastion.kg_recorder import get_recorder
+        get_recorder()
+        checks.append(("kg_recorder module", True, ""))
+    except Exception as e:
+        checks.append(("kg_recorder module", False, str(e)))
+    try:
+        from bastion.kg_metrics import get_metrics
+        get_metrics()
+        checks.append(("kg_metrics module", True, ""))
+    except Exception as e:
+        checks.append(("kg_metrics module", False, str(e)))
+    try:
+        from bastion.graph import get_graph
+        s = get_graph().stats()
+        checks.append((f"graph DB ({s.get('total_nodes',0)} nodes)", True, ""))
+    except Exception as e:
+        checks.append(("graph DB", False, str(e)))
+    try:
+        from bastion.history import HistoryLayer
+        h = HistoryLayer()
+        with h._conn() as c:
+            n = c.execute("SELECT COUNT(*) FROM history_anchors").fetchone()[0]
+        checks.append((f"history DB ({n} anchors)", True, ""))
+    except Exception as e:
+        checks.append(("history DB", False, str(e)))
+
+    all_ok = all(ok for _, ok, _ in checks)
+    for name, ok, err in checks:
+        mark = "[ OK ]" if ok else "[★FAIL]"
+        line = f"  {mark}  {name}"
+        if err:
+            line += f"  — {err}"
+        sys.stderr.write(line + "\n")
+    sys.stderr.write("-" * 60 + "\n")
+    if all_ok:
+        sys.stderr.write("KG integration: ENABLED  (모든 LLM 호출 자동 KG 참조 + 결과 anchor 기록)\n")
+    else:
+        sys.stderr.write("★ KG integration: DEGRADED  — 위 [★FAIL] 항목 즉시 수정 필요\n")
+        sys.stderr.write("★ chat 동작은 계속되지만 R5 학습 loop 는 작동 안 함\n")
+    sys.stderr.write("=" * 60 + "\n\n")
+    sys.stderr.flush()
+
+
+@app.on_event("startup")
+def _on_startup():
+    _startup_kg_banner()
+
+
 # ── 스키마 ──────────────────────────────────────────────────────────────────
 
 class ChatRequest(BaseModel):
@@ -126,6 +188,7 @@ class ChatRequest(BaseModel):
 
 @app.get("/health")
 def health():
+    """일반 health + KG 통합 활성 상태 (운영자가 KG 누락을 즉시 인지)."""
     return {
         "status": "ok",
         "model": agent.model,
@@ -134,7 +197,113 @@ def health():
         "llm": agent.ollama_url,
         "skills": len(agent.get_skills()),
         "playbooks": len(agent.get_playbooks()),
+        # ── KG 통합 강제 — 한쪽이라도 false 면 운영자 즉시 조치 ──
+        "kg": _kg_health_summary(),
     }
+
+
+def _kg_health_summary() -> dict:
+    """KG 시스템의 가용성 + 통합 status. /health 와 /kg/health 모두 사용."""
+    out = {
+        "context_module": False,
+        "recorder_module": False,
+        "metrics_module": False,
+        "graph_db": False,
+        "history_db": False,
+        "graph_nodes": 0,
+        "history_anchors": 0,
+        "last_chat_kg_used": None,
+        "last_chat_kg_recorded": None,
+        "errors": [],
+    }
+    try:
+        from bastion.kg_context import get_builder
+        get_builder()
+        out["context_module"] = True
+    except Exception as e:
+        out["errors"].append(f"kg_context import: {e}")
+    try:
+        from bastion.kg_recorder import get_recorder
+        get_recorder()
+        out["recorder_module"] = True
+    except Exception as e:
+        out["errors"].append(f"kg_recorder import: {e}")
+    try:
+        from bastion.kg_metrics import get_metrics
+        get_metrics()
+        out["metrics_module"] = True
+    except Exception as e:
+        out["errors"].append(f"kg_metrics import: {e}")
+    try:
+        from bastion.graph import get_graph
+        g = get_graph()
+        s = g.stats()
+        out["graph_db"] = True
+        out["graph_nodes"] = s.get("total_nodes", 0)
+    except Exception as e:
+        out["errors"].append(f"graph access: {e}")
+    try:
+        from bastion.history import HistoryLayer
+        h = HistoryLayer()
+        anchors = h.find_anchors(limit=1)
+        out["history_db"] = True
+        # full count 는 별도 sql 필요
+        try:
+            with h._conn() as c:
+                cur = c.execute("SELECT COUNT(*) FROM history_anchors").fetchone()
+                out["history_anchors"] = int(cur[0]) if cur else 0
+        except Exception:
+            out["history_anchors"] = -1
+    except Exception as e:
+        out["errors"].append(f"history access: {e}")
+    # 최근 chat 의 KG 사용 흔적
+    last_ctx = getattr(agent, "_last_kg_status", {}) or {}
+    last_rec = getattr(agent, "_last_kg_record", {}) or {}
+    out["last_chat_kg_used"] = bool(last_ctx.get("context_used"))
+    out["last_chat_kg_recorded"] = bool(last_rec.get("success"))
+    out["all_modules_loaded"] = (out["context_module"] and out["recorder_module"]
+                                  and out["metrics_module"])
+    return out
+
+
+@app.get("/kg/health")
+def kg_health():
+    """KG 통합 전용 health — 모든 module + DB + 최근 chat 흔적."""
+    return _kg_health_summary()
+
+
+@app.get("/kg/audit")
+def kg_audit(limit: int = 20):
+    """최근 N chat 의 KG 사용 audit (audit_log 의 verify/turns 정보 활용).
+
+    사용처: 운영자가 "지난 24h chat 중 KG record 실패한 건이 있나?" 확인.
+    """
+    try:
+        from bastion.audit import get_audit_log
+        log = get_audit_log()
+        recent = log.recent(limit=limit) if hasattr(log, 'recent') else []
+        # 각 row 에 KG 정보가 별도 컬럼은 아니므로, 현재는 최근 chat list + 최근 anchor 카운트
+        from bastion.history import HistoryLayer
+        h = HistoryLayer()
+        try:
+            with h._conn() as c:
+                cur = c.execute(
+                    "SELECT id, kind, label, created_at FROM history_anchors "
+                    "WHERE kind='task_outcome' ORDER BY created_at DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
+                recent_outcomes = [dict(r) for r in cur]
+        except Exception:
+            recent_outcomes = []
+        return {
+            "recent_chats": len(recent),
+            "recent_task_outcome_anchors": recent_outcomes,
+            "advice": ("KG 가 모든 chat 마다 작동하는지 확인하려면 chat 응답의 "
+                       "'kg_status' event 를 모니터링하라. "
+                       "context.used=true + record.success=true 가 정상."),
+        }
+    except Exception as e:
+        return {"error": str(e), "recent_chats": 0, "recent_task_outcome_anchors": []}
 
 
 @app.get("/skills")
