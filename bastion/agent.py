@@ -1764,6 +1764,19 @@ class BastionAgent:
             "  · '결과 정리/요약/분석 리포트'                → qa\n"
             "  · 위 카테고리는 probe_all/probe_host 보다 shell/qa 가 잘 맞음 (probe 는 recon/포트스캔 전용).\n"
             "\n"
+            "## ★ IR/build/CI/test 카테고리 (R5 fix 2026-05-07) — agent-ir-* 전용\n"
+            "  ★ probe_all/probe_host 호출 절대 금지. 다음은 shell 또는 전용 skill 사용:\n"
+            "  · 'pip install/패키지 설치/CI 환경 구축'      → shell (pip install -r ...)\n"
+            "  · 'python -m build/tar/패키지 빌드'           → shell (python -m build, tar czf)\n"
+            "  · 'pytest/unittest/테스트 실행'               → shell (pytest -v ...)\n"
+            "  · 'git clone/checkout/branch'                  → shell (git ...)\n"
+            "  · 'docker build/run/compose'                   → shell (docker ...)\n"
+            "  · 'systemctl/journalctl/서비스 관리'           → shell\n"
+            "  · 'IR playbook/체크리스트 작성'                → qa (산문 답변)\n"
+            "  · '메모리 덤프/포렌식 보존'                     → memory_dump 또는 forensic_collect\n"
+            "  · '방화벽 차단/process kill 등 봉쇄'            → process_kill 또는 shell (iptables/nft)\n"
+            "  · agent-ir-* 카테고리는 probe 호출하지 말 것 — recon 이 아니라 대응(IR)·빌드·테스트가 본질.\n"
+            "\n"
             "## ★★ Web-vuln-ai 카테고리 — OWASP payload library (R3 32.5% → 50%+ 목표)\n"
             "  ★ probe_all/probe_host 호출 절대 금지. shell 로 raw curl/python payload 작성.\n"
             "  ★ shell `target` 은 무조건 `attacker` 사용 — `target: web` 금지. (web 측 grep/cat 은 lab 의도 아님)\n"
@@ -1799,13 +1812,20 @@ class BastionAgent:
             "  ★ 에러 페이지·정보 누출 검사 시 `curl -i URL/nonexistent | head -30` — 본문 상위 30줄까지 stack trace 검증.\n"
             "  ★ shell tool 실행 시 stdout 이 verify 의 success_criteria 와 매칭되도록 `echo`/`grep` 으로 명시적 marker 출력. 예: `&& echo '에러 페이지 분석 완료'` 추가.\n"
             "\n"
-            "## ★★ 최종 답변 작성 규칙 (R3 fix #4, 2026-04-30) — judge 통과율 결정\n"
+            "## ★★ 최종 답변 작성 규칙 (R5 fix #8, 2026-05-07) — judge 통과율 결정\n"
             "  도구 실행 후 마지막 turn 에 작성하는 답변에 다음 4개 섹션을 모두 포함:\n"
-            "  1. **실행 결과**: 도구 stdout 의 핵심 라인 1~2줄 그대로 인용 (HTTP status, 응답 길이, 발견된 취약점 등)\n"
-            "  2. **취약점 입증**: 어떤 페이로드가 어떤 응답을 유도했는지 (`payload=X → response=Y`)\n"
-            "  3. **방어 언급**: HttpOnly / Secure / SameSite / WAF / CSP / DOMPurify / Trusted Types / SHA256 등 1개 이상\n"
-            "  4. **한계·인지**: 자동화 한계 / 동일 출처 위험 / 디폴트 보호 범위 / 사용자 인지 한계 등 1개 이상\n"
-            "  ※ 위 4개 누락 시 judge 가 'no-output' 또는 '방어 언급 없음' 으로 fail 판정. 개념 설명·표만 출력 금지.\n"
+            "  1. **실행 결과 (★ 코드블록 필수)**: 실행한 명령 + 도구 stdout 의 핵심 라인을 ``` 코드 블록으로 그대로 인용.\n"
+            "     예시 (반드시 이 형태):\n"
+            "     ```\n"
+            "     $ curl -i -X OPTIONS http://target/\n"
+            "     HTTP/1.1 200 OK\n"
+            "     Allow: GET, POST, OPTIONS\n"
+            "     ```\n"
+            "     산문 안에 'GET 200 / POST 403' 처럼 평문 나열만 하면 judge 가 'no-output' 판정. 반드시 ``` 펜스 안에 stdout 원본.\n"
+            "  2. **취약점/의도 입증**: 어떤 페이로드·요청이 어떤 응답을 유도했는지 (`payload=X → response=Y`). success_criteria 항목별 충족 여부 명시.\n"
+            "  3. **방어 언급**: HttpOnly / Secure / SameSite / WAF / CSP / DOMPurify / Trusted Types / SHA256 등 1개 이상.\n"
+            "  4. **한계·인지**: 자동화 한계 / 동일 출처 위험 / 디폴트 보호 범위 / 사용자 인지 한계 등 1개 이상.\n"
+            "  ※ 1번 코드블록 누락 시 judge 가 'no-output'/'format' 으로 fail 판정 — R4 web-vuln 1% 의 직접 원인. 개념 설명·표만 금지.\n"
             "\n"
             "## 도구 호출 예시 (★ 첫 turn 패턴)\n"
             "예시1) user: '메모리 덤프 떠서 IoC 추출해'\n"
@@ -2295,9 +2315,9 @@ class BastionAgent:
         # ── VALIDATING ─────────────────────────────────────────────────────
         yield {"event": "stage", "stage": "validating"}
 
-        # ★ R3 fix #7 (2026-04-30): last_assistant_content 가 punt/tool-call-만 있는 경우도
-        #   synthesis 강제 트리거. 패턴: "다음 단계에서", "계속 진행", "will analyze",
-        #   tool call JSON 만 있고 분석 없음, "[prompt-fallback]" 마커.
+        # ★ R3 fix #7 (2026-04-30) + R5 fix #10 (2026-05-07):
+        #   last_assistant_content 가 punt/plan-only/tool-call-만 인 경우 synthesis 강제 트리거.
+        #   추가 패턴 (fix #10): GOAL=/SUCCESS=/TODO_LIST= 만 있고 stdout 인용 없는 plan-only.
         _content_is_punt = False
         _trim = (last_assistant_content or "").strip()
         if _trim and all_tool_outputs:
@@ -2306,10 +2326,21 @@ class BastionAgent:
                 "will analyze", "next step", "[prompt-fallback]", "계속해서",
                 "다음 turn 에서", "이후 분석",
             )
-            # 길이 짧고 punt 마커 포함 OR tool call JSON 으로 시작
+            # plan-only 마커 (fix #10): GOAL/SUCCESS/TODO_LIST 헤더 + 도구 출력 인용 없음
+            _plan_markers = ("GOAL=", "SUCCESS=", "TODO_LIST=", "TODO=", "PLAN=")
+            _plan_only = (
+                len(_trim) < 600
+                and sum(1 for m in _plan_markers if m in _trim) >= 2
+            )
+            # 길이 짧고 punt 마커 포함 OR tool call JSON 으로 시작 OR plan-only
             if len(_trim) < 400 and any(m in _trim for m in _punt_markers):
                 _content_is_punt = True
             elif _trim.startswith("{") and ("\"tool\"" in _trim[:200] or "\"function\"" in _trim[:200]):
+                _content_is_punt = True
+            elif _plan_only:
+                _content_is_punt = True
+            elif len(_trim) < 250 and not any(c in _trim for c in ("```", "$ ", "HTTP/", "→", "충족", "미충족")):
+                # 짧은데 stdout 인용/결과 분석 마커 모두 없으면 punt
                 _content_is_punt = True
 
         # 마지막 LLM content 가 비었거나 punt 면 종합 답변 1회 생성

@@ -75,6 +75,13 @@ ATTACK_COURSES = {
     "web-vuln-ai", "physical-pentest-ai",
     # AI 보안 공격 카테고리 (prompt injection / model jailbreak)
     "ai-security-ai",
+    # R5 fix #12 (2026-05-07): agent-ir-* 과목도 deserialization payload 등 공격 step 다수 포함.
+    # probe 가드레일 + attack-mode preamble 적용 필요.
+    "agent-ir-ai", "agent-ir-adv-ai",
+    # autonomous-* / autonomous-systems-* 도 attack chain step 비중 높음
+    "autonomous-ai", "autonomous-systems-ai",
+    # ai-safety-adv-ai: jailbreak 방어 평가에 공격 시뮬 step 포함
+    "ai-safety-adv-ai",
 }
 
 _vm_ips = _get_vm_ips()
