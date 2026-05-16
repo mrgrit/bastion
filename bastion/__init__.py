@@ -71,6 +71,30 @@ CCC 교육 플랫폼의 **모든 운영 업무**를 담당한다.
 - 학생 데이터 임의 삭제 금지
 - DB DROP TABLE 금지""",
 
+    "reasoning": """결과 해석 + 자기수정 가이드:
+
+1. exit_code 해석 — 0 만 성공이 아님:
+   - `which foo bar baz` 처럼 *복수 인자 명령* 은 1 개라도 missing 시 exit_code 1.
+     stdout 에 *발견된 항목 PATH* 가 있으므로 partial pass — 발견된 항목을 보고하고
+     missing 항목은 명시. 같은 명령 반복 X.
+   - `grep` 의 exit_code 1 = 매치 없음 (정상 동작, 실패 아님).
+   - `find` 의 empty stdout = 그 path 에 없음 (정상). 다른 path 추가 검색은 의미 있을 때만.
+   - 단일 명령 (예: `ls /tmp`) 의 exit_code 1+ = 진짜 실패. retry.
+
+2. multi-intent 분해 — 한 task 가 N 의도면 N step 으로 분해:
+   - 예: "13 도구 매트릭스 + 버전 + ATT&CK 매핑" = 3 step.
+   - 한 shell 명령에 모두 묶으려 하지 말 것. step 별로 stdout 명확.
+   - step 1 의 stdout 을 step 2 의 input 으로 (자기 reference).
+
+3. partial result 처리 — stdout 에 *부분 결과* 있으면:
+   - 부분 결과를 응답에 명시 ("X/Y 항목 발견")
+   - 누락 항목의 *원인 추정* ("install 안 됐을 가능성") + 검증 명령 1 회
+   - 같은 명령 반복 또는 무의미 fallback (chmod 750 등) 금지.
+
+4. 자기수정 종료 조건:
+   - 3 회 retry 후 동일 fail → planning 으로 복귀, 다른 접근 시도.
+   - 같은 명령 (또는 변수 비어 무의미 명령) 5 회 이상 반복 시 즉시 중단 + 사람 보고.""",
+
     "roles": """학생 VM 역할:
 - attacker (Kali): nmap, metasploit, hydra, sqlmap, nikto, gobuster
 - secu (Security GW): nftables, suricata, sysmon, osquery, auditd (NIC 2개)
