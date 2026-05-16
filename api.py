@@ -169,6 +169,25 @@ def _startup_kg_banner() -> None:
 @app.on_event("startup")
 def _on_startup():
     _startup_kg_banner()
+    # Auto-register Assets — bastion 이 시작 시점에 .env 의 VM_*_IP 로 인프라 자동 파악
+    # (수동 PUT /assets/<role> 없이 즉시 사용 가능)
+    try:
+        registered = []
+        for role, ip in agent.vm_ips.items():
+            try:
+                agent.evidence_db.update_asset(role, ip, "configured",
+                                                "auto-registered from .env at startup")
+                registered.append(f"{role}={ip}")
+            except Exception as e:
+                print(f"[startup] Asset auto-register fail for {role}: {e}",
+                      file=__import__("sys").stderr, flush=True)
+        if registered:
+            print(f"[startup] Auto-registered {len(registered)} Assets: "
+                  f"{', '.join(registered)}",
+                  file=__import__("sys").stderr, flush=True)
+    except Exception as e:
+        print(f"[startup] Asset auto-register block failed: {e}",
+              file=__import__("sys").stderr, flush=True)
 
 
 # ── 스키마 ──────────────────────────────────────────────────────────────────
