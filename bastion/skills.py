@@ -853,17 +853,24 @@ def execute_skill(name: str, params: dict[str, Any], vm_ips: dict[str, str],
             return {"success": False, "output": f"Ollama API 호출 실패: {e}"}
 
     elif name == "http_request":
-        import httpx
         url = params.get("url", "")
         method = params.get("method", "GET").upper()
         headers = params.get("headers") or {}
         body = params.get("body", "")
         target = params.get("target", "attacker")
         ip = _resolve_vm_ip(target, vm_ips)
-        # attacker VM에서 curl로 실행 (대상 서버에 직접 httpx 호출 아님)
+        # attacker VM에서 curl로 실행 — 응답 헤더 (-D) + body 모두 회수.
+        # HEAD 메서드도 헤더 라인 (HTTP/1.1 / Server / X-Frame-Options 등) 모두 받아야
+        # 보안 점검 lab 의 verify 가 성립함.
         header_args = " ".join(f"-H '{k}: {v}'" for k, v in headers.items()) if headers else ""
         body_arg = f"-d '{body}'" if body else ""
-        cmd = f"curl -sS -o /tmp/http_resp_body -w 'HTTP_CODE:%{{http_code}}\\nSIZE:%{{size_download}}' -X {method} {header_args} {body_arg} '{url}' && echo && cat /tmp/http_resp_body | head -50"
+        cmd = (
+            f"curl -sS -D /tmp/http_resp_headers -o /tmp/http_resp_body "
+            f"-w 'HTTP_CODE:%{{http_code}}\\nSIZE:%{{size_download}}\\nTIME:%{{time_total}}' "
+            f"-X {method} {header_args} {body_arg} '{url}'; echo; "
+            f"echo '--- RESPONSE HEADERS ---'; cat /tmp/http_resp_headers 2>/dev/null; "
+            f"echo '--- RESPONSE BODY (head -30) ---'; head -30 /tmp/http_resp_body 2>/dev/null"
+        )
         r = run_command(ip, cmd, timeout=30)
         stdout = r.get("stdout", "")
         return {"success": "HTTP_CODE:2" in stdout or "HTTP_CODE:3" in stdout or "HTTP_CODE:4" in stdout,
