@@ -194,15 +194,10 @@ def _on_startup():
 
 class ChatRequest(BaseModel):
     message: str
-    # 학습 환경 default = 자동 승인. bastion 은 학습용 6v6 컨테이너 안에서만 돌고
-    # RoE 가 컨테이너 네트워크로 제한되므로 학습 단계의 lab step 실행은 매번
-    # 사람 승인 불필요. 외부 운영 시 명시적 false 전달 필요.
-    auto_approve: bool = True
+    auto_approve: bool = False   # True: 고위험 작업 자동 승인 (주의)
     stream: bool = True          # False: 전체 이벤트 배열 한번에 반환
     # 승인 모드 — normal | danger_danger | danger_danger_danger
-    # default = danger_danger (critical 만 묻기). normal 은 high/critical 양쪽
-    # 묻는데 lab 의 curl/sqlmap/nikto 등이 high 로 잡혀 학습 진행이 막힘.
-    approval_mode: str = "danger_danger"
+    approval_mode: str = "normal"
     # 테스트 메타데이터 — evidence DB에 함께 기록
     course: str = ""
     lab_id: str = ""

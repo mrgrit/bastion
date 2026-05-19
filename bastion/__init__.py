@@ -777,6 +777,10 @@ INTERNAL_IPS = {
     "siem":     os.getenv("VM_SIEM_IP",     "10.20.30.100"),
     "manager":  os.getenv("VM_MANAGER_IP",  "10.20.30.200"),
     "windows":  os.getenv("VM_WINDOWS_IP",  "10.20.30.50"),
+    # bastion 자신 — docker.sock RO mount + KG DB 가용. run_command 가 _is_local_ip
+    # 확인 후 subprocess 직접 실행 (SubAgent 안 거침). shell skill 의 docker ps /
+    # curl localhost API 가 여기로 라우팅 (cycle 2 F2c fix).
+    "bastion":  os.getenv("VM_BASTION_IP",  "127.0.0.1"),
 }
 INTERNAL_SUBNET = os.getenv("VM_INTERNAL_SUBNET", "10.20.30.0/24")
 SECU_GW = INTERNAL_IPS["secu"]
@@ -1320,8 +1324,31 @@ def run_command(ip: str, script: str, timeout: int = 60) -> dict:
     """
     if _is_local_ip(ip):
         try:
-            import subprocess as _sp
-            r = _sp.run(["bash", "-c", script], capture_output=True, text=True, timeout=timeout)
+            import subprocess as _sp, os as _os
+            # ★ bastion-autopilot cycle 8 (2026-05-18) fix F5:
+            #   uvicorn 이 root user (entrypoint default) → subprocess ssh 시 root 의
+            #   ~/.ssh/config 안 봄 → ccc 의 6v6-fw alias 무지 → root 로 시도 → Permission
+            #   denied. ccc user 로 강제 실행 (su - ccc -c) — ccc 의 .ssh/config + id_rsa
+            #   가용. 모든 local subprocess 명령 동일 적용.
+            _ssh_user = _os.getenv("SSH_USER", "ccc")
+            # ★ bastion-autopilot cycle 3 (2026-05-18) F6: ssh 호출 시 -tt 자동 주입.
+            # web 의 sudoers `Defaults use_pty` 가 non-tty subprocess 의 sudo 차단
+            # → ssh -tt 로 force tty allocation. 학생 PC autopilot subprocess (stdin
+            # 없음) 시 안전. 모든 sudo 통한 명령 호환성.
+            _script = script
+            if " ssh " in f" {_script} " or _script.startswith("ssh "):
+                # `ssh ` 단어 가 첫 위치 또는 어떤 토큰 으로 등장 시 -tt 추가
+                import re as _re
+                _script = _re.sub(r'\bssh (?!-)', 'ssh -tt ', _script, count=1)
+                # 이미 -n 이 있으면 -tt 와 충돌 → -n 제거 (autopilot 의 stdin 부재)
+                _script = _script.replace('-n -tt ', '-tt ').replace('-tt -n ', '-tt ')
+            if _ssh_user and _ssh_user != "root":
+                # quoted command — single-quote 안 의 '" 처리
+                _esc = _script.replace("'", "'\\''")
+                _cmd = ["su", "-", _ssh_user, "-c", f"bash -c '{_esc}'"]
+            else:
+                _cmd = ["bash", "-c", _script]
+            r = _sp.run(_cmd, capture_output=True, text=True, timeout=timeout)
             return {
                 "exit_code": r.returncode,
                 "stdout": r.stdout,

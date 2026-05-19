@@ -288,6 +288,11 @@ def _extract_shell_from_prose(text: str) -> list[str]:
     # Running:/실행: 동사 패턴
     for m in _PROSE_CMD_RE.finditer(text):
         c = m.group(1).strip().strip('`').strip()
+        # ★ cycle 7 (2026-05-18) F4: trailing 한국어 설명 strip — autopilot mission 2.
+        for _trail in (' — ', ' -- ', ' #', ' (예:', ' (확인'):
+            if _trail in c:
+                c = c.split(_trail, 1)[0].strip()
+                break
         if c and len(c) > 2 and c not in cands:
             cands.append(c)
     # 명령 prefix 가 줄 시작에 직접 등장 (가장 공격적, 마지막 우선순위)
@@ -309,6 +314,14 @@ def _extract_shell_from_prose(text: str) -> list[str]:
             '와 ', '과 ', '및 ', '또는 '
         )):
             continue
+        # ★ cycle 6 (2026-05-18) F4: trailing 한국어 설명 strip — `— ` (em-dash)
+        # 또는 ` -- ` 또는 `(...)` 가 명령 끝 에 있으면 cut. 예: "for h in ...; done
+        # — 4 호스트 hostname 응답 확인" → "for h in ...; done". autopilot 의 mission
+        # 2 finding.
+        for _trail in (' — ', ' -- ', ' #', ' (예:', ' (확인'):
+            if _trail in c:
+                c = c.split(_trail, 1)[0].strip()
+                break
         cands.append(c)
     # !cmd
     for m in _BANG_CMD_RE.finditer(text):
@@ -2357,15 +2370,66 @@ class BastionAgent:
                     f"의도: {_intent_s}\n"
                     f"성공 기준:\n{_crit_lines}\n"
                 )
-            _synth_prompt = (
-                "위 도구 실행 결과를 바탕으로 사용자 요청에 대한 최종 답을 작성하라.\n"
-                "## 작성 규칙 (필수)\n"
-                "1. 도구 stdout 에서 인용 가능한 핵심 라인 1~2줄을 그대로 인용.\n"
-                "2. 채점 기준이 있다면 각 기준에 대해 충족/미충족 한 줄씩 표시.\n"
-                "3. 개념 설명·이론·일반론 금지. 실측 결과 기반 결론만.\n"
-                "4. 분량: 5~10줄."
-                + _crit_block
+            # 도구 실행 의 success 여부 + stdout 가용 여부 가 prompt 분기 의 핵심.
+            # bastion-autopilot cycle 1 (2026-05-18) 발견: skill_result success=false
+            # 인데 LLM 이 "출력 결과 (예상):" 같은 가짜 example 생성 (학습 가치 0 +
+            # 운영 위험). _synth_prompt 에 명시적 anti-hallucination 룰 추가.
+            # ★ F7 fix (2026-05-18 reset cycle 1): turn_traces 는 content/thinking 만
+            #   저장 (line 2015) — success/output 미저장. 결과적으로 _any_skill_ok 항상
+            #   false → 도구 성공 시 에도 "도구 실행 실패" prompt branch → LLM 가짜 보고.
+            #   all_tool_outputs (line 2318 등) 가 진짜 success/output source.
+            _any_skill_ok = any(
+                (to.get("success") and (to.get("output") or "").strip())
+                for to in (all_tool_outputs or [])
             )
+            if _any_skill_ok:
+                _synth_prompt = (
+                    "위 도구 실행 결과를 바탕으로 사용자 요청에 대한 최종 답을 작성하라.\n"
+                    "## 작성 규칙 (필수)\n"
+                    "1. 도구 stdout 에서 인용 가능한 핵심 라인 1~2줄을 그대로 인용.\n"
+                    "2. 채점 기준이 있다면 각 기준에 대해 충족/미충족 한 줄씩 표시.\n"
+                    "3. 개념 설명·이론·일반론 금지. 실측 결과 기반 결론만.\n"
+                    "4. 분량: 5~10줄.\n"
+                    "5. **절대 금지**: 도구 stdout 에 없는 데이터/숫자/파일명/컨테이너명 등을\n"
+                    "   생성·예상·추정 으로 출력 금지. '예상', '(예상)', '~일 것입니다' 표현 금지.\n"
+                    + _crit_block
+                )
+            else:
+                # 모든 skill 실패 또는 stdout empty → 가짜 결과 생성 금지, 정직 보고.
+                _synth_prompt = (
+                    "도구 실행 이 모두 실패 또는 stdout 가 empty. **가짜 결과 생성 절대 금지.**\n"
+                    "## 작성 규칙 (필수)\n"
+                    "1. '도구 실행 실패' 정직 보고 (어느 skill 의 어느 명령 이 fail).\n"
+                    "2. 가능 한 원인 1-2 가지 추측 (target 잘못 / 권한 / network 등).\n"
+                    "3. 다음 시도 권장 (학생 또는 운영자 가 manual 시도 할 명령).\n"
+                    "4. **절대 금지**: 가짜 출력 example (`web-app-1 Running` 같은 hallucination).\n"
+                    "5. 분량: 3~5줄.\n"
+                    + _crit_block
+                )
+            # ★ bastion-autopilot cycle 4 (2026-05-18) fix F1.5:
+            #   LLM second-pass 가 prior tool_outputs 인지 못 함 — msgs 의 history
+            #   에 tool_output 가 not always present (특히 prompt_fallback path).
+            #   _synth_prompt 에 tool_output 직접 명시 주입 — last 2 tool 의 success
+            #   + truncated output 을 prompt 의 ## 마지막 도구 실행 결과 섹션 으로.
+            _tool_block = ""
+            if all_tool_outputs:
+                _tool_lines = []
+                for _to in all_tool_outputs[-2:]:
+                    _sk = _to.get("skill", "?")
+                    _sc = _to.get("success", False)
+                    _out = (_to.get("output", "") or "")[:1500]
+                    _params = _to.get("params") or {}
+                    _cmd = _params.get("command") or _params.get("url") or ""
+                    _tool_lines.append(
+                        f"### skill={_sk} success={_sc} command=`{_cmd[:120]}`\n"
+                        f"```\n{_out}\n```"
+                    )
+                _tool_block = (
+                    "\n## 마지막 도구 실행 결과 (이 stdout 만 사용. 가짜 example 금지)\n"
+                    + "\n".join(_tool_lines) + "\n"
+                )
+            _synth_prompt = _synth_prompt + _tool_block
+
             try:
                 r = httpx.post(
                     f"{self.ollama_url}/api/chat",

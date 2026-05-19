@@ -134,7 +134,14 @@ SKILLS: dict[str, dict] = {
         "description": "임의 셸 명령 실행 — 다른 skill로 불가능한 작업 시 사용",
         "params": {
             "command": {"type": "string", "description": "실행할 명령어", "required": True},
-            "target": {"type": "string", "description": "대상 VM role", "required": True},
+            "target": {"type": "string",
+                       "description": "대상 VM role. **선택 규칙** — docker ps / docker exec / "
+                                      "docker logs / docker.sock 접근 / KG 호출 / bastion-internal "
+                                      "metric 은 target=`bastion` (docker.sock RO mount + KG DB 가용). "
+                                      "네트워크 정찰 / nmap / curl 외부 = target=`attacker`. "
+                                      "wazuh / siem log = target=`siem`. modsec audit / apache = target=`web`. "
+                                      "nftables / fw 정책 = target=`fw`. 기본 fallback=`attacker`.",
+                       "required": True},
         },
         "target_vm": "auto",
         "requires_approval": True,
@@ -786,6 +793,27 @@ def execute_skill(name: str, params: dict[str, Any], vm_ips: dict[str, str],
     elif name == "shell":
         command = params.get("command", "echo ok")
         target = params.get("target", "attacker")
+        # ★ bastion-autopilot cycle 2 (2026-05-18) fix F2c: command pattern → target
+        #   자동 override. gemma3:4b 의 instruction following 한계 — shell skill 의
+        #   target description 무시 + 항상 `attacker` 선택. command 가 명백히 bastion
+        #   안 에서 만 가능 한 작업 (docker.sock 접근, KG 호출, localhost API) 이면
+        #   target=bastion 강제. 다른 작업 도 동일 효과 (오버피팅 X).
+        _cmd_strip = (command or "").strip()
+        _bastion_patterns = (
+            "docker ps", "docker exec", "docker logs", "docker inspect",
+            "docker images", "docker version", "docker info",
+            "curl http://localhost:9100", "curl https://localhost:9100",
+            "curl -s http://localhost:9100", "curl -s https://localhost:9100",
+            # ssh ProxyJump 시작점 = bastion (bastion 의 .ssh/config 에 6v6-* alias).
+            # 학생 PC 의 ssh 명령은 bastion 안 에서 실행 가능 (ccc user 의 .ssh/config).
+            # cycle 5+9 finding (Mission 2/4 = ProxyJump 검증). broader pattern.
+            "ssh 6v6-", "ssh -n 6v6-", "ssh -o ", "ssh -i ", "ssh -p ",
+            "ssh -t 6v6-", "ssh -T 6v6-",
+            # bash for loop 가 ssh 6v6-* 호출 — for h in ... ssh 6v6-$h ...
+            "for h in fw", "for h in 6v6", "for vm in",
+        )
+        if any(_cmd_strip.startswith(p) or f" {p}" in _cmd_strip for p in _bastion_patterns):
+            target = "bastion"
         ip = _resolve_vm_ip(target, vm_ips)
         # ★ R3 fix (2026-04-30): attacker 측에서 bastion-internal IP (10.20.30.80) 사용 시
         #   해당 IP 가 attacker 의 라우팅 테이블에 없어 unreachable. secu 의 외부 DNAT IP
