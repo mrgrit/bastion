@@ -65,6 +65,56 @@ def _get_vm_ips() -> dict[str, str]:
 from bastion import LLM_BASE_URL, LLM_MANAGER_MODEL
 import threading
 
+# ── Bastion lifecycle syslog emit → wazuh (local5) ──
+# 모든 mission event 를 stage 별로 syslog 송신. request_id 로 correlation.
+# wazuh 가 receiver: 10.20.32.100:514/udp (또는 SIEM_HOST env)
+_BASTION_SYSLOG_LOGGER = None
+def _emit_bastion_syslog(stage: str, payload: dict):
+    """1 mission lifecycle 의 1 event 를 wazuh 로 syslog 송신."""
+    global _BASTION_SYSLOG_LOGGER
+    try:
+        if _BASTION_SYSLOG_LOGGER is None:
+            import logging, logging.handlers, socket
+            lg = logging.getLogger("bastion-lifecycle")
+            lg.setLevel(logging.INFO)
+            siem_host = os.environ.get("SIEM_HOST", "10.20.32.100")
+            try:
+                h = logging.handlers.SysLogHandler(address=(siem_host, 514),
+                                                    facility=logging.handlers.SysLogHandler.LOG_LOCAL5,
+                                                    socktype=socket.SOCK_DGRAM)
+                h.setFormatter(logging.Formatter("bastion-lifecycle %(message)s"))
+                lg.addHandler(h)
+            except Exception: pass
+            try:
+                fh = logging.FileHandler("/var/log/bastion-lifecycle.log")
+                fh.setFormatter(logging.Formatter("%(asctime)s bastion-lifecycle %(message)s"))
+                lg.addHandler(fh)
+            except Exception: pass
+            lg.propagate = False
+            _BASTION_SYSLOG_LOGGER = lg
+        # payload size cap (UDP 1.5KB 안전)
+        msg = {"stage": stage, **payload}
+        _BASTION_SYSLOG_LOGGER.info(json.dumps(msg, ensure_ascii=False)[:1200])
+    except Exception:
+        pass
+
+def _slim_evt(evt: dict) -> dict:
+    """agent event 를 syslog 용 핵심 field 만 추출 (noise 제거)."""
+    ev = evt.get("event", "")
+    out = {"event": ev}
+    # 모든 event 공통 — 작은 필드만
+    for k in ("stage", "skill", "playbook_id", "confidence", "decision", "reason",
+              "attempt", "success", "host", "target", "score",
+              "model", "attack_mode", "count", "index", "total", "task"):
+        if k in evt: out[k] = evt[k]
+    # stream_token 의 token 은 너무 짧고 양 많음 — 제외
+    if ev == "stream_token": return {"event": "stream_token"}  # placeholder
+    # skill_result 의 output 은 100자만 (timeline 가독성)
+    if ev == "skill_result" and "output" in evt:
+        out["output_head"] = (str(evt.get("output", ""))[:100])
+    return out
+
+
 # 공격/대전 과목은 derestricted 모델로 — gpt-oss:120b 가 공격 페이로드 작성을 거절하는 문제(B유형 fail)
 # 해결. 방어/SOC/컴플라이언스 과목은 safety 보존된 기본 모델 유지.
 LLM_MANAGER_MODEL_UNSAFE = os.getenv("LLM_MANAGER_MODEL_UNSAFE", "gurubot/gpt-oss-derestricted:120b")
@@ -208,6 +258,9 @@ class ChatRequest(BaseModel):
     verify_success_criteria: list = []   # 충족해야 할 기준 (3+)
     verify_acceptable_methods: list = [] # 등가 허용 방법
     verify_negative_signs: list = []     # 명시적 fail 신호
+    # EG ablation 평가용 — off | playbook | experience | full (default full = 운영 기본).
+    # 운영은 항상 full(KG hard-coded). off/playbook/experience 는 Bastion-Bench 측정 전용.
+    eg_mode: str = "full"
 
 
 # ── 엔드포인트 ──────────────────────────────────────────────────────────────
@@ -1064,6 +1117,9 @@ def chat(req: ChatRequest):
         "step_order": req.step_order,
         "test_session": req.test_session,
     } if req.course else {}
+    # EG ablation mode — _test_meta 는 evidence_db.add(**_test_meta) 로 spread 되므로
+    # eg_mode 를 넣으면 TypeError. 별도 attr 로 분리.
+    agent._eg_mode = (req.eg_mode or "full").lower()
     # Step 3: 채점 기준 정렬 — agent 가 같은 기준으로 작업
     agent._verify_context = {
         "intent": req.verify_intent or "",
@@ -1076,17 +1132,32 @@ def chat(req: ChatRequest):
     target_model = _resolve_manager_model(req.course)
     is_attack = req.course in ATTACK_COURSES
 
+    # request_id (mission lifecycle 의 모든 syslog event correlation)
+    import uuid as _uuid, time as _time
+    _req_id = _uuid.uuid4().hex
+    _ts0 = _time.time()
+    _meta = {"request_id": _req_id, "course": req.course, "step_order": req.step_order,
+             "user_prompt": (req.message or "")[:120]}
+    _emit_bastion_syslog("bastion.request.received", {**_meta, "model": target_model})
+
     def event_generator():
         with _model_swap_lock:
             original = agent.model
             original_attack = getattr(agent, "attack_mode", False)
             agent.model = target_model
             agent.attack_mode = is_attack
+            seq = 0
             try:
                 if target_model != original:
                     yield json.dumps({"event": "model_routing", "course": req.course, "model": target_model, "attack_mode": is_attack}, ensure_ascii=False) + "\n"
                 for evt in agent.chat(req.message, approval_callback=approval_callback):
+                    seq += 1
+                    _emit_bastion_syslog(f"bastion.event.{evt.get('event','unknown')}",
+                                          {**_meta, "seq": seq, **_slim_evt(evt)})
                     yield json.dumps(evt, ensure_ascii=False) + "\n"
+                _emit_bastion_syslog("bastion.request.completed",
+                                      {**_meta, "seq": seq,
+                                       "duration_ms": int((_time.time()-_ts0)*1000)})
             finally:
                 agent.model = original
                 agent.attack_mode = original_attack
@@ -1107,6 +1178,13 @@ def chat(req: ChatRequest):
                 events = list(agent.chat(req.message, approval_callback=approval_callback))
                 if target_model != original:
                     events.insert(0, {"event": "model_routing", "course": req.course, "model": target_model, "attack_mode": is_attack})
+                # batch syslog (stream=False) — 모든 event 를 사후 송신
+                for s, evt in enumerate(events, 1):
+                    _emit_bastion_syslog(f"bastion.event.{evt.get('event','unknown')}",
+                                          {**_meta, "seq": s, **_slim_evt(evt)})
+                _emit_bastion_syslog("bastion.request.completed",
+                                      {**_meta, "seq": len(events),
+                                       "duration_ms": int((_time.time()-_ts0)*1000)})
             finally:
                 agent.model = original
                 agent.attack_mode = original_attack

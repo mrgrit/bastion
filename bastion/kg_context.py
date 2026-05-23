@@ -96,33 +96,32 @@ class KGContextBuilder:
     # ── Lazy lookup ─────────────────────────────────────────────────────────
 
     def _graph(self):
-        if self._graph_obj is False:
-            return None
-        if self._graph_obj is None:
+        # startup race(restart 직후 graph DB 미준비)로 첫 get_graph 가 실패해도
+        # 다음 호출에서 재시도 — False 영구 캐시 금지(영구 0 사전참조 버그 방지).
+        if self._graph_obj is None or self._graph_obj is False:
             try:
                 from bastion.graph import get_graph
                 self._graph_obj = get_graph()
             except Exception:
-                self._graph_obj = False
+                self._graph_obj = None
                 return None
         return self._graph_obj
 
     def _history(self):
-        if self._history_obj is False:
-            return None
-        if self._history_obj is None:
+        # startup race 로 첫 연결 실패해도 다음 호출 재시도 — False 영구 캐시 금지.
+        if self._history_obj is None or self._history_obj is False:
             try:
                 from bastion.history import HistoryLayer
                 self._history_obj = HistoryLayer()
             except Exception:
-                self._history_obj = False
+                self._history_obj = None
                 return None
         return self._history_obj
 
     # ── Public API ──────────────────────────────────────────────────────────
 
     def build(self, message: str, *, model: str = "",
-              token_budget: dict | None = None) -> dict:
+              token_budget: dict | None = None, eg_mode: str = "full") -> dict:
         """KG 검색 → structured dict.
 
         반환:
@@ -139,7 +138,7 @@ class KGContextBuilder:
             return self._empty()
 
         budget = token_budget or _budget_for(model)
-        key = _hash_key(message)
+        key = _hash_key(message + "|eg=" + (eg_mode or "full"))  # ablation 별 cache 분리
 
         # Cache hit
         cached = self._cache.get(key)
@@ -196,6 +195,26 @@ class KGContextBuilder:
                         break
             result["anchors"] = [self._summarize_anchor(a) for a in anchors[:5]]
 
+            # ★ F10 fix (2026-05-18 reset cycle 2 의 M19/M27 분석):
+            #   find_anchors 가 label_like LIKE 검색 → 무관한 anchor inject 가능.
+            #   message keyword 와 anchor label/body 의 overlap 0 이면 제거.
+            _msg_kws = set(k.lower() for k in _short_keywords(message, max_kws=5))
+            if _msg_kws:
+                def _has_overlap(anc: dict) -> bool:
+                    text = (
+                        (anc.get("label") or "") + " " +
+                        (anc.get("body") or "") + " " +
+                        (anc.get("kind") or "")
+                    ).lower()
+                    return any(kw in text for kw in _msg_kws)
+                result["anchors"] = [a for a in result["anchors"] if _has_overlap(a)]
+
+        # EG ablation tier filter (05 §2.2): playbook-only / experience-only
+        if eg_mode == "playbook":
+            result["anchors"] = []        # experience(anchor) 제거 → playbook+static knowledge
+        elif eg_mode == "experience":
+            result["playbooks"] = []      # playbook 제거 → experience(anchor)+static knowledge
+
         result = self._apply_budget(result, budget)
 
         took_ms = int((time.time() - t0) * 1000)
@@ -209,7 +228,10 @@ class KGContextBuilder:
         self._metric_inc("kg_context_search", labels={"cache": "miss"})
         self._metric_observe("kg_context_search_took_ms", took_ms)
 
-        self._cache_put(key, result)
+        # 빈 결과(graph/history 일시 미연결·startup race 등)는 캐시하지 않음 — 다음 호출 재검색.
+        # (restart 직후 첫 build 가 0 이면 5분 TTL 동안 빈 결과가 박히는 버그 방지)
+        if result["_metrics"]["hits"] > 0:
+            self._cache_put(key, result)
         return result
 
     @staticmethod

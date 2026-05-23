@@ -203,6 +203,46 @@ class AuditLog:
             row_id = c.execute("SELECT last_insert_rowid()").fetchone()[0]
             c.commit()
 
+        # ── syslog forward → wazuh (UDP 직접, rsyslog 우회 — docker 환경에서 /dev/log 없음) ──
+        # bastion-audit facility (local5) JSON 1줄. wazuh decoder 가 parse.
+        # SIEM_HOST = wazuh manager (default 10.20.32.100:514/udp).
+        try:
+            import logging, logging.handlers, json as _json, os as _os
+            global _BASTION_AUDIT_LOGGER
+            if "_BASTION_AUDIT_LOGGER" not in globals():
+                lg = logging.getLogger("bastion-audit")
+                lg.setLevel(logging.INFO)
+                siem_host = _os.environ.get("SIEM_HOST", "10.20.32.100")
+                siem_port = int(_os.environ.get("SIEM_SYSLOG_PORT", "514"))
+                # UDP 직접 송신 (rsyslog daemon 부재 환경 호환). 로컬 file fallback 도.
+                try:
+                    h = logging.handlers.SysLogHandler(address=(siem_host, siem_port),
+                                                       facility=logging.handlers.SysLogHandler.LOG_LOCAL5,
+                                                       socktype=__import__("socket").SOCK_DGRAM)
+                    h.setFormatter(logging.Formatter("bastion-audit %(message)s"))
+                    lg.addHandler(h)
+                except Exception:
+                    pass
+                # 로컬 file 도 (Wazuh agent file watch + 디버그)
+                try:
+                    fh = logging.FileHandler("/var/log/bastion-audit.log")
+                    fh.setFormatter(logging.Formatter("%(asctime)s bastion-audit %(message)s"))
+                    lg.addHandler(fh)
+                except Exception:
+                    pass
+                lg.propagate = False
+                _BASTION_AUDIT_LOGGER = lg
+            _BASTION_AUDIT_LOGGER.info(_json.dumps({
+                "id": row_id, "request_id": request_id, "session_id": session_id,
+                "ts_start": ts_start, "ts_end": ts_end, "duration_ms": duration_ms,
+                "course": course, "lab_id": lab_id, "step_order": step_order,
+                "user_prompt": (user_prompt or "")[:200],
+                "outcome": outcome, "model": model_used,
+                "self_hash": self_hash[:16],
+            }, ensure_ascii=False))
+        except Exception:
+            pass  # syslog 실패 = DB 저장 영향 없음 (silent fail)
+
         return {"id": row_id, "request_id": request_id,
                 "self_hash": self_hash, "prev_hash": prev_hash}
 

@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from packages.bastion import run_command, health_check, INTERNAL_IPS
+from bastion import run_command, health_check, INTERNAL_IPS
 
 
 # ── Skill 카테고리 — system prompt 에서 그룹핑에 사용 ──────────────
@@ -1276,7 +1276,7 @@ def execute_skill(name: str, params: dict[str, Any], vm_ips: dict[str, str],
     # ── History agent 호출 ──────────────────────────────────────────────
     elif name == "history_anchor":
         try:
-            from packages.bastion.history import HistoryLayer
+            from bastion.history import HistoryLayer
             h = HistoryLayer()
             related = [s.strip() for s in (params.get("related_ids") or "").split(",") if s.strip()]
             aid = h.add_anchor(
@@ -1292,7 +1292,7 @@ def execute_skill(name: str, params: dict[str, Any], vm_ips: dict[str, str],
 
     elif name == "history_narrative":
         try:
-            from packages.bastion.history import HistoryLayer
+            from bastion.history import HistoryLayer
             h = HistoryLayer()
             action = params.get("action", "open")
             if action == "open":
