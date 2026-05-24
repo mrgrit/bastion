@@ -912,13 +912,17 @@ class BastionAgent:
             chunks = self.rag_index.search(message, top_k=3)
             rag_ctx = format_context(chunks)
         prev_ctx = self.evidence_db.recent_context()
-        exp_ctx = self.experience.get_context(message)
+        # EG ablation: experience 주입은 experience/full tier 만 (off 는 No-EG 조건). 운영 기본 full.
+        exp_ctx = (self.experience.get_context(message)
+                   if getattr(self, "_eg_mode", "full") in ("experience", "full") else "")
 
         # ══ STAGE 1: PLANNING ══════════════════════════════════════════════
         yield {"event": "stage", "stage": "planning"}
 
         # 1-a. 정적 Playbook 우선 (Playbooks are law)
-        playbook_id = self._select_playbook(message)
+        # EG ablation: 정적 playbook 은 playbook/full tier 만 (off/experience 는 skip — playbook = KG-2 Reuse 경로)
+        playbook_id = (self._select_playbook(message)
+                       if getattr(self, "_eg_mode", "full") in ("playbook", "full") else None)
 
         if playbook_id:
             yield {"event": "playbook_selected", "playbook_id": playbook_id,
@@ -1923,20 +1927,27 @@ class BastionAgent:
         sys_prompt = self._build_react_system_prompt()
 
         # KG-4: playbook lookup → reuse/adapt/new 결정
+        # EG ablation: playbook lookup+주입은 playbook/full tier 만. off/experience 는 skip —
+        # off 가 진짜 No-KG 가 되도록(playbook 도 KG-2 Reuse 경로). off 흔적은 decision=skipped_eg_mode 로 가시화.
         lookup_result = None
-        try:
-            from bastion.lookup import decide, build_lookup_prompt
-            lookup_result = decide(message, self.ollama_url, self.model)
-            yield {"event": "lookup_decision",
-                   "decision": lookup_result.get("decision"),
-                   "playbook_id": lookup_result.get("playbook_id", ""),
-                   "confidence": lookup_result.get("confidence", 0),
-                   "reason": lookup_result.get("reason", "")}
-            inject = build_lookup_prompt(lookup_result)
-            if inject:
-                sys_prompt += "\n\n## [lookup result — 매칭된 playbook 활용]\n" + inject
-        except Exception as _e:
-            yield {"event": "lookup_error", "error": str(_e)[:200]}
+        _eg = getattr(self, "_eg_mode", "full")
+        if _eg in ("playbook", "full"):
+            try:
+                from bastion.lookup import decide, build_lookup_prompt
+                lookup_result = decide(message, self.ollama_url, self.model)
+                yield {"event": "lookup_decision",
+                       "decision": lookup_result.get("decision"),
+                       "playbook_id": lookup_result.get("playbook_id", ""),
+                       "confidence": lookup_result.get("confidence", 0),
+                       "reason": lookup_result.get("reason", "")}
+                inject = build_lookup_prompt(lookup_result)
+                if inject:
+                    sys_prompt += "\n\n## [lookup result — 매칭된 playbook 활용]\n" + inject
+            except Exception as _e:
+                yield {"event": "lookup_error", "error": str(_e)[:200]}
+        else:
+            yield {"event": "lookup_decision", "decision": "skipped_eg_mode",
+                   "playbook_id": "", "confidence": 0, "reason": f"eg_mode={_eg}"}
 
         # 메시지 빌드. 컨텍스트(rag/prev/exp)는 system 에 추가.
         ctx_lines = []
