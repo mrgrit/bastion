@@ -760,7 +760,7 @@ class BastionAgent:
         # 여기서 message 앞에 또 prepend 하면 user message 가 "긴 지시문" 처럼 보여
         # LLM 이 Q&A 로 응답하고 tool 을 안 부른다 (round 4 분석에서 발견).
         # → 사용자 message 는 원본 그대로 두고, 그래프 ID 도 원본 기준.
-        MAX_STEP_RETRY = 1
+        MAX_STEP_RETRY = 2             # 2026-05-26: 도구 실행 회피(코드 예시로 때움) 대응 — 재촉 2회
         cur_message = original
         outcome = "fail"
         try:
@@ -784,8 +784,11 @@ class BastionAgent:
                     f"[자기 수정 — 이전 시도가 부족함]\n"
                     f"사유: {fb}\n\n"
                     f"원래 요청: {original}\n\n"
-                    f"이번엔 반드시 실제 쉘 명령을 실행해서 stdout 을 받아내고, "
-                    f"그 결과를 근거로 답하라. 개념 설명·표·체크리스트만 출력 금지."
+                    f"방금 시도는 도구를 실제로 실행하지 않았다(코드 예시·설명·표만 출력했거나 도구 호출 0회). "
+                    f"이번엔 shell 또는 python3 skill 의 command 에 실제 명령을 넣어 반드시 호출하고 stdout 을 받아내라. "
+                    f"장애물이면 포기 말고: command not found → apt-get install -y/pip3 install 후, "
+                    f"404 → 다른 경로 탐색 후, 401 → 토큰 획득 후 재시도하라. "
+                    f"개념 설명·코드블록·표만 출력하면 작업이 완료되지 않은 것이다."
                 )
         finally:
             # ── KG 사용 audit event emit (호출자가 매 chat 의 KG 흔적 확인 가능) ──
@@ -1756,6 +1759,15 @@ class BastionAgent:
             "2. 매 turn: 이전 도구 결과를 보고 다음 도구를 호출하거나, 모든 todo 가 끝났고 GOAL 충족됐으면 도구 호출 없이 종합 답변 작성.\n"
             "3. 도구 호출 시: 정확한 skill 이름과 필수 파라미터 모두 채워서. 결과는 자동으로 다음 turn 에 보인다.\n"
             "4. 종료 조건: tool_calls 없는 응답 = 작업 끝. 이때 응답에 \"GOAL 충족됨: ...\" 명시.\n"
+            "\n"
+            "## ★ 실행 원칙 (위반 시 작업이 미완료로 간주된다)\n"
+            "- 코드 예시·pseudo-step·표·'이렇게 하면 됩니다' 식 설명만 출력하고 끝내지 마라. 그건 실행이 아니다.\n"
+            "  반드시 shell 또는 python3 skill 의 command 파라미터에 실제 명령을 넣어 호출해 stdout 을 받아라.\n"
+            "  파이썬 분석이 필요하면 코드를 보여주지 말고 shell 로 `python3 -c '...'` 또는 파일 저장 후 실행해 결과를 얻어라.\n"
+            "- 장애물을 만나면 포기하지 말고 아래 대안을 2~3개 시도한 뒤에만 '불가' 결론을 내려라:\n"
+            "  · command not found / 도구 미설치 → shell 로 `apt-get install -y <pkg>` 또는 `pip3 install <pkg>` 설치 후 재시도\n"
+            "  · 404 / endpoint 없음 → 다른 경로 탐색(/api-docs, swagger, 다른 HTTP 메서드, 루트 GET 으로 구조 확인)\n"
+            "  · 401 / 인증 필요 → 로그인 요청으로 토큰 획득 후 Authorization 헤더에 동봉해 재시도\n"
             "\n"
             "## 사용 가능한 Skill (function tools)\n"
             "※ 9개 일반 skill (shell/ollama_query/probe_*/file_manage/docker_manage 등) 만 의존하지 말고,\n"
