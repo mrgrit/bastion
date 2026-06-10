@@ -2,11 +2,11 @@
 
 > 단일 출처. 매 작업 단위 후 ledger 에서 재생성. 마지막 갱신: 2026-06-11 UTC · heartbeat #1
 
-## 전체 진행률: **Phase 0 (Bootstrap/Preflight) — ⛔ HARD-STOP**
+## 전체 진행률: **Phase 0 완료 (preflight PASS) → Phase 1 빌드 대기**  · heartbeat #2
 
 | Phase | 상태 |
 |-------|------|
-| 0 Bootstrap/Preflight | ⛔ HARD-STOP (preflight 미통과) |
+| 0 Bootstrap/Preflight | ✅ DONE (preflight PASS — §2.3 D방식 `eval_reset.sh` ROUNDTRIP_PASS) |
 | 1 하니스&계측 | PENDING (미구현) |
 | 2 베이스라인 7종 | PENDING (미구현 — 최대 리스크) |
 | 3 데이터셋 | PARTIAL (스펙 YAML 존재, runnable 미검증) |
@@ -16,9 +16,9 @@
 | 7 평가(RQ1–4) | PENDING |
 | 8 분석 | PENDING |
 
-## HARD-STOP 사유 (§2/§7)
-- **§2.3 6v6 스냅샷/롤백 IaC 부재** (preflight FAIL → §2 규칙상 정지).
-- Phase 1/2 핵심(7조건 하니스, 6 베이스라인, 독립오라클 배선) **미구현** — 논문 4장 전체는 현 상태 실행 불가.
+## 상태 (§2/§7)
+- ✅ preflight PASS — §2.3 클린리셋 D방식 구현·검증(`harness/eval_reset.sh`).
+- ⏭️ Phase 1/2(7조건 하니스, 6 베이스라인, auditd 독립오라클 배선) **미구현** = 다음 빌드 대상(수 주). 무결성상 반쪽 빌드 위장 안 함.
 - 상세: `reports/preflight.md`.
 
 ## 조건 × RQ 매트릭스 (현재)
@@ -39,4 +39,4 @@
 2. **노출 PAT revoke + 새 토큰** (push 경로 의존).
 3. §9 온라인(상용 모델·외부 CTF) in-scope 여부.
 
-git SHA: (commit 시 갱신) · heartbeat: 1
+git SHA: (commit 시 갱신) · heartbeat: 2

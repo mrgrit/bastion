@@ -1,0 +1,49 @@
+table ip nat {
+	chain DOCKER_OUTPUT {
+		meta l4proto tcp ip daddr 127.0.0.11 tcp dport 53 counter packets 0 bytes 0 dnat to 127.0.0.11:37483
+		meta l4proto udp ip daddr 127.0.0.11 udp dport 53 counter packets 0 bytes 0 dnat to 127.0.0.11:41452
+	}
+
+	chain OUTPUT {
+		type nat hook output priority -100; policy accept;
+		ip daddr 127.0.0.11 counter packets 0 bytes 0 jump DOCKER_OUTPUT
+	}
+
+	chain DOCKER_POSTROUTING {
+		meta l4proto tcp ip saddr 127.0.0.11 tcp sport 37483 counter packets 0 bytes 0 snat to :53
+		meta l4proto udp ip saddr 127.0.0.11 udp sport 41452 counter packets 0 bytes 0 snat to :53
+	}
+
+	chain POSTROUTING {
+		type nat hook postrouting priority srcnat; policy accept;
+		ip daddr 127.0.0.11 counter packets 0 bytes 0 jump DOCKER_POSTROUTING
+	}
+}
+table inet six_filter {
+	chain input {
+		type filter hook input priority filter; policy accept;
+		tcp dport 22 accept
+		ip protocol icmp accept
+		ip6 nexthdr ipv6-icmp accept
+		ct state established,related accept
+	}
+
+	chain forward {
+		type filter hook forward priority filter; policy accept;
+		ct state established,related accept
+		ip daddr 10.20.30.2 tcp dport 8000 accept
+	}
+
+	chain output {
+		type filter hook output priority filter; policy accept;
+	}
+}
+table ip six_nat {
+	chain prerouting {
+		type nat hook prerouting priority dstnat; policy accept;
+	}
+
+	chain postrouting {
+		type nat hook postrouting priority srcnat; policy accept;
+	}
+}
