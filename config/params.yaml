@@ -1,0 +1,33 @@
+# config/params.yaml — Bastion Ch4 eval defaults (Runbook §3)
+N_long_session: 30
+n_repeats: 5
+k_tamper: 50
+tamper_mix: [modify, delete, insert]
+events:
+  L1: 40
+  L2: 30
+suite_6v6: 60
+categories: [관제_트리아지, 취약점_점검, 로그분석_침해대응, 보안시스템_운영, 컴플라이언스]
+model_scales: [120B, 20B, 8B]
+ctf_combos:
+  - {model: 120B, agent: bare_react}
+  - {model: 120B, agent: bastion_full}
+  - {model: 20B,  agent: bastion_full}
+  - {model: commercial, agent: bare_react}   # online-only, §9
+stats:
+  test: wilcoxon_signed_rank
+  ci: bootstrap_95
+  effect_size: cliffs_delta
+  multiple_comparison: holm
+reset_store_each_condition: true
+seed: 20260607
+
+# --- 실측 환경 (preflight 2026-06-11) ---
+env:
+  eval_repo: mrgrit/bastion
+  models_host: "192.168.0.109 (spark-1397, NVIDIA GB10, ollama 0.30.0)"
+  models_available: {120B: "gpt-oss:120b", 20B: "gpt-oss:20b", 8B: "qwen3:8b,ministral-3:8b"}
+  range_6v6: "192.168.0.105 (docker compose, ext 10.20.30.x/dmz .32.x/int .31.x)"
+  bastion_endpoint: "6v6-bastion :9100/chat (manager=gpt-oss:120b via 0.109)"
+  siem: "Wazuh manager 10.20.32.100 (analysisd up), Suricata 6v6-ips, ModSec 6v6-web(미연동)"
+  oracle: "auditd present(bastion container); bpftrace/eBPF MISSING"
