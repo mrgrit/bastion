@@ -82,9 +82,25 @@ base 는 Wazuh 만 보고 실패, EG(asset/playbook=Suricata 보라)만 성공" 
 - ∴ "Wazuh-blind" 공격이 사실상 없음. check_wazuh 단일 호출이 전 센서 ground truth 노출.
   강한 base 모델 + 통합 SIEM ⇒ **탐지축은 공격유형 무관 saturate. EG 탐지 이득은 분리 불가.**
 
-### recon 실증 확인 (det-recon-suricata-01, 4조건×3rep)
-<!-- RECON_RESULTS -->
-(측정 중 — 완료 시 채움)
+### recon 실증 확인 (det-recon-suricata-01, 4조건×3rep, frozen)
+inject = attacker(.202) → DMZ web(.32.80) nmap -sS (ips 경유, Suricata 1000005 발화, src .202 보존).
+mission = **센서 미지정 open-ended**("어떤 센서를 봐야 하는지는 네가 판단하라").
+
+| 조건 | 탐지 | 완전식별 | kg_used | hits |
+|------|------|----------|---------|------|
+| bastion-off (No-EG) | 3/3 | 3/3 | 0/3 | 0.0 |
+| bastion-playbook | 3/3 | 3/3 | 0/3 | 0.0 |
+| bastion-experience | 3/3 | 3/3 | 3/3 | 1.0 |
+| bastion-full | 3/3 | 3/3 | 3/3 | 1.0 |
+
+독립오라클(Suricata 1000005) **12/12 발화**. **전 조건 3/3 완전식별** — off(메모리 0, 센서 미지정)도
+nmap recon 을 완벽 탐지 = check_wazuh 가 rule 86601(Suricata-passthrough)을 surface 하기 때문.
+**가설("base 는 Wazuh 만 보고 실패") 기각** — 통합 SIEM 이라 base 가 단일 조회로 해결.
+부수관찰: 이 trained-KG(203, 주로 web/ops 경험)에는 recon 관련 playbook 이 없어 playbook hits=0,
+experience/full 도 hits=1 로 낮음 → **신규 task 유형엔 EG 검색이득 자체가 미미**.
+
+⇒ 서로 다른 두 공격유형(web SQLi=Wazuh-native 100251 / network recon=Suricata→Wazuh 86601)
+모두에서 off=만점 → **탐지축 saturation 은 공격유형 무관하게 견고**.
 
 ## 5. 결론 / 다음
 
