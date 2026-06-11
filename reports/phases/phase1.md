@@ -1,6 +1,7 @@
 # Phase 1 — 하니스 & 계측 (보고서)
 
-상태: ✅ **하니스 BUILT + E2E 검증** (bastion EG-ablation 4조건) · 2026-06-11
+상태: ✅ **하니스 BUILT + E2E 검증 + plumbing 버그 수정 + 유효 ablation 실측** · 2026-06-11
+(eg_mode 토글 실증 / frozen-KG 격리 / det-sqli 4×5 → detection saturation 확인)
 
 ## 산출물
 - `harness/run_eval.py` — 통합 하니스. agent(gpt-oss:120b)·33skill·6v6 고정, **메모리 메커니즘만 교체**.
@@ -20,18 +21,24 @@
 - **auditd/eBPF = BLOCKED** — bastion 컨테이너 CAP_AUDIT 부재 + root 불가, 6v6 권한변경 금지. (syscall-level 도구실행 ground truth 미수집; SOC telemetry 로 대체.)
 - 안전성 3지표(4.7) best-effort 수집(파괴명령 사전차단·무승인 high+·환각 자기검증).
 
-## E2E 검증 (1 event × 4 ablation, det-sqli-01)
-| 조건 | oracle | detected | type/src | kg_used | tools | secs |
-|------|--------|----------|----------|---------|-------|------|
-| off | ✅ | ❌ | F/F | False | 6 | 202.7 |
-| playbook | ✅ | ✅ | T/T | False | 2 | 105.0 |
-| experience | ✅ | ✅ | T/T | False | 4 | 86.8 |
-| full | ✅ | ✅ | T/T | False | 5 | 79.3 |
+## ⚠️ 이전 E2E 표 무효 — plumbing 버그 (2026-06-11 정정)
+초기 E2E 표(off ❌ / rest ✅, kg_used=False)는 **무효**다. 원인: 배포 `api.py` 가 구버전이라
+요청 `eg_mode` 를 `agent._eg_mode` 로 전달하지 않아 **모든 조건이 default `full` 로 실행**됐고
+당시 KG 도 cold 였다. off 실패는 ablation 효과가 아니라 단일런 변동.
+상세·수정·재측정: **`reports/findings/ablation_egmode_plumbing_fix.md`**.
 
-**해석(무결성)**: 하니스 plumbing 검증 = 목적 달성. 단 **off≠rest 는 ablation 효과 아님** —
-모든 조건 `kg_used=False/hits=0`(cold KG, 0 검색) + **n=1**. off 실패는 단일런 변동. 진짜 ablation 결론은
-n_repeats(5)×다수 event + **KG 관련성 확보**(seed/누적) 후 Phase 7 에서만. 지금 수치는 결과로 인용 금지.
+## 유효 E2E (수정 후, det-sqli-01 × 4조건 × 5rep, frozen KG)
+| 조건 | 탐지 | 완전식별 | kg_used | hits | 기록 |
+|------|------|----------|---------|------|------|
+| off (No-EG) | 5/5 | 5/5 | 0/5 | 0.0 | 0/5 |
+| playbook | 4/5 | 3/5 | 5/5 | 3.0 | 5/5 |
+| experience | 5/5 | 5/5 | 5/5 | 5.0 | 5/5 |
+| full | 5/5 | 5/5 | 5/5 | 8.0 | 5/5 |
+
+독립오라클(Wazuh 100251) 20/20. **off 가 진짜 No-EG(kg_used 0/5)** 로 작동 = 하니스+ablation 메커니즘 검증 완료.
+**해석**: det-sqli saturation(base 가 단독 5/5) → EG 탐지 이득 측정 불가. 6v6 Wazuh 가 Suricata 를 ingest(86601)
+하는 **통합 SIEM** 이라 탐지축은 공격유형 무관 saturate. → RQ1 신호는 응답/held-out task 로 측정해야 함.
 
 ## 다음 (Phase 2)
 6 외부 baseline 충실 이식 + sanity (최대 리스크) + 3090 커리큘럼 자기메모리 적재 어댑터.
-+ cold-KG 해소(RQ1 ablation 유의미화 전제).
++ **RQ1 측정 대상 전환**: 탐지(saturate) → **응답/remediation·held-out 환경특이 task**.

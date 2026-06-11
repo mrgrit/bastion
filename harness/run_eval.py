@@ -22,6 +22,30 @@ SSH = ("sshpass -p 1 ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/
 SIEM, ALERTS = "6v6-siem", "/var/ossec/logs/alerts/alerts.json"
 ATTACKER, ENTRY, VHOST = "10.20.30.202", "10.20.30.1", "dvwa.6v6.lab"
 SEED = 20260607
+BASTION = "6v6-bastion"
+GRAPH_DB = "/opt/ccc-src/data/bastion_graph.db"      # graph+history 통합 SQLite (WAL)
+FROZEN_HOST = "/tmp/frozen_graph.db"                  # 0.105 호스트의 frozen trained-KG 스냅샷
+IPS, EVE = "6v6-ips", "/var/log/suricata/eve.json"   # Suricata 독립오라클 (eve.json, 거대 — byte offset 사용)
+
+
+def wait_health(tries=30):
+    """bastion /health 가 ok 될 때까지 polling (restart 후)."""
+    for _ in range(tries):
+        h = sh(f"docker exec {BASTION} curl -s --max-time 5 -H 'X-API-Key: ccc-api-key-2026' "
+               f"http://localhost:9100/health", timeout=20)
+        if '"status"' in h and '"ok"' in h:
+            return True
+        time.sleep(4)
+    return False
+
+
+def restore_restart():
+    """매 런 전: frozen trained-KG 복원(자기기록 anchor 제거) + WAL 정리 + restart(cache clear).
+    → 모든 (event×condition×rep) 가 동일 frozen KG 를 조회 → 자기참조/캐시 캐리오버 confound 제거."""
+    sh(f"docker cp {FROZEN_HOST} {BASTION}:{GRAPH_DB}", timeout=60)
+    sh(f"docker exec {BASTION} sh -c 'rm -f {GRAPH_DB}-wal {GRAPH_DB}-shm'", timeout=30)
+    sh(f"docker restart {BASTION}", timeout=90)
+    return wait_health()
 
 CONDITIONS = {
     "bastion-off":        {"agent": "bastion", "eg": "off"},
@@ -37,13 +61,27 @@ CONDITIONS = {
 
 # 검증용 예시 event (Phase 3 의 L1/6v6-suite 가 들어올 인터페이스). detection 유형.
 SAMPLE_EVENTS = {
-    "det-sqli-01": dict(rq="RQ1", category="로그분석_침해대응", kind="detection",
+    "det-sqli-01": dict(rq="RQ1", category="로그분석_침해대응", kind="detection", osrc="wazuh",
         inject=f"docker exec 6v6-attacker curl -s -o /dev/null -m5 -H 'Host: {VHOST}' "
                f"'http://{ENTRY}/?id=1%27+UNION+SELECT+username,password+FROM+users--+-'",
         oracle=("100251", "web_attack", "웹 공격", "sql injection"),
         mission=("위협 헌팅: Wazuh SIEM(가동중)에 보안 경보가 들어왔다. 헬스체크 말고 Wazuh alert 로그를 직접 "
                  "조회(check_wazuh/check_suricata)해 공격 출처IP·유형(MITRE)·대상·차단여부를 로그 근거와 보고하라."),
         detect_kw=("sql", "union", "injection", "인젝션"), src=("10.20.30.202",)),
+
+    # 변별력 event: Suricata 에만 잡히는 network recon(nmap). mission 이 센서를 지정하지 않음 →
+    # base 모델은 Wazuh 만 보고 "이상 없음" 결론 가능. EG(asset: 6v6-ips=Suricata / playbook: network recon→IPS)
+    # 가 "어디를 볼지" 알려줘야 탐지. det-sqli 의 saturation 한계 보완용. oracle=Suricata eve.json.
+    # inject target = DMZ web(.32.80): ext→DMZ 라우팅이 ips(.32.1) 를 경유 → Suricata 1000005 발화(src .202 보존).
+    # ENTRY(.1) 는 fw ext측이라 ips 미경유(실측). NOTE: Wazuh 가 Suricata eve 를 ingest(rule 86601) 하므로
+    # 실제로는 Wazuh-blind 가 아님 — "Suricata-only 변별" 가설은 기각, 탐지축 saturation 재확인용.
+    "det-recon-suricata-01": dict(rq="RQ1", category="네트워크_정찰_탐지", kind="detection", osrc="suricata",
+        inject="docker exec 6v6-attacker nmap -sS -T4 -Pn -p 1-1024 10.20.32.80",
+        oracle=("1000005", "nmap", "syn scan", "scan", "86601"),
+        mission=("보안 모니터링 중 이상 트래픽이 의심된다. 6v6 환경의 보안 센서를 직접 조회해 최근 공격/정찰 "
+                 "활동의 출처IP·유형(MITRE)·대상·차단 여부를 로그 근거와 함께 보고하라. 어떤 센서를 봐야 하는지는 "
+                 "네가 판단하라(헬스체크로 끝내지 말 것)."),
+        detect_kw=("scan", "스캔", "정찰", "nmap", "recon", "reconnaissance", "포트"), src=("10.20.30.202",)),
 }
 
 
@@ -84,12 +122,28 @@ def alerts_count():
         return 0
 
 
-def soc_oracle(L0, ts):
-    """독립 오라클: 사건 윈도우 [L0,now] 에서 SOC(Wazuh/Suricata) 가 기록한 공격(=ground truth)."""
-    new = sh(f"docker exec {SIEM} sh -c 'tail -n +{L0} {ALERTS} 2>/dev/null | grep -a {ATTACKER}'")
-    rules = sh(f"docker exec {SIEM} sh -c 'tail -n +{L0} {ALERTS} 2>/dev/null | grep -a {ATTACKER} | "
-               f"python3 -c \"import sys,json,collections;c=collections.Counter(json.loads(l)[\\\"rule\\\"][\\\"id\\\"] for l in sys.stdin if l.strip());print(dict(c))\"'")
-    return {"window_marker": ts, "soc_records": len(new.splitlines()), "rule_ids": rules[:200]}
+def oracle_marker(osrc):
+    """사건 윈도우 시작점. wazuh=alerts.json 줄수 / suricata=eve.json 바이트크기(6GB+ 라 byte offset)."""
+    if osrc == "suricata":
+        return (sh(f"docker exec {IPS} sh -c 'stat -c %s {EVE} 2>/dev/null'").strip() or "0")
+    return str(alerts_count())
+
+
+def oracle_read(osrc, marker):
+    """윈도우 [marker, now] 에서 attacker 관련 sensor raw 레코드. SUT(bastion) 와 분리된 독립 ground truth."""
+    if osrc == "suricata":
+        b = int(marker) if str(marker).isdigit() else 0
+        # eve.json 거대 → byte offset. flow/tls 노이즈 제외하고 우리 signature(nmap/1000005)만.
+        # NAT 로 src_ip 가 가려질 수 있어 IP 미필터 — signature 로 ground truth 판정.
+        cmd = f"docker exec {IPS} sh -c \"tail -c +{b + 1} {EVE} 2>/dev/null | grep -aiE 'nmap|1000005'\""
+        return sh(cmd, timeout=90)
+    return sh(f"docker exec {SIEM} sh -c 'tail -n +{marker} {ALERTS} 2>/dev/null | grep -a {ATTACKER}'", timeout=90)
+
+
+def soc_oracle(osrc, marker, raw):
+    """독립 오라클 요약: 윈도우 내 sensor 가 기록한 공격(=ground truth)."""
+    return {"source": osrc, "window_marker": str(marker),
+            "soc_records": len(raw.splitlines()), "sample": raw[:400]}
 
 
 def bastion_chat(mission, eg, session, max_time=300):
@@ -134,9 +188,9 @@ def grade_detection(event, out):
             "detected": bool(type_id and siem_used), "full_id": bool(type_id and src_id and siem_used)}
 
 
-def run_unit(event_id, cond_name, go=True):
+def run_unit(event_id, cond_name, go=True, rep=0):
     ev = SAMPLE_EVENTS[event_id]; cond = CONDITIONS[cond_name]
-    run_id = hashlib.sha1(f"{event_id}|{cond_name}|{SEED}".encode()).hexdigest()[:12]
+    run_id = hashlib.sha1(f"{event_id}|{cond_name}|{SEED}|r{rep}".encode()).hexdigest()[:12]
     rec = {"run_id": run_id, "event": event_id, "rq": ev["rq"], "category": ev["category"],
            "condition": cond_name, "agent": cond["agent"], "eg_mode": cond.get("eg"),
            "seed": SEED, "git_sha": git_sha(), "model": "gpt-oss:120b",
@@ -146,12 +200,17 @@ def run_unit(event_id, cond_name, go=True):
         rec["status"] = cond["agent"]; rec["note"] = "Phase 2/§9 미구현"; _write(rec); return rec
     if not go:
         rec["status"] = "dry"; _write(rec); return rec
-    ts = sh("date +%s")  # eval_reset event-start (SIEM 타임윈도우)
-    L0 = alerts_count()
-    sh(ev["inject"], timeout=90); time.sleep(12)
-    rec["soc_oracle"] = soc_oracle(L0, ts)
-    rec["oracle_fired"] = any(k in (sh(f"docker exec {SIEM} sh -c 'tail -n +{L0} {ALERTS}|grep -a {ATTACKER}'")).lower()
-                              for k in [o.lower() for o in ev["oracle"]])
+    # frozen trained-KG 복원 + restart (자기참조/캐시 confound 제거 — 모든 run 동일 KG 조회)
+    rec["kg_frozen_restored"] = restore_restart()
+    if not rec["kg_frozen_restored"]:
+        rec["status"] = "ERR-bastion-unhealthy-after-restart"; _write(rec); return rec
+    osrc = ev.get("osrc", "wazuh")
+    sh("date +%s")  # eval_reset event-start
+    marker = oracle_marker(osrc)               # 사건 윈도우 시작점 (inject 전)
+    sh(ev["inject"], timeout=120); time.sleep(15)
+    raw = oracle_read(osrc, marker)            # 윈도우 raw 1회 읽어 oracle 요약+발화 판정 공용
+    rec["soc_oracle"] = soc_oracle(osrc, marker, raw)
+    rec["oracle_fired"] = any(k in raw.lower() for k in [o.lower() for o in ev["oracle"]])
     t0 = time.time()
     obj, raw = bastion_chat(ev["mission"], cond["eg"], f"ceval-{run_id}")
     rec["solve_secs"] = round(time.time() - t0, 1)
@@ -178,15 +237,17 @@ def main():
     conds = (a[a.index("--conditions") + 1].split(",") if "--conditions" in a
              else ["bastion-off", "bastion-playbook", "bastion-experience", "bastion-full"])
     go = "--go" in a
-    print(f"=== Phase1 harness | event={event} conditions={conds} go={go} ===")
+    reps = int(a[a.index("--repeats") + 1]) if "--repeats" in a else 1
+    print(f"=== Phase1 harness | event={event} conditions={conds} reps={reps} go={go} ===")
     for c in conds:
-        r = run_unit(event, c, go=go)
-        m = r.get("metrics", {})
-        print(json.dumps({"condition": c, "status": r.get("status"), "oracle_fired": r.get("oracle_fired"),
-                          "detected": m.get("detected"), "full_id": m.get("full_id"), "eg": r.get("eg_mode"),
-                          "secs": r.get("solve_secs")}, ensure_ascii=False))
-        if go and r.get("status") == "DONE":
-            time.sleep(5)
+        for rep in range(reps):
+            r = run_unit(event, c, go=go, rep=rep)
+            m = r.get("metrics", {})
+            print(json.dumps({"condition": c, "rep": rep, "status": r.get("status"), "oracle_fired": r.get("oracle_fired"),
+                              "detected": m.get("detected"), "full_id": m.get("full_id"), "eg": r.get("eg_mode"),
+                              "kg_used": r.get("kg_used"), "kg_hits": r.get("kg_hits"), "secs": r.get("solve_secs")}, ensure_ascii=False))
+            if go and r.get("status") == "DONE":
+                time.sleep(5)
 
 
 if __name__ == "__main__":
