@@ -2,12 +2,12 @@
 
 > 단일 출처. 매 작업 단위 후 ledger 에서 재생성. 마지막 갱신: 2026-06-11 UTC · heartbeat #1
 
-## 전체 진행률: **Phase 0 완료 (preflight PASS) → Phase 1 빌드 대기**  · heartbeat #2
+## 전체 진행률: **Phase 1 하니스 BUILT+검증 → Phase 2 베이스라인 빌드 대기**  · heartbeat #3
 
 | Phase | 상태 |
 |-------|------|
 | 0 Bootstrap/Preflight | ✅ DONE (preflight PASS — §2.3 D방식 `eval_reset.sh` ROUNDTRIP_PASS) |
-| 1 하니스&계측 | PENDING (미구현) |
+| 1 하니스&계측 | ✅ DONE (run_eval.py: 4 EG-ablation E2E + run_id 감사 + SOC오라클; auditd=BLOCKED) |
 | 2 베이스라인 7종 | PENDING (미구현 — 최대 리스크) |
 | 3 데이터셋 | PARTIAL (스펙 YAML 존재, runnable 미검증) |
 | 4 측정·채점 | PENDING |

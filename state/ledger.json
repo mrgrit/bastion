@@ -1,10 +1,9 @@
 {
-  "runbook": "Bastion_Ch4_Eval_Runbook.md",
-  "started_utc": "2026-06-11",
-  "phase": "0-bootstrap-DONE",
-  "status": "PREFLIGHT_PASS",
-  "preflight": {"git_egress":"PASS(PAT-exposed)","models":"PASS(120/20/8)","clean_reset_2.3":"PASS(D, eval_reset.sh, ROUNDTRIP_PASS)","tools":"PARTIAL(auditd ok, eBPF missing)","secrets":"WARN(PAT exposed)"},
-  "completed_units": ["phase0-bootstrap", "preflight", "2.3-clean-reset-D"],
-  "next": "Phase1 harness build (7-condition memory-swappable + ablation toggles + auditd oracle)",
-  "heartbeat": 2
+  "runbook": "Bastion_Ch4_Eval_Runbook.md", "started_utc": "2026-06-11",
+  "phase": "1-harness-DONE", "status": "PHASE1_BUILT",
+  "completed_units": ["phase0-bootstrap","preflight(PASS)","2.3-clean-reset-D(ROUNDTRIP_PASS)","phase1-harness(run_eval.py)","phase1-E2E(1event x 4 EG-ablation)"],
+  "harness": {"conditions_native": ["bastion-off","bastion-playbook","bastion-experience","bastion-full"], "conditions_blocked": ["6 baselines(phase2)","commercial(§9)"], "independent_oracle": "SOC(Wazuh/Suricata); auditd=BLOCKED(no CAP_AUDIT)", "audit_records": "results/runs/<id>.json (§6)"},
+  "caveat": "Phase1 E2E plumbing verified; off!=rest is n=1 + kg_used=0 noise, NOT an ablation result",
+  "next": "Phase2 baselines (6 external ports + sanity) + cold-KG resolution",
+  "heartbeat": 3
 }
