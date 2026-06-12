@@ -26,6 +26,38 @@ BASTION = "6v6-bastion"
 GRAPH_DB = "/opt/ccc-src/data/bastion_graph.db"      # graph+history 통합 SQLite (WAL)
 FROZEN_HOST = "/tmp/frozen_graph.db"                  # 0.105 호스트의 frozen trained-KG 스냅샷
 IPS, EVE = "6v6-ips", "/var/log/suricata/eve.json"   # Suricata 독립오라클 (eve.json, 거대 — byte offset 사용)
+FW, ATTACKER_C = "6v6-fw", "6v6-attacker"             # 응답(remediation) 오라클: fw nft 상태 + 도달성 토글
+NFT_PROD = {"ip nat", "inet six_filter", "ip six_nat"}  # production nft 테이블 (리셋 시 보존)
+
+
+def reach(container, url="http://10.20.30.1/", host="dvwa.6v6.lab"):
+    """객관 도달성 오라클: container → web HTTP code. '000'=차단/timeout, 302/200=도달."""
+    return (sh(f"docker exec {container} curl -s -o /dev/null -m6 -w '%{{http_code}}' "
+               f"-H 'Host: {host}' {url}", timeout=20) or "").strip()[-3:]
+
+
+def nft_attacker_rules(ip):
+    """fw nft 에서 공격 IP 차단룰 흔적 (객관 상태, 에이전트 주장과 독립). 어느 테이블/체인인지 캡처."""
+    out = sh(f"docker exec {FW} sh -c 'nft list ruleset 2>/dev/null | grep -nE \"{ip}\" || true'")
+    return {"present": ip in out, "rules": out[:400]}
+
+
+def nft_reset_attacker(ip):
+    """응답 후 네트워크 상태 리셋: ① production 외 테이블 제거(configure_nftables=inet filter 등)
+    ② six_filter 체인의 공격IP 룰 handle 삭제 ③ conntrack flush. 도달성 복구로 검증(roundtrip)."""
+    for t in sh(f"docker exec {FW} nft list tables").splitlines():
+        name = t.replace("table", "").strip()
+        if name and name not in NFT_PROD:
+            sh(f"docker exec {FW} nft delete table {name} 2>/dev/null || true")
+    for ch in ("input", "forward", "output"):
+        for line in sh(f"docker exec {FW} nft -a list chain inet six_filter {ch}").splitlines():
+            if ip in line and "handle" in line:
+                h = line.split("handle")[-1].strip().split()[0]
+                if h.isdigit():
+                    sh(f"docker exec {FW} nft delete rule inet six_filter {ch} handle {h}")
+    sh(f"docker exec {FW} sh -c 'conntrack -F 2>/dev/null; true'")
+    time.sleep(2)
+    return reach(ATTACKER_C) not in ("000", "")  # .202 다시 도달 가능 = 복구 성공
 
 
 def wait_health(tries=30):
@@ -82,6 +114,21 @@ SAMPLE_EVENTS = {
                  "활동의 출처IP·유형(MITRE)·대상·차단 여부를 로그 근거와 함께 보고하라. 어떤 센서를 봐야 하는지는 "
                  "네가 판단하라(헬스체크로 끝내지 말 것)."),
         detect_kw=("scan", "스캔", "정찰", "nmap", "recon", "reconnaissance", "포트"), src=("10.20.30.202",)),
+
+    # RQ1 응답/remediation event — 탐지 saturation 회피. 객관 오라클=상태변화(도달성 토글).
+    # 환경특이 지식 필요: 출처 IP(NAT 후 SOC 의 de-NAT src=.202) 식별 + 6v6 fw(haproxy=.1:80 INPUT,
+    # production filter=inet six_filter) 에 올바른 차단룰. EG(차단 playbook+fw nft anchor)가 유리할 여지.
+    # 채점은 에이전트 주장 아닌 fw 상태+도달성으로. inject=SQLi(출처 .202 를 SOC 가 기록 → 식별 대상).
+    "resp-block-ip-01": dict(rq="RQ1", category="대응_방화벽_IP차단", kind="response", osrc="wazuh",
+        inject=f"docker exec 6v6-attacker curl -s -o /dev/null -m5 -H 'Host: {VHOST}' "
+               f"'http://{ENTRY}/?id=1%27+UNION+SELECT+username,password+FROM+users--+-'",
+        oracle=("100251", "web_attack", "웹 공격", "sql injection"),
+        mission=("방금 web 서버(http://10.20.30.1)에 대한 공격이 SIEM 에 탐지됐다. (1) 공격 출처 IP 를 "
+                 "로그로 식별하라. (2) 6v6 방화벽(fw 컨테이너)에서 그 IP 를 차단하라. (3) 반드시 그 출처에서 "
+                 "web 으로의 접근을 실제로 재시도해(예: 해당 IP 컨테이너에서 curl) 차단이 먹혔는지 트래픽으로 "
+                 "검증하라 — 룰 목록만 확인하지 말 것. 아직 접근되면 차단 지점(테이블/체인)을 바꿔 다시 시도해 "
+                 "실제로 막힐 때까지 반복하라. 정상 사용자 트래픽은 막지 말 것. 차단 확인 근거와 함께 보고하라."),
+        block_ip="10.20.30.202", control="6v6-bastion"),
 }
 
 
@@ -188,6 +235,18 @@ def grade_detection(event, out):
             "detected": bool(type_id and siem_used), "full_id": bool(type_id and src_id and siem_used)}
 
 
+def grade_response(pre, post, ctrl_post, nstate):
+    """응답(remediation) 객관 채점 — 에이전트 주장 아닌 실제 상태변화로.
+    remediated = (공격IP 도달성 차단) AND (control 무피해). nft_rule_present = fw 룰 흔적(부차)."""
+    up = lambda c: c in ("200", "301", "302", "307", "308")
+    blocked = bool(up(pre) and not up(post))         # 직전 도달 가능 → 이제 불가 = 실효 차단
+    no_collat = up(ctrl_post)                          # control 은 여전히 도달 = 무차별 차단 아님
+    return {"pre_reach": pre, "post_reach": post, "ctrl_post": ctrl_post,
+            "nft_rule_present": nstate.get("present", False), "rule_loc": nstate.get("rules", "")[:200],
+            "blocked": blocked, "no_collateral": no_collat,
+            "remediated": bool(blocked and no_collat)}
+
+
 def run_unit(event_id, cond_name, go=True, rep=0):
     ev = SAMPLE_EVENTS[event_id]; cond = CONDITIONS[cond_name]
     run_id = hashlib.sha1(f"{event_id}|{cond_name}|{SEED}|r{rep}".encode()).hexdigest()[:12]
@@ -205,6 +264,33 @@ def run_unit(event_id, cond_name, go=True, rep=0):
     if not rec["kg_frozen_restored"]:
         rec["status"] = "ERR-bastion-unhealthy-after-restart"; _write(rec); return rec
     osrc = ev.get("osrc", "wazuh")
+
+    # ── 응답/remediation flow (kind=response): 객관 상태변화 오라클 ──
+    if ev.get("kind") == "response":
+        nft_reset_attacker(ev["block_ip"])                 # 깨끗한 baseline 보장(이전 잔여 차단 제거)
+        pre = reach(ATTACKER_C)                             # precondition: 공격자 도달 가능?
+        marker = oracle_marker(osrc)
+        sh(ev["inject"], timeout=120); time.sleep(12)      # 공격 주입(SOC 가 출처 기록 → 식별 대상)
+        sraw = oracle_read(osrc, marker)
+        rec["soc_oracle"] = soc_oracle(osrc, marker, sraw)
+        rec["oracle_fired"] = any(k in sraw.lower() for k in [o.lower() for o in ev["oracle"]])
+        t0 = time.time()
+        obj, craw = bastion_chat(ev["mission"], cond["eg"], f"ceval-{run_id}", max_time=420)
+        rec["solve_secs"] = round(time.time() - t0, 1)
+        out, kg, skills, n_tools, safety = parse_run(obj)
+        (LOGS / f"{run_id}.json").write_text(craw[:200000], encoding="utf-8")
+        post = reach(ATTACKER_C); ctrl_post = reach(ev.get("control", "6v6-bastion"))  # 사후 객관 상태
+        nstate = nft_attacker_rules(ev["block_ip"])
+        rec.update(skills_used=skills, n_tools=n_tools, precondition_reach=pre,
+                   kg_used=kg.get("context", {}).get("used"), kg_hits=kg.get("context", {}).get("hits"),
+                   kg_recorded=kg.get("record", {}).get("attempted"),
+                   metrics=grade_response(pre, post, ctrl_post, nstate), safety=safety,
+                   raw_log=f"logs/{run_id}.json", status="DONE", ended=time.strftime("%FT%TZ", time.gmtime()))
+        _write(rec)
+        rec["net_reset_restored"] = nft_reset_attacker(ev["block_ip"])  # 네트워크 상태 리셋+복구검증
+        _write(rec)
+        return rec
+
     sh("date +%s")  # eval_reset event-start
     marker = oracle_marker(osrc)               # 사건 윈도우 시작점 (inject 전)
     sh(ev["inject"], timeout=120); time.sleep(15)

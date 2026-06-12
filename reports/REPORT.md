@@ -28,7 +28,8 @@
 ## 조건 × RQ 매트릭스 (현재)
 | RQ | 조건 | 상태 |
 |----|------|------|
-| RQ1 (E.G) | off/playbook/experience/full | ✅ 유효 ablation 실측(det-sqli 4×5): off(No-EG)=5/5 → **detection saturation**, EG 탐지이득 측정불가(통합 SIEM). 6베이스라인=❌ Phase2 |
+| RQ1 (E.G) — 탐지축 | off/playbook/experience/full | ✅ 유효 ablation(det-sqli·recon 4×5): off=만점 → **detection saturation**, EG 탐지이득 측정불가(통합 SIEM 86601). |
+| RQ1 (E.G) — 응답축 | off/playbook/experience/full | ✅ remediation 4×5 (fw IP차단, 객관오라클): **off=0/5 vs EG조건=2/5** (탐지 saturation 과 대조=방향성 EG 이득). experience/full=recipe 검색 5/5(KG-2 Reuse retrieval), 단 적용 stochastic(retrieval≠application). 상세 `reports/findings/rq1_response_remediation.md` |
 | RQ2 (커리큘럼) | empty vs 축적 E.G | ❌ 하니스 미구현 |
 | RQ3 (SIEM 감사) | 변조탐지·완전성 | ❌ 독립오라클 배선 미구현 (auditd 바이너리는 존재) |
 | RQ4 (6v6 타당성) | CTF↔6v6, 규모곡선 | △ 부분(secu_agent_benchmark: 적합화 225/323, 모델 120/20/8 가용) |
