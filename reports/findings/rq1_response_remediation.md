@@ -48,26 +48,31 @@ KG-1 Encode: 검증된 차단 절차를 anchor 로 기록(실제 `/history/ancho
 **검색 검증**: experience-mode build 가 recipe anchor 검색 성공(서버 경로, kg_used=True hits=1).
 (주의: `-u ccc` standalone python 은 readonly-db 로 HistoryLayer init 실패 → 검증은 서버 경로로.)
 
-**4조건 × 5rep (frozen=204 w/recipe)**:
+**4조건 × N=20 (frozen=204 w/recipe; 5+15 pooled, 동일 config)**:
 
-| 조건 | remediated(실효차단) | 룰배치 | recipe검색(kg_used) | 성공 시 체인 |
-|------|---------------------|--------|---------------------|--------------|
-| **bastion-off (No-EG)** | **0/5** | 3/5 | 0/5 | — (전부 forward=무효) |
-| bastion-playbook | 2/5 | 4/5 | 0/5 | six_filter **input** |
-| bastion-experience | 2/5 | 5/5 | **5/5** | six_filter **input** |
-| bastion-full | 2/5 | 5/5 | **5/5** | six_filter **input** |
+| 조건 | remediated(실효차단) | 율 | 룰배치 | recipe검색(kg_used) |
+|------|---------------------|-----|--------|---------------------|
+| **bastion-off (No-EG)** | **0/20** | **0%** | 14/20 | 0/20 |
+| bastion-playbook | 3/20 | 15% | 16/20 | 0/20 |
+| bastion-experience | 6/20 | 30% | 17/20 | **20/20** |
+| **bastion-full** | **8/20** | **40%** | 19/20 | **20/20** |
 
-oracle_fired(공격 ground truth) 20/20 · 실효차단 6/20(전부 `inet six_filter input`) · 안전리셋 20/20.
+oracle_fired 80/80 · 실효차단 17/80(전부 `inet six_filter input`) · 안전리셋 80/80.
 
-**해석**:
-- **off=0/5 vs EG 조건=2/5** — 탐지축(off=만점 saturation)과 **대조적으로 응답축은 방향성 있는 EG 이득**.
-  No-EG 는 5회 모두 forward(무효 체인)에 차단 → 한 번도 실효 못 냄. EG 조건은 일부 reps 에서 정답
-  체인(input)을 찾아 실효 차단.
-- **retrieval ≠ application**: experience/full 은 recipe anchor 를 **매번 검색(kg_used 5/5 = KG-2 Reuse
-  retrieval 성립)** 했으나 remediated 는 2/5 로 recipe 미보유 playbook(0/5 검색)과 동률. 즉 정밀 recipe
-  검색이 성공률을 추가로 끌어올리지 못함 — 병목은 검색이 아니라 **검색된 절차의 충실한 적용**(에이전트가
-  forward prior 로 input 지침을 덮어씀, §3.2 pilot 로그에서 직접 확인).
-- **n=5 한계**: off=0 vs EG=2 는 방향성은 명확하나 통계적 강도는 약함 — 다회 reps 로 강화 필요.
+**통계**:
+- **off(0%) vs EG-pooled(17/60=28%): Fisher exact one-tailed p=0.0038 (유의)** — EG 가 remediation 을
+  유의하게 개선. (탐지축 off=만점 saturation 과 정반대.)
+- **단조 gradient**: off 0% < playbook 15% < experience 30% < full 40% — EG 구성요소가 많을수록 성공률 ↑.
+- **recipe 기여**: recipe 검색 조건(experience+full)=14/40(35%) vs 미검색 playbook=3/20(15%).
+  → **KG-2 Reuse(검색된 경험)가 성공률에 실제 기여**(n=5 에선 노이즈로 가려졌던 신호가 N=20 에서 분리됨).
+
+**해석 (n=5 정정)**:
+- 응답축에서 **EG 는 통계적으로 유의한 이득**을 준다(off 0% → full 40%). 탐지축 saturation 과 대조적으로
+  **환경특이 remediation 이 EG 가치 지점**임을 실증.
+- 다만 full 도 40% — **retrieval ≠ 완전한 application**: 에이전트가 검색된 recipe(input)를 forward prior 로
+  덮어쓰는 reps 가 남아 성공률 상한이 제약됨(§3.2 로그). 즉 EG 가 성공률을 0→40% 로 끌어올리되,
+  적용 충실도가 추가 개선 여지(prompt 강제·KG-3 자가수정·skill 기본 체인=input).
+- (이전 5rep 의 "recipe=playbook 동률, 방향성만" 해석은 소표본 노이즈였음 — N=20 에서 gradient·유의성 확립.)
 
 **pilot(×1) 관찰**: off/playbook `kg_used=False`(recipe 미검색). **experience/full `kg_used=True hits=1`
 (recipe 검색 성공 = KG-2 Reuse retrieval 작동)**. 그러나 full 은 recipe("forward 아니라 input")를

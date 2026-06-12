@@ -324,9 +324,10 @@ def main():
              else ["bastion-off", "bastion-playbook", "bastion-experience", "bastion-full"])
     go = "--go" in a
     reps = int(a[a.index("--repeats") + 1]) if "--repeats" in a else 1
-    print(f"=== Phase1 harness | event={event} conditions={conds} reps={reps} go={go} ===")
+    rep_start = int(a[a.index("--rep-start") + 1]) if "--rep-start" in a else 0  # 기존 reps 보존 후 추가 누적
+    print(f"=== Phase1 harness | event={event} conditions={conds} reps={rep_start}..{rep_start+reps} go={go} ===")
     for c in conds:
-        for rep in range(reps):
+        for rep in range(rep_start, rep_start + reps):
             r = run_unit(event, c, go=go, rep=rep)
             m = r.get("metrics", {})
             print(json.dumps({"condition": c, "rep": rep, "status": r.get("status"), "oracle_fired": r.get("oracle_fired"),
