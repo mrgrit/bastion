@@ -235,7 +235,7 @@ class KGContextBuilder:
         return result
 
     @staticmethod
-    def format(result: dict, *, char_budget: int = 1500) -> str:
+    def format(result: dict, *, char_budget: int = 2800) -> str:
         """system prompt 에 embed 가능한 markdown 형태."""
         if not result:
             return ""
@@ -256,7 +256,8 @@ class KGContextBuilder:
                 if field == "anchors":
                     label = it.get("label") or "?"
                     body = it.get("body") or ""
-                    block_lines.append(f"- [{ident}] {label} — {_truncate(body, 220)}")
+                    # anchor 는 과거 검증된 절차·명령(actionable)을 담음 → 명령이 잘리지 않게 충분히.
+                    block_lines.append(f"- [{ident}] {label} — {_truncate(body, 600)}")
                 else:
                     name = it.get("name") or "?"
                     summary = it.get("summary") or ""
@@ -265,7 +266,9 @@ class KGContextBuilder:
 
         if not sections:
             return ""
-        full = ("# KG 컨텍스트 (사전 참조 — agent 는 이 정보를 활용해 plan/answer 보강)\n\n"
+        full = ("# KG 컨텍스트 (과거 검증된 결과·절차 — **너의 추측보다 우선 적용**)\n"
+                "아래 Anchor/Playbook 에 현재 작업과 일치하는 검증된 절차·명령이 있으면, 직관과 다르더라도\n"
+                "그대로(테이블/체인/대상까지) 적용하라. 적용 후 반드시 효과를 재검증할 것.\n\n"
                 + "\n\n".join(sections))
         return _truncate(full, char_budget)
 
