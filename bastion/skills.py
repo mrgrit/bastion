@@ -9,6 +9,7 @@ import re
 from typing import Any
 
 from bastion import run_command, health_check, INTERNAL_IPS
+from bastion.targets import container_for  # 역할→컨테이너 (discovery 우선, el34 정적 폴백)
 
 
 # ── Skill 카테고리 — system prompt 에서 그룹핑에 사용 ──────────────
@@ -533,7 +534,7 @@ def execute_skill(name: str, params: dict[str, Any], vm_ips: dict[str, str],
 
     elif name == "scan_ports":
         # ★ fix-L (2026-05-18): docker exec wrapping — attacker IP placeholder fail 시
-        #   bastion → docker exec 6v6-attacker nmap 으로 자동 fallback.
+        #   bastion → docker exec el34-attacker nmap 으로 자동 fallback.
         target = params.get("target", "10.20.32.80")
         # target 이 IP 면 그대로, 컨테이너 alias 면 _resolve_vm_ip
         ip = target if target.replace(".", "").isdigit() else _resolve_vm_ip(target, vm_ips)
@@ -542,7 +543,7 @@ def execute_skill(name: str, params: dict[str, Any], vm_ips: dict[str, str],
         # bastion 의 docker daemon 통해 attacker 컨테이너 안에서 nmap 실행
         nmap_cmd = f"nmap -sV {ip} {ports} --max-retries 1 -T4 --host-timeout 30s"
         r = run_command(bastion_ip,
-            f"docker exec 6v6-attacker sh -c \"{nmap_cmd} -oG - 2>/dev/null | grep 'Ports:' || "
+            f"docker exec {container_for('attacker')} sh -c \"{nmap_cmd} -oG - 2>/dev/null | grep 'Ports:' || "
             f"{nmap_cmd} 2>/dev/null | grep -E '^[0-9]+/tcp'\"",
             timeout=45)
         raw = r.get("stdout", "")
@@ -560,29 +561,30 @@ def execute_skill(name: str, params: dict[str, Any], vm_ips: dict[str, str],
 
     elif name == "check_suricata":
         # ★ fix-J (2026-05-18): docker exec wrapping — secu(10.20.30.x) placeholder 대신
-        #   docker exec 6v6-ips 호출 (bastion 의 docker socket 통해).
+        #   docker exec <ids 컨테이너> 호출 (bastion 의 docker socket 통해).
         lines = params.get("lines", 10)
         ip = vm_ips.get("bastion") or "127.0.0.1"
         script = (
             f"echo '=== Suricata Process ===' && "
-            f"docker exec 6v6-ips pgrep -af suricata 2>/dev/null | head -3 && "
+            f"docker exec {container_for('ids')} pgrep -af suricata 2>/dev/null | head -3 && "
             f"echo '=== Recent Alerts ===' && "
-            f"docker exec 6v6-ips sh -c \"grep -E 'event_type.:.alert' /var/log/suricata/eve.json 2>/dev/null | tail -{lines}\" "
+            f"docker exec {container_for('ids')} sh -c \"grep -E 'event_type.:.alert' /var/log/suricata/eve.json 2>/dev/null | tail -{lines}\" "
         )
         r = run_command(ip, script, timeout=20)
         return {"success": True, "output": r.get("stdout", "") or r.get("output", "")}
 
     elif name == "check_wazuh":
         # ★ fix-J (2026-05-18): docker exec wrapping — siem(10.20.30.100) placeholder 대신
-        #   docker exec 6v6-siem.
+        #   docker exec el34-siem.
         ip = vm_ips.get("bastion") or "127.0.0.1"
+        c = container_for("siem")
         script = (
             "echo '=== Wazuh Daemons ===' && "
-            "docker exec 6v6-siem /var/ossec/bin/wazuh-control status 2>/dev/null | head -8 && "
+            f"docker exec {c} /var/ossec/bin/wazuh-control status 2>/dev/null | head -8 && "
             "echo '=== Agents ===' && "
-            "docker exec 6v6-siem /var/ossec/bin/agent_control -lc 2>/dev/null && "
+            f"docker exec {c} /var/ossec/bin/agent_control -lc 2>/dev/null && "
             "echo '=== Recent Alerts (alerts.log) ===' && "
-            "docker exec 6v6-siem tail -10 /var/ossec/logs/alerts/alerts.log 2>/dev/null"
+            f"docker exec {c} tail -10 /var/ossec/logs/alerts/alerts.log 2>/dev/null"
         )
         r = run_command(ip, script, timeout=20)
         return {"success": True, "output": r.get("stdout", "") or r.get("output", "")}
@@ -648,11 +650,11 @@ def execute_skill(name: str, params: dict[str, Any], vm_ips: dict[str, str],
     elif name == "check_modsecurity":
         # ★ fix-J (2026-05-18): docker exec wrapping — INTERNAL_IPS web=10.20.30.80 placeholder
         #   는 bastion 에서 unreachable. 실제 web 컨테이너 는 dmz 10.20.32.80, bastion 의
-        #   docker socket 통해 docker exec 6v6-web 호출 만 정상 작동.
+        #   docker socket 통해 docker exec el34-web 호출 만 정상 작동.
         lines = params.get("lines", 10)
         ip = vm_ips.get("bastion") or "127.0.0.1"  # bastion 의 docker daemon
         script = (
-            f"docker exec 6v6-web sh -c \""
+            f"docker exec {container_for('web')} sh -c \""
             f"echo '=== ModSecurity Status ===' && "
             f"apachectl -M 2>/dev/null | grep -i security2 && "
             f"echo '=== Config SecRuleEngine ===' && "
@@ -666,7 +668,7 @@ def execute_skill(name: str, params: dict[str, Any], vm_ips: dict[str, str],
 
     elif name == "configure_nftables":
         action = params.get("action", "list")
-        # ★ fix (2026-06-11): 6v6 방화벽은 6v6-fw 컨테이너 안에 nft 가 있음. 과거엔 vm_ips["secu"] 호스트에서
+        # ★ fix (2026-06-11): el34 방화벽은 el34-fw 컨테이너 안에 nft 가 있음. 과거엔 vm_ips["secu"] 호스트에서
         #   sudo+nft 를 직접 실행 → command-not-found. scan_ports 처럼 bastion 의 docker 로 컨테이너 내부 실행.
         ip = vm_ips.get("bastion") or "127.0.0.1"
         family = params.get("family") or "inet"
@@ -753,8 +755,8 @@ def execute_skill(name: str, params: dict[str, Any], vm_ips: dict[str, str],
             cmd = raw if raw.startswith("nft ") else f"nft {raw}"
         else:
             return {"success": False, "error": f"Unknown action: {action}"}
-        # 6v6 방화벽 nft 는 6v6-fw 컨테이너 내부 → bastion 의 docker 로 컨테이너 안에서 실행.
-        fw_cmd = f'docker exec 6v6-fw sh -c "{cmd}"'
+        # el34 방화벽 nft 는 el34-fw 컨테이너 내부 → bastion 의 docker 로 컨테이너 안에서 실행.
+        fw_cmd = f'docker exec {container_for("fw")} sh -c "{cmd}"'
         r = run_command(ip, fw_cmd, timeout=15)
         output = r.get("stdout", "") or ""
         stderr = r.get("stderr", "") or ""
@@ -853,13 +855,13 @@ def execute_skill(name: str, params: dict[str, Any], vm_ips: dict[str, str],
             "ip route", "ip -br addr", "ip addr show",
             "curl http://localhost:9100", "curl https://localhost:9100",
             "curl -s http://localhost:9100", "curl -s https://localhost:9100",
-            # ssh ProxyJump 시작점 = bastion (bastion 의 .ssh/config 에 6v6-* alias).
+            # ssh ProxyJump 시작점 = bastion (bastion 의 .ssh/config 에 el34-* alias).
             # 학생 PC 의 ssh 명령은 bastion 안 에서 실행 가능 (ccc user 의 .ssh/config).
             # cycle 5+9 finding (Mission 2/4 = ProxyJump 검증). broader pattern.
-            "ssh 6v6-", "ssh -n 6v6-", "ssh -o ", "ssh -i ", "ssh -p ",
-            "ssh -t 6v6-", "ssh -T 6v6-",
-            # bash for loop 가 ssh 6v6-* 호출 — for h in ... ssh 6v6-$h ...
-            "for h in fw", "for h in 6v6", "for vm in",
+            "ssh el34-", "ssh -n el34-", "ssh -o ", "ssh -i ", "ssh -p ",
+            "ssh -t el34-", "ssh -T el34-",
+            # bash for loop 가 ssh el34-* 호출 — for h in ... ssh el34-$h ...
+            "for h in fw", "for h in el34", "for vm in",
         )
         if any(_cmd_strip.startswith(p) or f" {p}" in _cmd_strip for p in _bastion_patterns):
             target = "bastion"

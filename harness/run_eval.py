@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Phase 1 — 통합 평가 하니스 (Runbook §4 Phase 1).
 
-조건(memory mechanism)만 교체하고 agent(120B)·skill·6v6 는 고정. 각 (event × condition) 을:
+조건(memory mechanism)만 교체하고 agent(120B)·skill·el34 는 고정. 각 (event × condition) 을:
   eval_reset event-start → (조건별 메모리모드로) bastion 실행 → SOC 독립오라클 대조 → 채점 → run_id 감사레코드(§6)
   → eval_reset event-reset.
 조건:
@@ -18,19 +18,19 @@ RUNS = ROOT / "results" / "runs"; RUNS.mkdir(parents=True, exist_ok=True)
 LOGS = ROOT / "logs"; LOGS.mkdir(exist_ok=True)
 RESET = ROOT / "harness" / "eval_reset.sh"
 SSH = ("sshpass -p 1 ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "
-       "-o ControlMaster=auto -o ControlPath=/tmp/cc6v6-%r@%h-%p -o ControlPersist=300s ccc@192.168.0.105")
-SIEM, ALERTS = "6v6-siem", "/var/ossec/logs/alerts/alerts.json"
-ATTACKER, ENTRY, VHOST = "10.20.30.202", "10.20.30.1", "dvwa.6v6.lab"
+       "-o ControlMaster=auto -o ControlPath=/tmp/ccel34-%r@%h-%p -o ControlPersist=300s ccc@192.168.0.105")
+SIEM, ALERTS = "el34-siem", "/var/ossec/logs/alerts/alerts.json"
+ATTACKER, ENTRY, VHOST = "10.20.30.202", "10.20.30.1", "dvwa.el34.lab"
 SEED = 20260607
-BASTION = "6v6-bastion"
+BASTION = "el34-bastion"
 GRAPH_DB = "/opt/ccc-src/data/bastion_graph.db"      # graph+history 통합 SQLite (WAL)
 FROZEN_HOST = "/tmp/frozen_graph.db"                  # 0.105 호스트의 frozen trained-KG 스냅샷
-IPS, EVE = "6v6-ips", "/var/log/suricata/eve.json"   # Suricata 독립오라클 (eve.json, 거대 — byte offset 사용)
-FW, ATTACKER_C = "6v6-fw", "6v6-attacker"             # 응답(remediation) 오라클: fw nft 상태 + 도달성 토글
+IPS, EVE = "el34-ips", "/var/log/suricata/eve.json"   # Suricata 독립오라클 (eve.json, 거대 — byte offset 사용)
+FW, ATTACKER_C = "el34-fw", "el34-attacker"             # 응답(remediation) 오라클: fw nft 상태 + 도달성 토글
 NFT_PROD = {"ip nat", "inet six_filter", "ip six_nat"}  # production nft 테이블 (리셋 시 보존)
 
 
-def reach(container, url="http://10.20.30.1/", host="dvwa.6v6.lab"):
+def reach(container, url="http://10.20.30.1/", host="dvwa.el34.lab"):
     """객관 도달성 오라클: container → web HTTP code. '000'=차단/timeout, 302/200=도달."""
     return (sh(f"docker exec {container} curl -s -o /dev/null -m6 -w '%{{http_code}}' "
                f"-H 'Host: {host}' {url}", timeout=20) or "").strip()[-3:]
@@ -91,10 +91,10 @@ CONDITIONS = {
     "flat-rag": {"agent": "BLOCKED-phase2"}, "commercial-bare": {"agent": "BLOCKED-online-§9"},
 }
 
-# 검증용 예시 event (Phase 3 의 L1/6v6-suite 가 들어올 인터페이스). detection 유형.
+# 검증용 예시 event (Phase 3 의 L1/el34-suite 가 들어올 인터페이스). detection 유형.
 SAMPLE_EVENTS = {
     "det-sqli-01": dict(rq="RQ1", category="로그분석_침해대응", kind="detection", osrc="wazuh",
-        inject=f"docker exec 6v6-attacker curl -s -o /dev/null -m5 -H 'Host: {VHOST}' "
+        inject=f"docker exec el34-attacker curl -s -o /dev/null -m5 -H 'Host: {VHOST}' "
                f"'http://{ENTRY}/?id=1%27+UNION+SELECT+username,password+FROM+users--+-'",
         oracle=("100251", "web_attack", "웹 공격", "sql injection"),
         mission=("위협 헌팅: Wazuh SIEM(가동중)에 보안 경보가 들어왔다. 헬스체크 말고 Wazuh alert 로그를 직접 "
@@ -102,33 +102,33 @@ SAMPLE_EVENTS = {
         detect_kw=("sql", "union", "injection", "인젝션"), src=("10.20.30.202",)),
 
     # 변별력 event: Suricata 에만 잡히는 network recon(nmap). mission 이 센서를 지정하지 않음 →
-    # base 모델은 Wazuh 만 보고 "이상 없음" 결론 가능. EG(asset: 6v6-ips=Suricata / playbook: network recon→IPS)
+    # base 모델은 Wazuh 만 보고 "이상 없음" 결론 가능. EG(asset: el34-ips=Suricata / playbook: network recon→IPS)
     # 가 "어디를 볼지" 알려줘야 탐지. det-sqli 의 saturation 한계 보완용. oracle=Suricata eve.json.
     # inject target = DMZ web(.32.80): ext→DMZ 라우팅이 ips(.32.1) 를 경유 → Suricata 1000005 발화(src .202 보존).
     # ENTRY(.1) 는 fw ext측이라 ips 미경유(실측). NOTE: Wazuh 가 Suricata eve 를 ingest(rule 86601) 하므로
     # 실제로는 Wazuh-blind 가 아님 — "Suricata-only 변별" 가설은 기각, 탐지축 saturation 재확인용.
     "det-recon-suricata-01": dict(rq="RQ1", category="네트워크_정찰_탐지", kind="detection", osrc="suricata",
-        inject="docker exec 6v6-attacker nmap -sS -T4 -Pn -p 1-1024 10.20.32.80",
+        inject="docker exec el34-attacker nmap -sS -T4 -Pn -p 1-1024 10.20.32.80",
         oracle=("1000005", "nmap", "syn scan", "scan", "86601"),
-        mission=("보안 모니터링 중 이상 트래픽이 의심된다. 6v6 환경의 보안 센서를 직접 조회해 최근 공격/정찰 "
+        mission=("보안 모니터링 중 이상 트래픽이 의심된다. el34 환경의 보안 센서를 직접 조회해 최근 공격/정찰 "
                  "활동의 출처IP·유형(MITRE)·대상·차단 여부를 로그 근거와 함께 보고하라. 어떤 센서를 봐야 하는지는 "
                  "네가 판단하라(헬스체크로 끝내지 말 것)."),
         detect_kw=("scan", "스캔", "정찰", "nmap", "recon", "reconnaissance", "포트"), src=("10.20.30.202",)),
 
     # RQ1 응답/remediation event — 탐지 saturation 회피. 객관 오라클=상태변화(도달성 토글).
-    # 환경특이 지식 필요: 출처 IP(NAT 후 SOC 의 de-NAT src=.202) 식별 + 6v6 fw(haproxy=.1:80 INPUT,
+    # 환경특이 지식 필요: 출처 IP(NAT 후 SOC 의 de-NAT src=.202) 식별 + el34 fw(haproxy=.1:80 INPUT,
     # production filter=inet six_filter) 에 올바른 차단룰. EG(차단 playbook+fw nft anchor)가 유리할 여지.
     # 채점은 에이전트 주장 아닌 fw 상태+도달성으로. inject=SQLi(출처 .202 를 SOC 가 기록 → 식별 대상).
     "resp-block-ip-01": dict(rq="RQ1", category="대응_방화벽_IP차단", kind="response", osrc="wazuh",
-        inject=f"docker exec 6v6-attacker curl -s -o /dev/null -m5 -H 'Host: {VHOST}' "
+        inject=f"docker exec el34-attacker curl -s -o /dev/null -m5 -H 'Host: {VHOST}' "
                f"'http://{ENTRY}/?id=1%27+UNION+SELECT+username,password+FROM+users--+-'",
         oracle=("100251", "web_attack", "웹 공격", "sql injection"),
         mission=("방금 web 서버(http://10.20.30.1)에 대한 공격이 SIEM 에 탐지됐다. (1) 공격 출처 IP 를 "
-                 "로그로 식별하라. (2) 6v6 방화벽(fw 컨테이너)에서 그 IP 를 차단하라. (3) 반드시 그 출처에서 "
+                 "로그로 식별하라. (2) el34 방화벽(fw 컨테이너)에서 그 IP 를 차단하라. (3) 반드시 그 출처에서 "
                  "web 으로의 접근을 실제로 재시도해(예: 해당 IP 컨테이너에서 curl) 차단이 먹혔는지 트래픽으로 "
                  "검증하라 — 룰 목록만 확인하지 말 것. 아직 접근되면 차단 지점(테이블/체인)을 바꿔 다시 시도해 "
                  "실제로 막힐 때까지 반복하라. 정상 사용자 트래픽은 막지 말 것. 차단 확인 근거와 함께 보고하라."),
-        block_ip="10.20.30.202", control="6v6-bastion"),
+        block_ip="10.20.30.202", control="el34-bastion"),
 }
 
 
@@ -151,7 +151,7 @@ def git_sha():
 
 
 def model_digest(model):
-    raw = sh(f"docker exec 6v6-bastion curl -s --max-time 8 http://192.168.0.109:11434/api/tags")
+    raw = sh(f"docker exec el34-bastion curl -s --max-time 8 http://192.168.0.109:11434/api/tags")
     try:
         for m in json.loads(raw).get("models", []):
             if m["name"] == model:
@@ -196,7 +196,7 @@ def soc_oracle(osrc, marker, raw):
 def bastion_chat(mission, eg, session, max_time=300):
     payload = json.dumps({"message": mission, "stream": False, "course": "secbench-eval",
                           "session_id": session, "eg_mode": eg, "auto_approve": True}, ensure_ascii=False)
-    inner = (f"docker exec -u ccc 6v6-bastion curl -s -X POST --max-time {max_time} -H 'X-API-Key: ccc-api-key-2026' "
+    inner = (f"docker exec -u ccc el34-bastion curl -s -X POST --max-time {max_time} -H 'X-API-Key: ccc-api-key-2026' "
              f"-H 'Content-Type: application/json' -d {shlex.quote(payload)} http://localhost:9100/chat")
     raw = subprocess.run(f"{SSH} {shlex.quote(inner)}", shell=True, capture_output=True, text=True, timeout=max_time + 60).stdout
     i = raw.find("{")
@@ -279,7 +279,7 @@ def run_unit(event_id, cond_name, go=True, rep=0):
         rec["solve_secs"] = round(time.time() - t0, 1)
         out, kg, skills, n_tools, safety = parse_run(obj)
         (LOGS / f"{run_id}.json").write_text(craw[:200000], encoding="utf-8")
-        post = reach(ATTACKER_C); ctrl_post = reach(ev.get("control", "6v6-bastion"))  # 사후 객관 상태
+        post = reach(ATTACKER_C); ctrl_post = reach(ev.get("control", "el34-bastion"))  # 사후 객관 상태
         nstate = nft_attacker_rules(ev["block_ip"])
         rec.update(skills_used=skills, n_tools=n_tools, precondition_reach=pre,
                    kg_used=kg.get("context", {}).get("used"), kg_hits=kg.get("context", {}).get("hits"),

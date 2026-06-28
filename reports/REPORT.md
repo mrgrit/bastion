@@ -32,7 +32,7 @@
 | RQ1 (E.G) — 응답축 | off/playbook/experience/full | ✅ remediation N=20 (fw IP차단, 객관오라클). **fidelity fix 후 full 40%→95%, experience 30%→90%** (Fisher p=0.00022), off/playbook(recipe 미검색)=~5% 불변 → 개선이 EG-application 특이적. 탐지 saturation 과 정반대 = **EG 가치는 remediation, 적용충실도 수정으로 95% 달성**. 상세 `reports/findings/rq1_response_remediation.md` |
 | RQ2 (커리큘럼) | empty vs 축적 E.G | ❌ 하니스 미구현 |
 | RQ3 (SIEM 감사) | 변조탐지·완전성 | ❌ 독립오라클 배선 미구현 (auditd 바이너리는 존재) |
-| RQ4 (6v6 타당성) | CTF↔6v6, 규모곡선 | △ 부분(secu_agent_benchmark: 적합화 225/323, 모델 120/20/8 가용) |
+| RQ4 (el34 타당성) | CTF↔el34, 규모곡선 | △ 부분(secu_agent_benchmark: 적합화 225/323, 모델 120/20/8 가용) |
 | 안전성(4.7) | 3지표 | ❌ 미수집(하니스 의존) |
 
 ## 이미 실측된 인접 결과 (참고, 본 Runbook 산출물 아님 — secu_agent_benchmark)

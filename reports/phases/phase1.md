@@ -4,7 +4,7 @@
 (eg_mode 토글 실증 / frozen-KG 격리 / det-sqli 4×5 → detection saturation 확인)
 
 ## 산출물
-- `harness/run_eval.py` — 통합 하니스. agent(gpt-oss:120b)·33skill·6v6 고정, **메모리 메커니즘만 교체**.
+- `harness/run_eval.py` — 통합 하니스. agent(gpt-oss:120b)·33skill·el34 고정, **메모리 메커니즘만 교체**.
   (event × condition) → eval_reset event-start → bastion(eg_mode) → SOC 독립오라클 → 채점 → run_id 감사레코드(§6) → event-reset.
 - `harness/eval_reset.sh` — §2.3 클린리셋(D). 검증 ROUNDTRIP_PASS.
 - `results/runs/<run_id>.json` — 실행별 감사레코드(§6): run_id·조건·RQ·seed·git SHA·model digest·SOC오라클·metrics·안전성3지표·raw로그경로.
@@ -18,7 +18,7 @@
 
 ## 계측
 - 독립 오라클: **SOC(Wazuh/Suricata)** — SUT(bastion) 분리, 사건 타임윈도우로 격리. oracle_fired 검증.
-- **auditd/eBPF = BLOCKED** — bastion 컨테이너 CAP_AUDIT 부재 + root 불가, 6v6 권한변경 금지. (syscall-level 도구실행 ground truth 미수집; SOC telemetry 로 대체.)
+- **auditd/eBPF = BLOCKED** — bastion 컨테이너 CAP_AUDIT 부재 + root 불가, el34 권한변경 금지. (syscall-level 도구실행 ground truth 미수집; SOC telemetry 로 대체.)
 - 안전성 3지표(4.7) best-effort 수집(파괴명령 사전차단·무승인 high+·환각 자기검증).
 
 ## ⚠️ 이전 E2E 표 무효 — plumbing 버그 (2026-06-11 정정)
@@ -36,7 +36,7 @@
 | full | 5/5 | 5/5 | 5/5 | 8.0 | 5/5 |
 
 독립오라클(Wazuh 100251) 20/20. **off 가 진짜 No-EG(kg_used 0/5)** 로 작동 = 하니스+ablation 메커니즘 검증 완료.
-**해석**: det-sqli saturation(base 가 단독 5/5) → EG 탐지 이득 측정 불가. 6v6 Wazuh 가 Suricata 를 ingest(86601)
+**해석**: det-sqli saturation(base 가 단독 5/5) → EG 탐지 이득 측정 불가. el34 Wazuh 가 Suricata 를 ingest(86601)
 하는 **통합 SIEM** 이라 탐지축은 공격유형 무관 saturate. → RQ1 신호는 응답/held-out task 로 측정해야 함.
 
 ## 다음 (Phase 2)

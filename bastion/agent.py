@@ -903,6 +903,7 @@ class BastionAgent:
                 t = str(trg).strip().lower()
                 if t and t in low:
                     return h["harness_id"]
+            # 하네스 id/name 직접 지칭 + 팀/하네스 키워드
             if (h["harness_id"].lower() in low or str(h.get("name", "")).lower() in low) \
                and any(k in low for k in ("팀으로", "하네스", "harness", "team")):
                 best = h["harness_id"]
@@ -1853,21 +1854,21 @@ class BastionAgent:
             "   step 키워드가 IR/포렌식/AI 보안/모의해킹/컴플라이언스/장기기억 카테고리에 해당하면\n"
             "   해당 카테고리의 전용 skill 을 우선 호출할 것. shell 로 동등 동작이 가능해도 전용 skill 사용.\n"
             "\n"
-            "## ★ 6v6 실제 자산 매핑 (fix-H 2026-05-18 NL-M4 발견)\n"
+            "## ★ el34 실제 자산 매핑 (fix-H 2026-05-18 NL-M4 발견)\n"
             "INTERNAL_IPS (예: web=10.20.30.80) 은 학습용 placeholder 일 뿐.\n"
             "실제 컨테이너 IP/네트워크는 다음. **이 매핑을 사용해서 명령 수행하라**:\n"
             "| Container | Network | IP | 역할 |\n"
             "|-----------|---------|-----|-----|\n"
-            "| 6v6-bastion | ext | 10.20.30.201 | Bastion Master (너 자신) |\n"
-            "| 6v6-attacker | ext | 10.20.30.202 | Red team VM |\n"
-            "| 6v6-fw | ext+pipe | 10.20.30.1, 10.20.31.1 | Firewall router |\n"
-            "| 6v6-ips | dmz+pipe | 10.20.32.1, 10.20.31.2 | Suricata IDS |\n"
-            "| 6v6-web | dmz+int | 10.20.32.80, 10.20.40.80 | Apache + ModSec WAF |\n"
-            "| 6v6-siem | dmz | 10.20.32.100 | Wazuh manager |\n"
-            "| 6v6-juiceshop | int | 10.20.40.81 | OWASP Juice Shop |\n"
-            "| 6v6-dvwa | int | 10.20.40.82 | DVWA |\n"
-            "**중요**: bastion (너) 은 dmz 미연결. dmz/int 컨테이너 접근은 **반드시 `docker exec 6v6-<X>`** 통해.\n"
-            "attacker VM 에서 web 접근은 fw 통해 라우팅 — `ssh 6v6-attacker curl http://10.20.32.80/` 또는 `juice.6v6.lab`.\n"
+            "| el34-bastion | ext | 10.20.30.201 | Bastion Master (너 자신) |\n"
+            "| el34-attacker | ext | 10.20.30.202 | Red team VM |\n"
+            "| el34-fw | ext+pipe | 10.20.30.1, 10.20.31.1 | Firewall router |\n"
+            "| el34-ips | dmz+pipe | 10.20.32.1, 10.20.31.2 | Suricata IDS |\n"
+            "| el34-web | dmz+int | 10.20.32.80, 10.20.40.80 | Apache + ModSec WAF |\n"
+            "| el34-siem | dmz | 10.20.32.100 | Wazuh manager |\n"
+            "| el34-juiceshop | int | 10.20.40.81 | OWASP Juice Shop |\n"
+            "| el34-dvwa | int | 10.20.40.82 | DVWA |\n"
+            "**중요**: bastion (너) 은 dmz 미연결. dmz/int 컨테이너 접근은 **반드시 `docker exec el34-<X>`** 통해.\n"
+            "attacker VM 에서 web 접근은 fw 통해 라우팅 — `ssh el34-attacker curl http://10.20.32.80/` 또는 `juice.el34.lab`.\n"
             "\n"
             "## ★ 조회 vs 변경 — 절대 혼동 금지 (autopilot fix-B 2026-05-18)\n"
             "**조회 (Read-only) — 사용자 요청 동사가 '확인/조회/보기/요약/검사/측정/카운트'** :\n"
@@ -1875,7 +1876,7 @@ class BastionAgent:
             "  → 절대 configure_* / fw_rule_add / install_* / restart_* 등 변경 skill 호출 금지\n"
             "**변경 (Write/Modify) — 사용자 요청 동사가 '설정/변경/추가/삭제/배포/재시작/설치'** :\n"
             "  → configure_nftables / configure_modsec / fw_rule_add / install_pkg / restart_service\n"
-            "**예시**: '6v6 의 fw nftables 규칙 확인' = 조회 = shell `docker exec 6v6-fw nft list ruleset` 또는\n"
+            "**예시**: 'el34 의 fw nftables 규칙 확인' = 조회 = shell `docker exec el34-fw nft list ruleset` 또는\n"
             "  docker_manage(action=exec). configure_nftables 절대 금지 (변경 작업).\n"
             "\n"
             f"{skill_list}\n"
@@ -2436,8 +2437,8 @@ class BastionAgent:
                                 "Output ONLY the command, no explanation, no markdown, no quotes. "
                                 "If you cannot, output 'echo SKIP'.\n\n"
                                 "★ CRITICAL RULES (F15 fix 2026-05-18):\n"
-                                "1. **NEVER convert container names to IPs.** If the task says `6v6-bastion`, "
-                                "`6v6-fw`, `6v6-attacker` etc — keep as-is. DO NOT replace with 127.0.0.1, 10.20.30.x, etc.\n"
+                                "1. **NEVER convert container names to IPs.** If the task says `el34-bastion`, "
+                                "`el34-fw`, `el34-attacker` etc — keep as-is. DO NOT replace with 127.0.0.1, 10.20.30.x, etc.\n"
                                 "2. **Preserve exact command syntax** including `docker exec`, `ssh`, quotes, pipes.\n"
                                 "3. If the task already contains a shell command after `실행:` or `Run:` — copy that command verbatim."
                             )

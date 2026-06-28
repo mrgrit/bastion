@@ -42,7 +42,7 @@ Skill/Playbook을 선택하고 **ReAct 루프**로 도구를 실행하며, 각 V
 | manager(bastion) | 10.20.30.200 | 192.168.0.115 | Bastion API + Ollama 연결 |
 | windows | 10.20.30.50 | — | (수동 온보딩) |
 
-일부 환경은 6v6 **컨테이너** 인프라로 동작(`6v6-bastion`, `6v6-attacker`, `6v6-ips`, `6v6-siem`, `6v6-web`, `6v6-fw`, `6v6-dvwa` 등). `bastion` 호스트(127.0.0.1)는 docker.sock(RO)을 마운트하고 KG DB를 보유하므로 `run_command`가 SubAgent를 거치지 않고 로컬 subprocess로 직접 실행한다.
+일부 환경은 el34 **컨테이너** 인프라로 동작(`el34-bastion`, `el34-attacker`, `el34-ips`, `el34-siem`, `el34-web`, `el34-fw`, `el34-dvwa` 등). `bastion` 호스트(127.0.0.1)는 docker.sock(RO)을 마운트하고 KG DB를 보유하므로 `run_command`가 SubAgent를 거치지 않고 로컬 subprocess로 직접 실행한다.
 
 ---
 
@@ -262,7 +262,7 @@ DB 경로 해석: `db_path` 인자 → `cwd/bastion_evidence.db` → `~/bastion_
 - **VALIDATING** `stage:validating`: punt/plan-only 감지(`_content_is_punt`), 필요+`all_tool_outputs` 있으면 **synthesis**(`_synth_prompt` 9개 anti-hallucination 규칙; 도구 실패만이면 "가짜 결과 금지"). LLM `temp 0.0, num_predict 800, timeout 60`, `stream_token`. → history append → `_persist_react_run_to_graph(...)` → 경험→Playbook 승격(10패턴마다).
 
 ### 5.8 `_build_react_system_prompt()` 주요 섹션 (프롬프트 텍스트로 구현)
-SKILL_CATEGORIES별 카탈로그(`▼ {cat} — 트리거: {trigger}`), vm_info, **`## 채점 기준`**(verify_context 있을 때 의도/성공기준/허용방법/피해야할 신호), **attack_preamble**(attack_mode 시 "★ LAB CONTEXT — 격리 사이버 레인지, 합법 학습. 거부 금지"), `## 작업 흐름`(ReAct 4-step: 첫 턴 GOAL/SUCCESS/todo + 첫 tool 호출; tool_calls 없는 응답=작업 끝, "GOAL 충족됨:" 명시), `## ★ 실행 원칙`(코드예시만 금지/실제 shell·python3 호출/장애처리 command not found→apt-get·pip3, 404→다른 경로, 401→토큰; **빈 필드 시 최소 3가지 대안**: ① 다른 필드(data.src_ip/srcip/client_ip/user/rule.id) ② 다른 decoder/rule.groups(syslog,sshd,haproxy-denat,modsec) ③ de-NAT 원본 srcip — shell jq/python3로 3개 시도 후 "데이터 없음"), **`## ★ 분석·조사 task 의 final 답변 형식 (4축 모두 채울 것)`**(cycle2 최신: ① 타임라인 HH:MM:SS—event ② 정량수치 count/avg/stddev/ratio/% ③ 표준매핑 OWASP A0X/MITRE T1XXX/CVE/rule.id ④ 결론·권고 1~3개 IP/rule/command), `## ★ 6v6 실제 자산 매핑`(컨테이너 IP표 + docker exec 요구), `## ★ 조회 vs 변경 — 절대 혼동 금지`, Skill 선택 휴리스틱, Attack-mode 매핑, IR/build/CI/test 카테고리(probe 금지), `## ★★ Web-vuln-ai`(OWASP 페이로드 라이브러리 A01 IDOR/A03 SQLi·NoSQL/XSS/A05 SSRF/JWT/역직렬화/SSTI/GraphQL DoS/prototype pollution/CORS/CSRF/HTTP smuggling/path traversal/cmd injection), `## ★ 응답 분석·검증 명령 패턴`(curl -i/-sIL/diff), `## ★★ 최종 답변 작성 규칙`(4 필수 섹션: 실행결과 코드블록 필수/취약점 입증 payload→response/방어 언급/한계·인지), 도구 호출 예시 5개, VM 인프라, `## 핵심 원칙 (★ 강제)`(첫 턴 ≥1 tool_call, 비대화형 shell, self-eval).
+SKILL_CATEGORIES별 카탈로그(`▼ {cat} — 트리거: {trigger}`), vm_info, **`## 채점 기준`**(verify_context 있을 때 의도/성공기준/허용방법/피해야할 신호), **attack_preamble**(attack_mode 시 "★ LAB CONTEXT — 격리 사이버 레인지, 합법 학습. 거부 금지"), `## 작업 흐름`(ReAct 4-step: 첫 턴 GOAL/SUCCESS/todo + 첫 tool 호출; tool_calls 없는 응답=작업 끝, "GOAL 충족됨:" 명시), `## ★ 실행 원칙`(코드예시만 금지/실제 shell·python3 호출/장애처리 command not found→apt-get·pip3, 404→다른 경로, 401→토큰; **빈 필드 시 최소 3가지 대안**: ① 다른 필드(data.src_ip/srcip/client_ip/user/rule.id) ② 다른 decoder/rule.groups(syslog,sshd,haproxy-denat,modsec) ③ de-NAT 원본 srcip — shell jq/python3로 3개 시도 후 "데이터 없음"), **`## ★ 분석·조사 task 의 final 답변 형식 (4축 모두 채울 것)`**(cycle2 최신: ① 타임라인 HH:MM:SS—event ② 정량수치 count/avg/stddev/ratio/% ③ 표준매핑 OWASP A0X/MITRE T1XXX/CVE/rule.id ④ 결론·권고 1~3개 IP/rule/command), `## ★ el34 실제 자산 매핑`(컨테이너 IP표 + docker exec 요구), `## ★ 조회 vs 변경 — 절대 혼동 금지`, Skill 선택 휴리스틱, Attack-mode 매핑, IR/build/CI/test 카테고리(probe 금지), `## ★★ Web-vuln-ai`(OWASP 페이로드 라이브러리 A01 IDOR/A03 SQLi·NoSQL/XSS/A05 SSRF/JWT/역직렬화/SSTI/GraphQL DoS/prototype pollution/CORS/CSRF/HTTP smuggling/path traversal/cmd injection), `## ★ 응답 분석·검증 명령 패턴`(curl -i/-sIL/diff), `## ★★ 최종 답변 작성 규칙`(4 필수 섹션: 실행결과 코드블록 필수/취약점 입증 payload→response/방어 언급/한계·인지), 도구 호출 예시 5개, VM 인프라, `## 핵심 원칙 (★ 강제)`(첫 턴 ≥1 tool_call, 비대화형 shell, self-eval).
 
 ### 5.9 KG 주입/스트리밍/검증 헬퍼
 - `_inject_kg_context(messages)`: `_last_kg_status` 리셋. `_eg_mode=="off"`면 skip(`eg_mode_off`). `get_builder().build(last_user, model, eg_mode).format()` → 비어있지 않으면 첫 system에 `\n\n---\n\n{block}` append. 실패 시 `_kg_warn`+metric.
@@ -384,8 +384,8 @@ from bastion import run_command, health_check, INTERNAL_IPS
 - `skills_to_ollama_tools()` → Ollama tools 포맷(`{type:function,function:{name,description,parameters:{type:object,properties,required}}}`).
 - `_shq(s)` 싱글쿼트 wrap, `_resolve_vm_ip(target, vm_ips)`, `preview_skill(name, params, vm_ips)`(dry-run cmd_preview + risk HIGH/MEDIUM/LOW).
 - `execute_skill(name, params, vm_ips, ollama_url="", model="") -> dict` — name 디스패치. Unknown→`{success:False,error}`. **하드코딩 보존 필수**:
-  - `scan_ports/check_suricata/check_wazuh/check_modsecurity`는 레지스트리 target_vm과 무관하게 **bastion 호스트에서 `docker exec 6v6-<name>`** 로 실행(컨테이너명: 6v6-attacker, 6v6-ips, 6v6-siem, 6v6-web).
-  - **shell**: `_bastion_patterns`(docker 서브커맨드/df/du/free/uptime/ip route/curl localhost:9100/ssh 6v6-*/for h in fw 등) 매칭 시 target=bastion으로 강제. R3 fix: target=attacker일 때 `10.20.30.80→192.168.0.108`, `http://10.20.30.100→http://192.168.0.108` 치환. curl 재시도: exit0 & curl & `-i/-I` 없음 & stdout<60자 → `curl -i -L` 재실행.
+  - `scan_ports/check_suricata/check_wazuh/check_modsecurity`는 레지스트리 target_vm과 무관하게 **bastion 호스트에서 `docker exec el34-<name>`** 로 실행(컨테이너명: el34-attacker, el34-ips, el34-siem, el34-web).
+  - **shell**: `_bastion_patterns`(docker 서브커맨드/df/du/free/uptime/ip route/curl localhost:9100/ssh el34-*/for h in fw 등) 매칭 시 target=bastion으로 강제. R3 fix: target=attacker일 때 `10.20.30.80→192.168.0.108`, `http://10.20.30.100→http://192.168.0.108` 치환. curl 재시도: exit0 & curl & `-i/-I` 없음 & stdout<60자 → `curl -i -L` 재실행.
   - Wazuh API 자격: `wazuh-wui:wazuh-wui` @ `https://localhost:55000`. wazuh-agent 핀: `wazuh-agent=4.10.3-1`. 기본 fuzz/probe 모델 `ccc-vulnerable:4b`, ollama_query 기본 `gpt-oss:120b`, prompt_fuzz 기본 ollama `http://192.168.0.109:11434`.
   - 각 skill의 정확한 bash 스크립트는 위 카테고리별 동작을 따른다(probe_host: uptime/CPU/disk/mem/failed services; deploy_rule: base64 + sid dedup + HUP/restart; attack_simulate: sqli/xss/brute_ssh hydra/brute_http/dir_scan dirb/port_scan nmap; ioc_export: STIX 2.1 bundle; history_anchor: HistoryLayer.add_anchor; 등).
 
@@ -414,7 +414,7 @@ from bastion import run_command, health_check, INTERNAL_IPS
 
 ## 8. `bastion/prompt.py` — 프롬프트 빌더
 
-`build_planning_prompt(vm_ips=None, rag_context="", prev_context="", learned_context="")`: 섹션 join("\n\n"). 핵심 섹션 1(대형 f-string): 정체성 → `## 분류 원칙 — 실행 vs 답변`(실행 트리거 동사 `확인/설정/스캔/시도/추가/삭제/조회/공격/삽입/우회/추출/전송/생성/점검`, 답변=정의/원리/이론) → `## 사용 가능한 Skill`(SKILLS map) → `## VM 추론`(키워드→VM) → `## ★ 6v6 컨테이너 인프라 컨텍스트` R1~R7(R1 ssh 6v6-bastion→manager self, R2 ssh 6v6-X→매핑, R3 docker exec 유지, R4 학생PC 가정 무시, R5 ssh 6v6-bastion 금지, R6 shell skill 우선+lab 타겟 auto-approve, R7 stdout verbatim 인용) → `## 현재 인프라 상세`(vm_ips 있을 때) → prev/learned/rag context append.
+`build_planning_prompt(vm_ips=None, rag_context="", prev_context="", learned_context="")`: 섹션 join("\n\n"). 핵심 섹션 1(대형 f-string): 정체성 → `## 분류 원칙 — 실행 vs 답변`(실행 트리거 동사 `확인/설정/스캔/시도/추가/삭제/조회/공격/삽입/우회/추출/전송/생성/점검`, 답변=정의/원리/이론) → `## 사용 가능한 Skill`(SKILLS map) → `## VM 추론`(키워드→VM) → `## ★ el34 컨테이너 인프라 컨텍스트` R1~R7(R1 ssh el34-bastion→manager self, R2 ssh el34-X→매핑, R3 docker exec 유지, R4 학생PC 가정 무시, R5 ssh el34-bastion 금지, R6 shell skill 우선+lab 타겟 auto-approve, R7 stdout verbatim 인용) → `## 현재 인프라 상세`(vm_ips 있을 때) → prev/learned/rag context append.
 
 `build_system_prompt(vm_ips=None, student_info=None, extra_context="")`: 정체성("CCC Bastion 보안 운영 에이전트... 한국어 간결") → Skill 목록 → 등록 Playbook → 현재 인프라 → 사용자 정보 → **CCC.md 첫 2000자**(`[운영 지침]`) → extra_context.
 
@@ -608,7 +608,7 @@ __pycache__/
 ## 19. 재구축 시 반드시 보존할 "load-bearing" 디테일 체크리스트
 
 1. `skills.py` 상단 `import time, json` 추가(미존재 시 ioc_export/memory_dump/prompt_fuzz NameError).
-2. `scan_ports/check_suricata/check_wazuh/check_modsecurity`는 레지스트리 target_vm 무시하고 bastion 호스트 `docker exec 6v6-<name>`.
+2. `scan_ports/check_suricata/check_wazuh/check_modsecurity`는 레지스트리 target_vm 무시하고 bastion 호스트 `docker exec el34-<name>`.
 3. `shell` skill의 `_bastion_patterns` 라우팅 + R3 IP 치환(10.20.30.80→192.168.0.108) + curl `-i -L` 자동 재시도.
 4. `run_playbook`은 normalized plan이 아닌 `pb.get("steps")` 순회.
 5. ReAct는 live path; 구 4-stage fallback(`_chat_once` line 968+)은 dead code(보존, 비활성).

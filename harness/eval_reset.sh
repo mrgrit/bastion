@@ -7,9 +7,9 @@
 #  사건당 클린 baseline 을 달성. 무거운 stateful(wazuh/elastic/win)·host LVM 은 건드리지 않음(리스크 회피).
 set -uo pipefail
 SSH="sshpass -p 1 ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
- -o ControlMaster=auto -o ControlPath=/tmp/cc6v6-%r@%h-%p -o ControlPersist=300s ccc@192.168.0.105"
+ -o ControlMaster=auto -o ControlPath=/tmp/ccel34-%r@%h-%p -o ControlPersist=300s ccc@192.168.0.105"
 HERE="$(cd "$(dirname "$0")/.." && pwd)"; BASE="$HERE/state/nft_baseline.txt"
-FW="docker exec 6v6-fw"
+FW="docker exec el34-fw"
 
 case "${1:-}" in
   baseline)   # 1회: production nft 베이스라인 캡처 (감사용)
@@ -23,7 +23,7 @@ case "${1:-}" in
     echo "event-reset: eval_reset table cleared + cctest targets removed" ;;
   condition-reset)  # 조건 시작: bastion E.G/KG 를 seed 로 초기화 (reset_store). SEED 경로 인자.
     SEED="${2:?seed graph.db path required}"
-    echo "condition-reset: restore E.G seed=$SEED (구현시 6v6_bastion-data/graph.db 교체 + bastion 재기동)"
+    echo "condition-reset: restore E.G seed=$SEED (구현시 el34_bastion-data/graph.db 교체 + bastion 재기동)"
     # 실행부(eval 가동 시 활성화): scp $SEED → 0.105, docker cp 로 graph.db 교체, bastion restart.
     ;;
   verify)  # §2.3 왕복 검증: 차단룰 add → reset → gone + production 보존
