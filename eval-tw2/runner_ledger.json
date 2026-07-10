@@ -1,6 +1,6 @@
 {
   "loop": "teach-until-pass-runner",
-  "heartbeat": 4,
+  "heartbeat": 5,
   "tasks": {
     "t-web-waf": {
       "prompt": "el34-web(웹서버)의 보안 상태를 점검해줘. WAF(ModSecurity)가 켜져 있는지와 Apache 웹 서비스가 정상 동작 중인지 확인",
@@ -14,6 +14,25 @@
           "skills_used": [],
           "skills_denied": [],
           "answer_tail": ""
+        }
+      ]
+    },
+    "t-siem-wazuh": {
+      "prompt": "el34 SIEM(Wazuh) 매니저가 정상 동작 중인지 점검해서 알려줘.",
+      "attempts": [
+        {
+          "rep": 1,
+          "verdict": "PASS",
+          "detail": "siem_up=OK",
+          "gt": true,
+          "gt_ev": "wazuh_proc=True",
+          "skills_used": [
+            "check_wazuh"
+          ],
+          "skills_denied": [
+            "shell"
+          ],
+          "answer_tail": "`wazuh-clusterd`를 시작·활성화하면 향후 다중‑노드 확장 시 장애 없이 동기화가 가능하다.  \n2. **메일 알림 서비스(`wazuh-maild`) 구성**  \n   - 현재 비활성화돼 있어 이메일 기반 경고가 전송되지 않는다. `ossec.conf`에 메일 섹션을 추가하고 서비스를 시작·enable한다.  \n3. **SSH 로그인 감시 강화**  \n   - Rule 5502의 레벨을 상황에 맞게 조정(예: 비정상 IP·시간대 발생 시 Level 5)하고, `wazuh-modulesd`의 `ssh` 모듈 설정을 검토한다"
         }
       ]
     }
