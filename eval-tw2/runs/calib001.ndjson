@@ -1,0 +1,20 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.122 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "skill_start", "skill": "check_modsecurity", "params": {"lines": 10, "target": "10.20.30.80", "host": "10.20.30.80"}, "attempt": 1}
+{"event": "skill_skip", "skill": "shell", "reason": "denied"}
+{"event": "skill_skip", "skill": "shell", "reason": "denied"}
+{"event": "skill_skip", "skill": "shell", "reason": "denied"}
+{"event": "skill_skip", "skill": "shell", "reason": "denied"}
+{"event": "skill_skip", "skill": "shell", "reason": "denied"}
+{"event": "stage", "stage": "validating"}
+{"event": "stream_token", "token": "**ModSecurity 상태**  \n```\n=== Config SecRuleEngine ===\nSecRuleEngine On\n...\n\"response\":{\"protocol\":\"H"}
+{"event": "stream_token", "token": "TTP/1.1\",\"status\":403,...\n```  \n\n- **WAF 활성 여부**: `SecRuleEngine` 가 **On** 이므로 ModSecurity가 실행 중이며, "}
+{"event": "stream_token", "token": "최근 로그에 HTTP 403 응답이 기록돼 실제 차단 동작을 확인했습니다. → **충족**  \n- **Apache 서비스 상태**: 현재 제공된 출력에는 Apache(또는 http"}
+{"event": "stream_token", "token": "d) 프로세스 정보가 포함되어 있지 않아 서비스 가동 여부를 판단할 수 없습니다. → **미충족**  \n\n**요약**  \n1️⃣ ModSecurity 모듈이 로드돼(`securit"}
+{"event": "stream_token", "token": "y2_module (shared)`) 있고, 규칙 엔진이 켜져 있어 웹 요청을 차단하고 있습니다.  \n2️⃣ 최근 로그에 SQL‑i 공격 시도에 대해 403 응답이 반환된 점은 W"}
+{"event": "stream_token", "token": "AF가 정상 동작함을 증명합니다.  \n3️⃣ Apache 웹 서버의 현재 실행 상태는 확인되지 않았으므로, 별도의 프로세스/서비스 조회가 필요합니다.  \n\n**권고**  \n- Mo"}
+{"event": "stream_token", "token": "dSecurity 설정(`SecRuleEngine On`)을 유지하고, 규칙 업데이트를 정기적으로 적용하세요.  \n- Apache 서비스 가동 여부를 `docker exec el3"}
+{"event": "stream_token", "token": "4-web systemctl status apache2` 등으로 직접 확인한 뒤, 비정상일 경우 재시작하거나 로그를 검토하십시오.  "}
+{"event": "kg_status", "context": {"used": true, "hits": 1, "took_ms": 25, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-759c252e5b6b", "dedup": false, "error": ""}}

@@ -42,6 +42,8 @@
 - **F2** 단일 ollama 백엔드 **모델 스왑 직렬화** → 매니저(90s)↔서브(16s) 교대 시 harness 1회가 수분~십수분. 루프 cadence 반영 필요.
 - **F3** 배포 bastion `playbooks=0` — `BASTION_PLAYBOOKS_DIR` 미설정/미마운트 의심. 정적 playbook 경로가 teach-until-pass 튜닝 대상이므로 조사 예정.
 - **F4** compose 가 published 포트를 `.161`(웹엔트리)에 바인딩 → 9100 충돌(dockerd 점유). publish 회피(docker exec 구동)로 해소.
+- **F5** Assessor `process_running@web pattern=apache` 증거표기 quirk(비-apache 프로세스 나열). passed 판정엔 무영향 → 채점은 `port_listening` 로 대체. 나중 조사.
+- **F6**(중) 읽기전용 점검을 bastion 이 `shell`(승인필요)로 라우팅 → auto_approve=false 에서 5회 denied → 완수 실패. bastion 개선점. `eval-tw2/findings/F6-*`.
 
 ## 5. 결정 (사용자 지시/기본값)
 - 소통 **한국어**. **순차 실행만**(병렬/백그라운드/배치 러너 금지, 오래 걸리면 먼저 물어봄).
@@ -49,5 +51,7 @@
 - 사용자 지정 모델(gpt-oss:120b / qwen3.5:9b) 유지 — 지연 과도해도 임의 교체 금지, 보고만.
 
 ## 6. 현재 위치 / 다음
-- ✅ 포팅·배포·검증 완료. ⏭ 루프 스크립트(scripts/eval) 구축 → **1회 보정 루프**(과제 1개 무힌트 → 채점 → 필요시 튜닝) → 재작업 임계 실측.
+- ✅ 포팅·배포·검증 완료. ✅ 루프 E2E 1사이클 실증: **calib001 attempt#1 = FAIL(1/2)** — WAF 정확, Apache 는 F6 로 미완.
+- ⏭ **attempt#2 (F6 튜닝)**: 읽기전용 점검을 read-only 스킬로 라우팅(또는 게이트 허용) — 정답 비주입 → 재발제 → 통과 여부로 THRESHOLD 실측.
+- ⏭ 루프 러너 스크립트(`scripts/eval/`) 코드화(이번 흐름 재사용).
 - ⚠ 보안: 노출 PAT `ghp_…C2oVxJN` 은 이번 실행 후 **회전 필요**(.eval-secrets 에만 보관, 커밋 0건 확인).

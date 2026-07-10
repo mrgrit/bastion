@@ -1,0 +1,36 @@
+{
+  "loop": "teach-until-pass",
+  "updated_utc": "2026-07-10T05:16Z",
+  "threshold_default": 3,
+  "heartbeat": 2,
+  "tasks": {
+    "calib001": {
+      "kind": "practice-blue-readonly",
+      "prompt": "el34-web(웹서버) WAF(ModSecurity) 활성 + Apache 가동 상태 점검·보고 (무힌트)",
+      "issue": { "endpoint": "/chat", "auto_approve": false, "stream": true },
+      "ground_truth": { "waf_modsec": "on", "apache_up": true, "web_port80": true },
+      "grade_spec": [
+        {"id":"modsec_on","type":"file_contains","target":"web","params":{"path":"/etc/modsecurity/modsecurity.conf","pattern":"SecRuleEngine On"}},
+        {"id":"web_80","type":"port_listening","target":"web","params":{"port":80}}
+      ],
+      "attempts": [
+        {
+          "n": 1,
+          "at": "2026-07-10T04:56Z",
+          "elapsed_min": 19,
+          "verdict": "FAIL",
+          "score": "1/2",
+          "waf": "correct (SecRuleEngine On + 403 log)",
+          "apache": "undetermined (정직하게 판단불가 보고)",
+          "skills_used": ["check_modsecurity"],
+          "skills_denied": ["shell x5 (reason: denied — approval gate)"],
+          "root_cause": "F6",
+          "run": "runs/calib001.ndjson",
+          "kg_recorded": "anc-759c252e5b6b"
+        }
+      ],
+      "status": "OPEN",
+      "next": "attempt#2 — F6 튜닝(읽기전용 점검을 shell 대신 read-only recon 스킬/게이트 허용) 후 재발제"
+    }
+  }
+}
