@@ -56,12 +56,12 @@ SKILL_CATEGORIES: dict[str, dict] = {
 
 SKILLS: dict[str, dict] = {
     "probe_host": {
-        "description": "호스트 상태 점검 — uptime, 디스크, 메모리, 실패 서비스 확인",
+        "description": "호스트 상태 점검 — uptime, 디스크, 메모리, 실패 서비스 확인. 서비스 가동/프로세스 존재 여부 읽기전용 확인(승인 불필요, shell 대체)",
         "params": {"target": {"type": "string", "description": "대상 VM role (attacker/secu/web/siem/manager) 또는 IP", "required": True}},
         "target_vm": "auto",
     },
     "scan_ports": {
-        "description": "nmap 포트 스캔 — 대상의 열린 포트와 서비스 버전 확인",
+        "description": "nmap 포트 스캔 — 대상의 열린 포트와 서비스 버전 확인. 서비스 가동·포트 리슨 여부 읽기전용 확인에 사용(승인 불필요, shell 대체)",
         "params": {
             "target": {"type": "string", "description": "스캔 대상 IP 또는 role", "required": True},
             "ports": {"type": "string", "description": "포트 범위 (기본: --top-ports 100)", "required": False},

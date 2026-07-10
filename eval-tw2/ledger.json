@@ -1,36 +1,39 @@
 {
   "loop": "teach-until-pass",
-  "updated_utc": "2026-07-10T05:16Z",
-  "threshold_default": 3,
-  "heartbeat": 2,
+  "updated_utc": "2026-07-10T07:21Z",
+  "heartbeat": 3,
+  "threshold_learning": {
+    "initial": "재작업 THRESHOLD=3 (1회 통과 시 성공)",
+    "revised": "F7(비결정성) 실측 후 변경 — 채점을 단발 pass/fail 이 아니라 n_repeats 다수결 pass-rate 로. 초기 n_repeats=3, 튜닝라운드 THRESHOLD=3.",
+    "reason": "동일 과제·동일 설정에서 attempt#1=FAIL, attempt#2=PASS (스킬사용 동일: check_modsecurity+shell×5 denied). 차이는 최종 합성 추론뿐 → 단발 채점은 신뢰 불가."
+  },
   "tasks": {
     "calib001": {
       "kind": "practice-blue-readonly",
-      "prompt": "el34-web(웹서버) WAF(ModSecurity) 활성 + Apache 가동 상태 점검·보고 (무힌트)",
+      "prompt": "el34-web WAF(ModSecurity) 활성 + Apache 가동 상태 점검·보고 (무힌트)",
       "issue": { "endpoint": "/chat", "auto_approve": false, "stream": true },
       "ground_truth": { "waf_modsec": "on", "apache_up": true, "web_port80": true },
-      "grade_spec": [
-        {"id":"modsec_on","type":"file_contains","target":"web","params":{"path":"/etc/modsecurity/modsecurity.conf","pattern":"SecRuleEngine On"}},
-        {"id":"web_80","type":"port_listening","target":"web","params":{"port":80}}
-      ],
       "attempts": [
         {
-          "n": 1,
-          "at": "2026-07-10T04:56Z",
-          "elapsed_min": 19,
-          "verdict": "FAIL",
-          "score": "1/2",
-          "waf": "correct (SecRuleEngine On + 403 log)",
-          "apache": "undetermined (정직하게 판단불가 보고)",
-          "skills_used": ["check_modsecurity"],
-          "skills_denied": ["shell x5 (reason: denied — approval gate)"],
-          "root_cause": "F6",
-          "run": "runs/calib001.ndjson",
-          "kg_recorded": "anc-759c252e5b6b"
+          "n": 1, "at": "2026-07-10T04:56Z", "elapsed_min": 19,
+          "verdict": "FAIL", "score": "1/2",
+          "waf": "correct", "apache": "undetermined (판단불가 정직보고)",
+          "skills_used": ["check_modsecurity"], "skills_denied": ["shell x5"],
+          "root_cause": "F6", "run": "runs/calib001.ndjson"
+        },
+        {
+          "n": 2, "at": "2026-07-10T07:00Z", "elapsed_min": 21,
+          "verdict": "PASS", "score": "2/2",
+          "waf": "correct", "apache": "correct (modsec 로그 Apache/2.4.52 403 에서 추론)",
+          "skills_used": ["check_modsecurity"], "skills_denied": ["shell x5"],
+          "tuning_applied": "F6 튜닝: scan_ports/probe_host 설명 일반화(읽기전용·승인불필요)",
+          "tuning_effective": false,
+          "caveat": "PASS 는 F6 튜닝 효과 아님 — 플래너가 여전히 shell(denied) 선택, scan_ports 0회. PASS 는 LLM 추론변동(F7)에 기인.",
+          "run": "runs/calib002.ndjson"
         }
       ],
-      "status": "OPEN",
-      "next": "attempt#2 — F6 튜닝(읽기전용 점검을 shell 대신 read-only recon 스킬/게이트 허용) 후 재발제"
+      "status": "PASS_UNSTABLE",
+      "next": "n_repeats 채점으로 pass-rate 확정. 결정론 라우팅 원하면 F6 튜닝을 playbook(F3 동시해소)/harness 로 상향."
     }
   }
 }

@@ -25,3 +25,9 @@
 ## 대조 정답 (Assessor)
 - `port_listening web 80` = PASS (apache2 pid 687), `file_contains web modsecurity.conf "SecRuleEngine On"` = PASS.
 - 즉 Apache 는 실제 가동중 → bastion 이 확인만 했으면 PASS 였음.
+
+## attempt#2 결과 (2026-07-10) — 튜닝안 A(스킬설명) 효과 없음
+- 적용: `probe_host`/`scan_ports` 설명을 "서비스 가동/포트 리슨 읽기전용 확인(승인불필요, shell 대체)"로 일반화.
+- 재발제 결과: 플래너가 **여전히 shell 5회 선택→denied**, `scan_ports`/`probe_host` **0회**. → **스킬설명 튜닝은 라우팅을 못 바꿈**.
+- attempt#2 는 PASS(2/2) 였으나 이는 튜닝 아닌 **추론변동(F7)** 때문(정직 귀속).
+- 결론: 결정론적 read-only 라우팅을 원하면 더 강한 레버 필요 — **playbook(정확 DAG, F3 동시해소)** 또는 **harness 팀 경로**(persona `allowed_skills` 로 shell 배제 + read-only 스킬 강제). 다음 튜닝 후보.
