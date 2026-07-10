@@ -1,36 +1,31 @@
-# Bastion tw2/el34 — 진행 보고서 (heartbeat #3)
+# Bastion tw2/el34 — 진행 보고서 (heartbeat #4)
 
-> 단일 출처. STATE.md/ledger 에서 재생성. 갱신: 2026-07-10 07:21 UTC · 담당 CC(checker) · 브랜치 eval-tw2
+> 단일 출처. STATE.md/ledger 에서 재생성. 갱신: 2026-07-10 · 담당 CC(checker) · 브랜치 eval-tw2
 
-## 진행률: **포팅+배포+루프 완전 실증(발제→채점→튜닝→재작업 2사이클). 재작업 THRESHOLD 실측 완료**
+## 진행률: **자동 러너 가동 + 반복실패 근본원인(F9) 규명 → 환경/loop 개선 중**
 
-| 단계 | 상태 |
-|---|---|
-| 0–4 정찰·환경·클론/PAT·포팅·배포 | ✅ (bastion 풀 가동: skills=33, KG 364, harness 8·페르소나 12) |
-| 5 CC teach-until-pass 루프 | ✅ 스파인(LOOP/STATE/ledger) + 발제→채점→튜닝→재작업 E2E 2회 실증 |
-| 6 1회 보정 + THRESHOLD 실측 | ✅ 2 attempt 완료(FAIL→PASS) — THRESHOLD 규칙 실측 개정 |
+## 성공률 (자동 러너, 버그수정 후 깨끗한 실측)
+| task | verdict | skills | 비고 |
+|---|---|---|---|
+| t-siem-wazuh | ✅ PASS | check_wazuh | 전용 읽기전용 스킬 → Wazuh up 정확 |
+| t-ips-suricata | ✅ PASS | check_suricata | 전용 읽기전용 스킬 → Suricata up 정확 |
+| t-web-waf | ❌ FAIL | (없음) | **콜드로드 타임아웃(F9)** — bastion 결함 아님 |
+- **2/3 (67%)**. web 실패는 성능이 아니라 **환경(지연)**.
 
-## 성공률
-- **calib001**(BLUE 읽기전용): attempt#1 **FAIL(1/2)** → attempt#2 **PASS(2/2)** = `PASS_UNSTABLE`.
-- 정직 귀속: attempt#2 PASS 는 **F6 튜닝 효과 아님**(스킬설명 튜닝은 라우팅 못 바꿈, 여전히 shell denied) — **LLM 추론변동(F7)** 때문.
-- 소요: attempt당 ~19–21분(매니저 gpt-oss:120b 지연 지배).
-
-## 재작업 THRESHOLD (실측 결론)
-- 초기 "1회 통과=성공"은 **F7 비결정성으로 신뢰불가**. → **채점 = n_repeats(초기 3) 다수결 pass-rate**, 튜닝라운드 THRESHOLD=3.
-- 튜닝 효과 귀속도 n_repeats 전후 비교 필수(단발 PASS 를 튜닝성공으로 오귀속 금지).
+## 반복실패 → 근본원인 → 개선 (지시하신 루프)
+- **원인 규명(F9)**: gpt-oss:120b 지연(warm 90s·**cold 133s**) > bastion react 타임아웃(180s). 큐 첫 과제가 콜드로드로 타임아웃 → skills=[] → FAIL. 후속(warm)은 PASS. ⇒ F2·F7·web반복실패를 **전부 설명**. EG/하네스 문제 아님.
+- **개선(다중 레버)**: ①환경=gpt-oss:120b·qwen3.5:9b `keep_alive=60m` 예열(콜드로드 제거) ②loop=`loop.py` warmup preflight 추가 ③config(옵션)=react 180→300s·planning 상향.
+- **러너 버그 수정**: 발제 페이로드가 JSON 아닌 원시문자열 → 422. 수정+오프라인 재현검증 완료.
 
 ## Findings
-- **F1** 매니저·서브 둘 다 thinking 모델(지연·토큰↑).
-- **F2** 단일 ollama 모델스왑 직렬화 → 매니저 ~90s/호출, attempt 1회 ~19–21분 실측.
-- **F3** playbooks=0 (정적 playbook 미배선) — 결정론 라우팅 튜닝의 상위 레버 후보.
-- **F5** Assessor process_running@web 증거 quirk(채점 무영향).
-- **F6** 읽기전용 점검이 shell 게이트에 막힘 → **스킬설명 튜닝은 라우팅 개선 실패**. playbook/harness 로 상향 필요.
-- **F7**(중~높) 실행 비결정성: 동일 과제·설정이 FAIL→PASS → 단발 채점 불가, n_repeats 필요.
+- **F8**(중) 서브에이전트 일부 경로 gemma3:4b 하드코딩 → qwen3.5:9b 미적용. `findings/F8`.
+- **F9**(높) 매니저 LLM 지연 > 타임아웃 = flakiness 근본원인. `findings/F9`.
+- **gemma4:31b**: 내 bastion 미사용 확정(gpt-oss:120b 라우팅). 공유 GPU에 stuck-loaded(ollama stop 3회 무효), 무해(자동 evict). 강제해제=ollama 재시작(공유 3자 영향)이라 단독 미실행.
+- F1(thinking 모델), F2(모델스왑 지연), F5(assessor quirk), F6(읽기전용 shell 게이트), F7(비결정성) 는 상당 부분 **F9 의 발현**으로 재해석됨.
 
-## 개선 방향 / 다음
-1. 채점을 **n_repeats 다수결**로 전환(LOOP.md 반영 완료). calib001 을 n=3 재측정해 진짜 pass-rate 확정.
-2. F6 결정론 라우팅: **playbook `web_health_check`**([check_modsecurity, scan_ports]) 배선(F3 동시해소) 또는 harness 팀 경로.
-3. 루프 러너 스크립트(`scripts/eval/`) 코드화(이번 흐름 재사용) — 다음 세션.
-4. ⚠ 노출 PAT **회전**(실행 후).
+## 다음
+1. warm 상태에서 **t-web-waf 재실행** → PASS 전환 확인(F9 수정 검증).
+2. 확인되면 warmup 내장 러너로 큐 재측정(2/3→3/3 기대) + n_repeats.
+3. F8·(옵션)타임아웃 상향을 한 번의 재배포로 통합.
 
-git SHA: (commit 시 갱신) · heartbeat: 3
+heartbeat: 4

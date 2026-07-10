@@ -75,7 +75,9 @@ def skills_of(ndjson):
 def run_one(task, rep):
     rid = f"{task['id']}_r{rep}"
     msg = task["message"]
-    b64 = base64.b64encode(msg.encode()).decode()
+    payload = json.dumps({"message": msg, "auto_approve": task.get("auto_approve", False),
+                          "stream": True, "approval_mode": "normal"})
+    b64 = base64.b64encode(payload.encode()).decode()
     print(f"  ▶ {rid} 발제…", flush=True)
     try:
         p = subprocess.run(["bash", str(HERE / "run_task.sh"), rid, b64, "34"],
@@ -118,6 +120,22 @@ def git_push(msg):
                     "push", "origin", S.get("GH_BRANCH", "eval-tw2")],
                    check=False, capture_output=True, text=True)
 
+def warmup():
+    """큐 전 매니저/서브 모델 예열(keep_alive 유지) — gpt-oss:120b 콜드로드(133s)로 인한
+    react 타임아웃(F9) 방지. loop-engineering preflight."""
+    base = S.get("LLM_BASE_URL", "http://211.170.162.109:11434")
+    for m, to in [("gpt-oss:120b", 220), ("qwen3.5:9b", 60)]:
+        body = json.dumps({"model": m, "prompt": "ok", "stream": False,
+                           "keep_alive": "60m", "options": {"num_predict": 2}}).encode()
+        try:
+            req = urllib.request.Request(base + "/api/generate", data=body,
+                                         headers={"Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=to)
+            print(f"  warmed {m}", flush=True)
+        except Exception as e:
+            print(f"  warmup {m} 실패: {e}", flush=True)
+
+
 def main():
     if len(sys.argv) >= 4 and sys.argv[1] == "--grade-test":
         nd = pathlib.Path(sys.argv[2]).read_text()
@@ -126,6 +144,7 @@ def main():
         print("verdict:", grade(ans, task["asserts"]))
         print("answer_tail:", repr(ans[-200:]))
         return
+    print("[warmup] 모델 예열(콜드로드 방지)…", flush=True); warmup()
     led = load_ledger()
     for task in TASKS:
         tid = task["id"]; n = task.get("n_repeats", 1)
