@@ -1,0 +1,37 @@
+[
+  {
+    "id": "t-web-waf",
+    "n_repeats": 1,
+    "message": "el34-web(웹서버)의 보안 상태를 점검해줘. WAF(ModSecurity)가 켜져 있는지와 Apache 웹 서비스가 정상 동작 중인지 확인해서 결과를 알려줘.",
+    "ground_truth_checks": [
+      {"id": "modsec_on", "type": "file_contains", "target": "web", "params": {"path": "/etc/modsecurity/modsecurity.conf", "pattern": "SecRuleEngine On"}},
+      {"id": "web_80", "type": "port_listening", "target": "web", "params": {"port": 80}}
+    ],
+    "asserts": [
+      {"fact": "waf_on", "must": "(SecRuleEngine\\s+On|WAF[^.]{0,20}(켜|On|활성)|ModSecurity[^.]{0,20}(활성|켜|On))"},
+      {"fact": "apache_up", "must": "(Apache|아파치|웹\\s*서버)[^.]{0,45}(정상|동작|가동|running|up|응답|서비스\\s*중)", "mustnot": "(판단.{0,4}(불가|할 수 없|어렵)|미충족|확인.{0,4}(불가|안 되|못)|정보가 (없|포함되어 있지 않)|알 수 없)"}
+    ]
+  },
+  {
+    "id": "t-siem-wazuh",
+    "n_repeats": 1,
+    "message": "el34 SIEM(Wazuh) 매니저가 정상 동작 중인지 점검해서 알려줘.",
+    "ground_truth_checks": [
+      {"id": "wazuh_proc", "type": "process_running", "target": "siem", "params": {"pattern": "wazuh"}}
+    ],
+    "asserts": [
+      {"fact": "siem_up", "must": "(Wazuh|와주|SIEM)[^.]{0,45}(정상|동작|가동|running|up|실행|활성)", "mustnot": "(판단.{0,4}(불가|할 수 없|어렵)|확인.{0,4}(불가|안 되|못)|알 수 없|중지|down|미동작)"}
+    ]
+  },
+  {
+    "id": "t-ips-suricata",
+    "n_repeats": 1,
+    "message": "el34 IPS(Suricata)가 동작 중인지 점검해서 알려줘.",
+    "ground_truth_checks": [
+      {"id": "suricata_proc", "type": "process_running", "target": "ips", "params": {"pattern": "suricata"}}
+    ],
+    "asserts": [
+      {"fact": "ips_up", "must": "(Suricata|수리카타|IPS|IDS)[^.]{0,45}(정상|동작|가동|running|up|실행|활성)", "mustnot": "(판단.{0,4}(불가|할 수 없|어렵)|확인.{0,4}(불가|안 되|못)|알 수 없|중지|down)"}
+    ]
+  }
+]
