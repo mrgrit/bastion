@@ -1,6 +1,6 @@
 {
   "loop": "teach-until-pass-runner",
-  "heartbeat": 11,
+  "heartbeat": 12,
   "tasks": {
     "t-web-waf": {
       "prompt": "el34-web(웹서버)의 보안 상태를 점검해줘. WAF(ModSecurity)가 켜져 있는지와 Apache 웹 서비스가 정상 동작 중인지 확인",
@@ -101,6 +101,41 @@
           ],
           "skills_denied": [],
           "answer_tail": "ートが生成** されており、SQLi 攻撃の検知実績がある。  \n\n**추천 조치**\n1. `suricata-update` を定期実行しシグニチャを最新化する。  \n2. HTTPS トラフィックも監視対象に加えるため、TLS termination プロキシまたは Suricata の TLS‑inspection 機能を有効化。  \n3. 重要アラート（SQLi 等）については `reject` アクションへ変更し、攻撃トラフィックを即時遮断する。\n\n**GOAL 충족됨:** Suricata IPS 가동 여부와 알림 생성 현황을 확인하고, 방어 강화 방향을 제시했습니다."
+        }
+      ]
+    },
+    "t-juice-up": {
+      "prompt": "el34 취약 웹앱 Juice Shop 서비스가 떠 있는지(정상 응답하는지) 점검해서 알려줘.",
+      "attempts": [
+        {
+          "rep": 1,
+          "verdict": "FAIL",
+          "detail": "juice_up=X",
+          "gt": false,
+          "gt_ev": "juice_proc=False",
+          "skills_used": [
+            "docker_manage",
+            "docker_manage"
+          ],
+          "skills_denied": [
+            "shell",
+            "shell",
+            "shell",
+            "shell",
+            "shell",
+            "shell",
+            "shell",
+            "shell",
+            "shell",
+            "shell",
+            "shell",
+            "shell",
+            "shell",
+            "shell",
+            "shell",
+            "shell"
+          ],
+          "answer_tail": " 라우팅되지 않음.  \n3. **다음 시도 권장** – 운영자는 먼저 `docker_manage(action=\"ps\")` 로 컨테이너 상태 확인 후, 필요시 `docker start el34-juiceshop`; 이후 `docker exec el34-juiceshop curl -i http://localhost:3000` 혹은 `docker inspect --format='{{json .NetworkSettings.Ports}}' el34-juiceshop` 로 포트 매핑을 검증하고, 방화벽 규칙이 해당 포트를 허용하는지 확인한다."
         }
       ]
     }
