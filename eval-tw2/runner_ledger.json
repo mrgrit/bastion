@@ -1,6 +1,6 @@
 {
   "loop": "teach-until-pass-runner",
-  "heartbeat": 9,
+  "heartbeat": 10,
   "tasks": {
     "t-web-waf": {
       "prompt": "el34-web(웹서버)의 보안 상태를 점검해줘. WAF(ModSecurity)가 켜져 있는지와 Apache 웹 서비스가 정상 동작 중인지 확인",
@@ -53,6 +53,23 @@
             "shell"
           ],
           "answer_tail": "`wazuh-clusterd`를 시작·활성화하면 향후 다중‑노드 확장 시 장애 없이 동기화가 가능하다.  \n2. **메일 알림 서비스(`wazuh-maild`) 구성**  \n   - 현재 비활성화돼 있어 이메일 기반 경고가 전송되지 않는다. `ossec.conf`에 메일 섹션을 추가하고 서비스를 시작·enable한다.  \n3. **SSH 로그인 감시 강화**  \n   - Rule 5502의 레벨을 상황에 맞게 조정(예: 비정상 IP·시간대 발생 시 Level 5)하고, `wazuh-modulesd`의 `ssh` 모듈 설정을 검토한다"
+        },
+        {
+          "rep": 2,
+          "verdict": "FAIL",
+          "detail": "siem_up=X",
+          "gt": true,
+          "gt_ev": "wazuh_proc=True",
+          "skills_used": [
+            "check_wazuh"
+          ],
+          "skills_denied": [
+            "shell",
+            "shell",
+            "shell",
+            "shell"
+          ],
+          "answer_tail": "태가 감지되면 즉시 복구 절차를 수행한다.\n\n---  \n\n**요약:** Wazuh 매니저는 대부분의 핵심 데몬이 정상 작동하지만 `wazuh-clusterd` 와 `wazuh-maild` 가 중단돼 있어 클러스터링·메일 알림 기능에 취약점이 존재합니다. 에이전트와 로그 수집은 정상이며, 최근 로그인 성공 이벤트는 기대된 동작입니다. 위 권고를 적용하면 서비스 가용성 및 보안 경보 체계가 완전해집니다.**GOAL 충족됨:** el34 SIEM (Wazuh) 매니저가 정상 동작 중인지 확인하고, 비정상 요소와 권고 사항을 제공했습니다."
         }
       ]
     },
