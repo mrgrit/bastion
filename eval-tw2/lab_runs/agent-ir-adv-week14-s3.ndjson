@@ -1,0 +1,26 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.099 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "python3 - <<'PY'\ncommits=[{\"id\":\"a1b2\",\"signed\":True,\"author\":\"kim@corp\"},\n {\"id\":\"c3d4\",\"signed\":False,\"author\":\"unknown\"}]\nartifact={\"name\":\"app-1.0.jar\",\"expected_hash\":\"abc123\",\"actual_hash\":\"XYZ999\"}\nviolations=[]\nfor c in commits:\n if not c[\"signed\"]: violations.append(f\"unsigned commit {c['id']} by {c['author']}\")\nif artifact[\"expected_hash\"]!=artifact[\"actual_hash\"]:\n violations.append(f\"artifact hash mismatch ({artifact['name']})\")\nfor v in violations: print(\" violation:\", v)\nprint(\"INTEGRITY_VIOLATION\" if violations else \"INTEGRITY_OK\")\nPY", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": " violation: unsigned commit c3d4 by unknown\n violation: artifact hash mismatch (app-1.0.jar)\nINTEGRITY_VIOLATION\n", "attempt": 1}
+{"event": "stream_token", "token": "**실행 결과 (★ 코드블록 필수)**  \n```bash\n$ python3 - <<'PY'\ncommits=[{\"id\":\"a1b2\",\"signed\":True,\"author\":\"kim"}
+{"event": "stream_token", "token": "@corp\"},\n {\"id\":\"c3d4\",\"signed\":False,\"author\":\"unknown\"}]\nartifact={\"name\":\"app-1.0.jar\",\"expected_"}
+{"event": "stream_token", "token": "hash\":\"abc123\",\"actual_hash\":\"XYZ999\"}\nviolations=[]\nfor c in commits:\n    if not c[\"signed\"]:\n     "}
+{"event": "stream_token", "token": "   violations.append(f\"unsigned commit {c['id']} by {c['author']}\")\nif artifact[\"expected_hash\"]!=ar"}
+{"event": "stream_token", "token": "tifact[\"actual_hash\"]:\n    violations.append(f\"artifact hash mismatch ({artifact['name']})\")\nfor v i"}
+{"event": "stream_token", "token": "n violations: print(\" violation:\", v)\nprint(\"INTEGRITY_VIOLATION\" if violations else \"INTEGRITY_OK\")"}
+{"event": "stream_token", "token": "\nPY\n violation: unsigned commit c3d4 by unknown\n violation: artifact hash mismatch (app-1.0.jar)\nINT"}
+{"event": "stream_token", "token": "EGRITY_VIOLATION\n```\n\n**취약점/의도 입증**  \n- **Unsigned 커밋 탐지** → `unsigned commit c3d4 by unknown`  \n  *"}
+{"event": "stream_token", "token": "무서명 커밋*은 신뢰할 수 없는 코드 변경을 의미하며, 악의적인 삽입 가능성을 시사한다.  \n- **아티팩트 해시 불일치** → `artifact hash mismatch (app"}
+{"event": "stream_token", "token": "-1.0.jar)`  \n  기대값(`abc123`)과 실제 값(`XYZ999`)이 다르므로 배포된 JAR 파일이 변조되었음이 확인된다.  \n- 최종 출력 `INTEGRITY_VIO"}
+{"event": "stream_token", "token": "LATION` 은 위 두 항목 모두 존재함을 명시적으로 나타낸다 → **무결성 위반**이 확실히 감지됨.\n\n**방어 언급**  \n1. **Git 서명( GPG/SSH ) 강제 적용"}
+{"event": "stream_token", "token": "** – 모든 커밋에 `git commit -S` 로 서명을 요구하고, CI 파이프라인에서 `git verify-commit` 검증을 수행한다.  \n2. **아티팩트 해시 검증 자"}
+{"event": "stream_token", "token": "동화** – 빌드·배포 단계에서 SHA‑256 해시를 메타데이터에 기록하고, 배포 전 `sha256sum -c` 로 무결성을 확인한다.  \n3. **CI/CD 정책** – 서명되지"}
+{"event": "stream_token", "token": " 않은 커밋 및 해시 불일치 시 파이프라인을 즉시 차단하도록 Gatekeeper/OPA 규칙을 적용한다.\n\n**한계·인지**  \n- 현재 스크립트는 **정적인 데이터**(hard‑"}
+{"event": "stream_token", "token": "coded 리스트)만 검사하므로, 실제 레포지토리와 아티팩트 저장소를 실시간으로 조회하지 않는다. 운영 환경에서는 `git log --show-signature` 와 아티팩트 레지"}
+{"event": "stream_token", "token": "스트리 API 를 연동해 자동화해야 한다.  \n- 해시 불일치는 **변조** 외에도 빌드 환경 차이(예: 타임스탬프, 메타데이터)로 인한 정상적인 변형일 수 있다. 따라서 허용 가"}
+{"event": "stream_token", "token": "능한 변형을 사전에 정의하고 예외 처리를 추가하는 것이 필요하다.  \n- 무서명 커밋 탐지는 **작성자 식별**에 한계가 있다 – `unknown` 사용자는 인증되지 않은 계정이므"}
+{"event": "stream_token", "token": "로, IAM 정책 강화와 MFA 적용으로 사전 방어를 보완해야 한다."}
+{"event": "stage", "stage": "validating"}
+{"event": "kg_status", "context": {"used": true, "hits": 3, "took_ms": 49, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-e5e35a3d78f5", "dedup": false, "error": ""}}
