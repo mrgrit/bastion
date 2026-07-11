@@ -7,7 +7,7 @@
   lab_loop.py            # 전량 순차(완료 스텝 skip → 재개)
   lab_loop.py --count    # 총 스텝 수
 """
-import base64, json, subprocess, sys, pathlib, urllib.request
+import base64, json, re, subprocess, sys, pathlib, urllib.request
 try:
     import yaml
 except ImportError:
