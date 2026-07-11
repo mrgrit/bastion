@@ -136,11 +136,13 @@ def judge(answer, step):
         return None, f"judge-error: {e}"
 
 def grade(step, answer):
-    exp_hit = bool(step.get("expect") and str(step["expect"]) in answer)   # output_contains 신호
+    exp_hit = bool(step.get("expect") and str(step["expect"]) in answer)   # output_contains 보조신호
     met, ev = judge(answer, step)
-    if met is not None:
-        verdict = "PASS" if met else ("PASS" if exp_hit else "FAIL")
-    else:
+    if met is True:                        # semantic 우선 — judge 가 실제 달성 판정
+        verdict = "PASS"
+    elif met is False:
+        verdict = "FAIL"
+    else:                                  # judge 실패(None)시에만 expect 폴백
         verdict = "PASS" if exp_hit else "UNKNOWN"
     return verdict, {"sem": met, "sem_ev": ev, "expect_hit": exp_hit}
 
