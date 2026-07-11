@@ -63,6 +63,37 @@ def grade(answer, asserts):
         detail.append(f"{a['fact']}={'OK' if good else 'X'}")
     return ("PASS" if ok else "FAIL"), ", ".join(detail)
 
+def grade_llm(answer, task):
+    """LLM-judge 채점(qwen3.5:9b) — regex 취약성(긴 답변의 하위요소 언급) 극복.
+    실제상태(task['truth'])를 기준으로 에이전트가 각 사실을 올바르게 보고했는지 의미 판정."""
+    if not answer.strip():
+        return "FAIL", "빈 답변"
+    facts = [a["fact"] for a in task["asserts"]]
+    base = S.get("LLM_BASE_URL", "http://211.170.162.109:11434")
+    prompt = (
+        "너는 보안 점검 채점자다. '에이전트 답변'이 각 사실을 '실제 상태'에 맞게 올바르게 보고했는지만 판정한다.\n"
+        "하위 구성요소 일부 이상을 언급해도 전체 서비스가 정상이라고 올바르게 결론냈으면 그 사실은 true.\n\n"
+        f"과제: {task['message']}\n"
+        f"실제 상태(정답): {task.get('truth','(미제공)')}\n"
+        f"판정할 사실: {', '.join(facts)}\n\n"
+        f"에이전트 답변:\n{answer[:4000]}\n\n"
+        "각 사실에 대해 에이전트가 실제 상태와 일치하게 명확히 보고했으면 true, 아니면 false.\n"
+        "설명 없이 JSON 만: {" + ", ".join(f'\"{f}\": true' for f in facts) + "}"
+    )
+    body = json.dumps({"model": "qwen3.5:9b", "prompt": prompt, "stream": False,
+                       "format": "json", "keep_alive": "60m", "think": False,
+                       "options": {"num_predict": 500, "temperature": 0}}).encode()
+    try:
+        req = urllib.request.Request(base + "/api/generate", data=body,
+                                     headers={"Content-Type": "application/json"})
+        r = json.loads(urllib.request.urlopen(req, timeout=120).read())
+        resp = (r.get("response") or "").strip() or "{}"
+        j = json.loads(resp)
+        ok = all(j.get(f) is True for f in facts)
+        return ("PASS" if ok else "FAIL"), "judge:" + ", ".join(f"{f}={j.get(f)}" for f in facts)
+    except Exception as e:
+        return None, f"llm-judge-error: {e}"
+
 def skills_of(ndjson):
     used, denied = [], []
     for ln in ndjson.splitlines():
@@ -88,7 +119,9 @@ def run_one(task, rep):
     (RUNS / f"{rid}.ndjson").write_text(ndjson)
     answer = extract_answer(ndjson)
     gt_ok, gt_ev = assess(task.get("ground_truth_checks", []))
-    verdict, detail = grade(answer, task["asserts"])
+    verdict, detail = grade_llm(answer, task)          # LLM-judge 우선(의미 판정)
+    if verdict is None:                                 # judge 실패 → regex 폴백
+        verdict, detail = grade(answer, task["asserts"])
     used, denied = skills_of(ndjson)
     print(f"    {rid}: {verdict} ({detail}) | gt={gt_ok} | skills={used} denied={denied}", flush=True)
     return {"rep": rep, "verdict": verdict, "detail": detail, "gt": gt_ok, "gt_ev": gt_ev,
@@ -143,6 +176,17 @@ def main():
         ans = extract_answer(nd)
         print("verdict:", grade(ans, task["asserts"]))
         print("answer_tail:", repr(ans[-200:]))
+        return
+    if sys.argv[1:2] == ["--regrade"]:
+        for f in sorted(RUNS.glob("*.ndjson")):
+            stem = f.stem
+            tid = "t-web-waf" if stem.startswith("calib") else stem.rsplit("_r", 1)[0]
+            task = next((t for t in TASKS if t["id"] == tid), None)
+            if not task:
+                print(f"  {stem}: (task {tid} 없음)"); continue
+            ans = extract_answer(f.read_text())
+            vl = grade_llm(ans, task); vr = grade(ans, task["asserts"])
+            print(f"  {stem}: LLM={vl[0]} / regex={vr[0]}  | {vl[1][:66]}")
         return
     print("[warmup] 모델 예열(콜드로드 방지)…", flush=True); warmup()
     led = load_ledger()

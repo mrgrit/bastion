@@ -1,35 +1,34 @@
-# Bastion tw2/el34 — 진행 보고서 (heartbeat #5)
+# Bastion tw2/el34 — 진행 보고서 (heartbeat #6)
 
 > 단일 출처. STATE.md/ledger 에서 재생성. 갱신: 2026-07-11 · 담당 CC(checker) · 브랜치 eval-tw2
 
-## 진행률: **자동 루프 안정화 — 반복실패 근본원인 2건(F9·F6) 규명·수정·검증 완료. 3/3 PASS**
+## 진행률: **자동 루프 안정화 완료 — bastion BLUE 점검 유효과제 100%, 채점기 견고화(LLM-judge)**
 
-## 성공률 (자동 러너)
-| task | verdict | skills | 경과 |
-|---|---|---|---|
-| t-web-waf | ✅ PASS | check_modsecurity(+Apache) | FAIL(콜드로드)→FAIL(shell게이트)→**PASS** |
-| t-siem-wazuh | ✅ PASS | check_wazuh | 안정 |
-| t-ips-suricata | ✅ PASS | check_suricata | 안정 |
-- **3/3 (100%)**. web 은 2단계 수정(F9→F6) 후 통과.
+## bastion 성능 (F9·F6 수정 후, 견고한 채점 기준)
+| task | pass-rate | 스킬 |
+|---|---|---|
+| t-web-waf (WAF+Apache) | **2/2** | check_modsecurity(+Apache) |
+| t-siem-wazuh | **2/2** | check_wazuh |
+| t-ips-suricata | **2/2** | check_suricata |
+- **유효 BLUE 점검 6/6 (100%)**. bastion 은 전용 읽기전용 스킬이 있는 점검을 안정적으로 수행.
 
-## 개선 사이클 (지시하신 "반복실패→원인→개선" 그대로)
-1. **F9 규명·수정**: gpt-oss:120b cold 133s > react 타임아웃 180s → 첫 과제 타임아웃 → skills=[].
-   → **환경**: keep_alive=60m 예열(콜드로드 제거, gemma4:31b evict 부수효과) + **loop**: warmup preflight 내장.
-   결과: bastion 이 스킬 실행 재개(waf_on 정확).
-2. **F6 규명·수정**: Apache 확인이 shell(승인필요)로 라우팅→auto_approve=false 에서 5회 denied.
-   → **skill 개선**: check_modsecurity 가 Apache 프로세스+포트80 읽기전용 확인도 반환(정답주입 아님).
-   결과: 한 읽기전용 스킬로 WAF+Apache 커버 → apache_up 정확 → PASS.
-3. **러너 버그**: 발제 페이로드 JSON 누락(422) 수정 + 오프라인 재현검증.
+## 개선 여정 (지시하신 "반복실패→원인→개선"의 연속)
+1. **러너 페이로드 버그**(JSON 미포장→422) → 수정+오프라인 재현.
+2. **F9**(콜드로드 타임아웃): gpt-oss:120b cold 133s > react 180s → 첫 과제 skills=[]. → 모델 keep_alive 예열 + loop warmup preflight. (gemma4:31b evict 부수해결)
+3. **F6**(Apache 읽기전용 shell 게이트): check_modsecurity 가 Apache 프로세스+포트80 읽기전용 확인도 반환 → web PASS.
+4. **채점기 취약성**: regex mustnot 이 긴 답변의 하위요소("일부 데몬 중단") 언급을 오탐 → **LLM-judge(qwen3.5:9b, think:false)** 도입 + regex 완화. 저장 run 재채점으로 검증(LLM=regex 전건 일치).
 
-## Findings (정리)
-- **F9**(높, 수정됨) LLM지연>타임아웃 = flakiness 근본. F2·F7·web반복실패의 발현이었음.
-- **F6**(중, 수정됨) 읽기전용 shell 게이트 → check_modsecurity 확장으로 우회. 일반화(read-only shell 허용)는 향후.
-- **F8**(중, OPEN) 서브에이전트 gemma3:4b 하드코딩 → qwen3.5:9b 미적용. 다음 재배포에 포함 예정.
-- gemma4:31b: bastion 미사용 확정 + 예열로 evict 됨(해소).
+## 정정/종결
+- 직전 "5/7" 의 2 실패는 **bastion 아님**: siem_r2=채점 오탐(교정됨), t-juice-up=Assessor 가 juiceshop 미매핑(불가과제, 제거).
+- **F8**(서브 gemma3:4b) → **오탐, CLOSED**(실제 qwen3.5:9b 사용, gemma3:4b 는 예외폴백/docstring).
+
+## 남은 개선 여지 (관측)
+- **F6 일반화**: 전용 스킬 없는 대상(예: 취약앱)은 여전히 shell(denied) 로 빠짐 → read-only shell 허용 또는 범용 read-only 서비스체크 스킬이 근본해결.
+- **F7**(비결정성)은 상당부분 F9 발현이었음 — 예열 후 편차 축소 확인.
 
 ## 다음 (계속)
-1. **안정성**: web/siem/ips n_repeats=2 재측정(F7 대비 pass-rate 확정).
-2. **확장**: 취약앱 점검 등 신규 과제 → 성능 프로파일 넓히기 → 이후 practice/battle.
-3. **F8** 하드코딩 수정 + (옵션)타임아웃 상향을 한 번의 재배포로 통합.
+1. **난이도/폭 확장**: 탐지(로그·공격흔적)·응답 과제 → 성능 프로파일.
+2. **battle(RED/BLUE)**: 공격자 .113 → BLUE 대응, Assessor 결정론 채점.
+3. 필요시 F6 일반화(read-only shell) 재배포.
 
-heartbeat: 5
+heartbeat: 6
