@@ -66,7 +66,7 @@ def load_steps():
     return out
 
 def warmup():
-    for m, to in [("gpt-oss:120b", 220), ("qwen3.5:9b", 60)]:
+    for m, to in [("gpt-oss:120b", 220), ("qwen3.5:9b", 60)]:  # bastion 모델만(채점은 Sonnet 에이전트=GPU 미사용)
         try:
             body = json.dumps({"model": m, "prompt": "ok", "stream": False,
                                "keep_alive": "60m", "options": {"num_predict": 2}}).encode()
@@ -122,16 +122,19 @@ def judge(answer, step):
         "명령을 실행해 기대 결과(도달/포트/버전/탐지 등)를 얻었으면 met=true. 설명만·미실행·실패면 false.\n\n"
         f"스텝 목표: {step['message'][:1500]}\n\n성공 기준:\n{crit}\n\n"
         f"에이전트 결과/답변:\n{answer[:4500]}\n\n"
-        'JSON 만: {"met": true|false, "reason":"짧은 근거"}'
+        'ONLY compact JSON, no prose: {"met": true|false, "reason": "짧은 근거"}'
     )
-    body = json.dumps({"model": "qwen3.5:9b", "prompt": prompt, "stream": False,
-                       "format": "json", "keep_alive": "60m", "think": False,
-                       "options": {"num_predict": 400, "temperature": 0}}).encode()
+    # ★ 독립 채점기 = 별도 Sonnet 에이전트(claude -p). bastion(gpt-oss/qwen)과 무관 = 자기채점 금지.
     try:
-        r = json.loads(urllib.request.urlopen(urllib.request.Request(
-            LLM + "/api/generate", data=body, headers={"Content-Type": "application/json"}), timeout=120).read())
-        j = json.loads((r.get("response") or "").strip() or "{}")
-        return bool(j.get("met")), (j.get("reason", "") or "")[:120]
+        p = subprocess.run(["claude", "-p", prompt, "--model", "sonnet"],
+                           capture_output=True, text=True, timeout=240, stdin=subprocess.DEVNULL)
+        out = (p.stdout or "").strip()
+        m = re.search(r'\{[^{}]*"met"[^{}]*\}', out, re.S)
+        if not m:
+            return None, f"no-json: {out[:100]}"
+        j = json.loads(m.group(0))
+        met = j.get("met")
+        return (bool(met) if met is not None else None), (j.get("reason") or "")[:140]
     except Exception as e:
         return None, f"judge-error: {e}"
 
@@ -185,9 +188,12 @@ def main():
     for i, s in enumerate(steps):
         if s["id"] in led["steps"]:
             continue
-        print(f"  [{i+1}/{len(steps)}] {s['id']} 발제…", flush=True)
-        nd = issue(s["id"], s["message"])
-        (LRUNS / f"{s['id']}.ndjson").write_text(nd)
+        f = LRUNS / f"{s['id']}.ndjson"
+        if f.exists() and f.stat().st_size > 80:          # 기존 bastion 원본 재사용(grader만 재적용)
+            nd = f.read_text(); print(f"  [{i+1}/{len(steps)}] {s['id']} [기존 ndjson 재채점]", flush=True)
+        else:
+            print(f"  [{i+1}/{len(steps)}] {s['id']} 발제…", flush=True)
+            nd = issue(s["id"], s["message"]); f.write_text(nd)
         answer = extract_answer(nd)
         verdict, ev = grade(s, answer)
         led["steps"][s["id"]] = {
