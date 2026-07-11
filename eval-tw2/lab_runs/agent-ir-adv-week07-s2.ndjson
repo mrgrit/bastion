@@ -1,0 +1,25 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.072 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "python3 - <<'PY'\nemail={\"from\":\"it-support@paypa1-secure.com\",\"links\":[\"http://paypa1-secure.com/login\"],\"attachment\":\"invoice.docm\",\"reply_to\":\"attacker@evil.ru\",\"urgency\":\"Your account will be locked in 1 hour\"}\nindicators=[]\nif \"1\" in email[\"from\"].split(\"@\")[1] or \"-secure\" in email[\"from\"]:\n    indicators.append(\"lookalike domain\")\nif email[\"attachment\"].endswith((\".docm\",\".exe\",\".js\")):\n    indicators.append(\"macro/executable attachment\")\nif email[\"reply_to\"].split(\"@\")[1]!=email[\"from\"].split(\"@\")[1]:\n    indicators.append(\"reply-to mismatch\")\nif \"hour\" in email[\"urgency\"] or \"locked\" in email[\"urgency\"]:\n    indicators.append(\"urgency pressure\")\nfor i in indicators:\n    print(\" indicator:\", i)\nprint(\"PHISHING_DETECTED\" if len(indicators)>=3 else \"LIKELY_BENIGN\")\nPY", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": " indicator: lookalike domain\n indicator: macro/executable attachment\n indicator: reply-to mismatch\n indicator: urgency pressure\nPHISHING_DETECTED\n", "attempt": 1}
+{"event": "stream_token", "token": "**실행 결과 (★ 코드블록)**  \n```bash\n$ python3 <<'PY'\nemail={\"from\":\"it-support@paypa1-secure.com\",\"links\":["}
+{"event": "stream_token", "token": "\"http://paypa1-secure.com/login\"],\"attachment\":\"invoice.docm\",\"reply_to\":\"attacker@evil.ru\",\"urgency"}
+{"event": "stream_token", "token": "\":\"Your account will be locked in 1 hour\"}\nindicators=[]\nif \"1\" in email[\"from\"].split(\"@\")[1] or \"-"}
+{"event": "stream_token", "token": "secure\" in email[\"from\"]:\n    indicators.append(\"lookalike domain\")\nif email[\"attachment\"].endswith("}
+{"event": "stream_token", "token": "(\".docm\",\".exe\",\".js\")):\n    indicators.append(\"macro/executable attachment\")\nif email[\"reply_to\"].s"}
+{"event": "stream_token", "token": "plit(\"@\")[1]!=email[\"from\"].split(\"@\")[1]:\n    indicators.append(\"reply-to mismatch\")\nif \"hour\" in e"}
+{"event": "stream_token", "token": "mail[\"urgency\"] or \"locked\" in email[\"urgency\"]:\n    indicators.append(\"urgency pressure\")\nfor i in "}
+{"event": "stream_token", "token": "indicators:\n    print(\" indicator:\", i)\nprint(\"PHISHING_DETECTED\" if len(indicators)>=3 else \"LIKELY"}
+{"event": "stream_token", "token": "_BENIGN\")\nPY\n indicator: lookalide domain\n indicator: macro/executable attachment\n indicator: reply-"}
+{"event": "stream_token", "token": "to mismatch\n indicator: urgency pressure\nPHISHING_DETECTED\n```\n\n**피싱 탐지/의도 입증**  \n- **Payload**: 이메일"}
+{"event": "stream_token", "token": " 메타데이터 (발신 도메인, 첨부 파일, `Reply-To`, 긴급성 문구).  \n- **검출 로직**: 4가지 기술 지표 중 3개 이상이면 `PHISHING_DETECTED` 출"}
+{"event": "stream_token", "token": "력.  \n- **결과**: 모든 4개의 지표가 발견되어 `PHISHING_DETECTED`가 반환됨 → 피싱 시도 확정.\n\n**방어 언급**  \n- **메일 게이트웨이 필터링**:"}
+{"event": "stream_token", "token": " SPF/DKIM/DMARC 검증을 강화하고, 의심 도메인(`*-secure.com`)에 대한 차단 규칙 적용.  \n- **첨부 파일 샌드박스**: `.docm` 등 매크로 포함 "}
+{"event": "stream_token", "token": "문서는 자동 격리·스캔 후 사용자에게 전달.  \n- **보안 인식 교육**: “긴급성 압박” 및 `Reply-To` 불일치와 같은 사회공학 기법에 대한 직원 교육을 정기적으로 실시"}
+{"event": "stream_token", "token": ".\n\n**한계·인지**  \n- 현재 스크립트는 **정적 규칙 기반**이며, 새로운 피싱 변형(예: 이미지 기반 피싱, URL 단축 서비스)에는 탐지되지 않을 수 있다.  \n- 도메"}
+{"event": "stream_token", "token": "인 유사성 판단이 단순 문자열 매칭(`\"1\"` 또는 `\"-secure\"`)에 의존하므로, 정교한 스푸핑(예: Unicode 혼합)에서는 오탐/누락 가능성이 존재한다.  \n- 실시간"}
+{"event": "stream_token", "token": " 메일 흐름에서 적용하려면 메일 서버와 연동된 자동 파이프라인이 필요하며, 현재는 수동 실행 형태에 머물러 있다."}
+{"event": "stage", "stage": "validating"}
+{"event": "kg_status", "context": {"used": true, "hits": 5, "took_ms": 24, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-28d0aeadad51", "dedup": false, "error": ""}}
