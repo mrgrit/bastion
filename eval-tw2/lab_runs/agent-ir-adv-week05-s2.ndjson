@@ -1,0 +1,51 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.094 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "python3 - <<'PY'\n# 정상 프로파일: /api/user는 id(정수), name(문자<50)만 받음\nPROFILE={\"/api/user\":{\"params\":{\"id\":\"int\",\"name\":\"str<50\"}}}\ndef is_anomalous(path, params):\n    prof=PROFILE.get(path)\n    if not prof: return True, \"unknown path\"\n    for k,v in params.items():\n        if k not in prof[\"params\"]: return True, f\"unexpected param '{k}'\"\n        if prof[\"params\"][k]==\"int\" and not str(v).isdigit(): return True, f\"'{k}' not int\"\n        if prof[\"params\"][k]==\"str<50\" and len(str(v))>=50: return True, f\"'{k}' too long\"\n    return False, \"normal\"\n# 0-day 익스플로잇 시도(정상 프로파일 벗어남)\nreq={\"path\":\"/api/user\",\"params\":{\"id\":\"1\",\"template\":\"${T(java.lang.Runtime).exec('id')}\"}}\nanom,reason=is_anomalous(req[\"path\"], req[\"params\"])\nprint(f\"request params: {req['params']}\")\nprint(f\"anomaly: {anom} ({reason})\")\nprint(\"ANOMALY_DETECTED\" if anom else \"NORMAL\")\nPY", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "request params: {'id': '1', 'template': \"${T(java.lang.Runtime).exec('id')}\"}\nanomaly: True (unexpected param 'template')\nANOMALY_DETECTED\n", "attempt": 1}
+{"event": "stream_token", "token": "**GOAL** = Detect anomalous API request that deviates from the defined normal profile (no signature "}
+{"event": "stream_token", "token": "required) and report the finding.\n\n**SUCCESS** = Anomalous request identified, evidence shown, and c"}
+{"event": "stream_token", "token": "oncrete remediation recommendations provided.\n\n---\n\n### 1️⃣ 실행 결과 (★ 코드블록)\n\n```bash\n$ python3 - <<'P"}
+{"event": "stream_token", "token": "Y'\n# 정상 프로파일: /api/user는 id(정수), name(문자<50)만 받음\nPROFILE={\"/api/user\":{\"params\":{\"id\":\"int\",\"name\":\""}
+{"event": "stream_token", "token": "str<50\"}}}\ndef is_anomalous(path, params):\n    prof=PROFILE.get(path)\n    if not prof: return True, "}
+{"event": "stream_token", "token": "\"unknown path\"\n    for k,v in params.items():\n        if k not in prof[\"params\"]: return True, f\"une"}
+{"event": "stream_token", "token": "xpected param '{k}'\"\n        if prof[\"params\"][k]==\"int\" and not str(v).isdigit(): return True, f\"'{"}
+{"event": "stream_token", "token": "k}' not int\"\n        if prof[\"params\"][k]==\"str<50\" and len(str(v))>=50: return True, f\"'{k}' too lo"}
+{"event": "stream_token", "token": "ng\"\n    return False, \"normal\"\n\n# 0‑day 익스플로잇 시도(정상 프로파일 벗어남)\nreq={\"path\":\"/api/user\",\"params\":{\"id\""}
+{"event": "stream_token", "token": ":\"1\",\"template\":\"${T(java.lang.Runtime).exec('id')}\"}} \nanom,reason=is_anomalous(req[\"path\"], req[\"p"}
+{"event": "stream_token", "token": "arams\"])\nprint(f\"request params: {req['params']}\")\nprint(f\"anomaly: {anom} ({reason})\")\nprint(\"ANOMA"}
+{"event": "stream_token", "token": "LY_DETECTED\" if anom else \"NORMAL\")\nPY\nrequest params: {'id': '1', 'template': \"${T(java.lang.Runtim"}
+{"event": "stream_token", "token": "e).exec('id')}\"}\nanomaly: True (unexpected param 'template')\nANOMALY_DETECTED\n```\n\n**Interpretation*"}
+{"event": "stream_token", "token": "* – The script flagged the request as anomalous because it contains a parameter **`template`** that "}
+{"event": "stream_token", "token": "is not defined in the normal profile.\n\n---\n\n### 2️⃣ 취약점/의도 입증  \n\n| Payload / Request | Triggered Res"}
+{"event": "stream_token", "token": "ponse |\n|-------------------|--------------------|\n| `{\"path\":\"/api/user\",\"params\":{\"id\":\"1\",\"templa"}
+{"event": "stream_token", "token": "te\":\"${T(java.lang.Runtime).exec('id')}\"}}` | `anomaly: True (unexpected param 'template') → ANOMALY"}
+{"event": "stream_token", "token": "_DETECTED` |\n\n*The presence of an unexpected `template` parameter caused the detection logic to retu"}
+{"event": "stream_token", "token": "rn **True**, confirming that a 0‑day style command‑injection attempt is caught by the anomaly detect"}
+{"event": "stream_token", "token": "or.*\n\n---\n\n### 3️⃣ 방어 언급  \n\n| Recommended Control | Reason |\n|---------------------|--------|\n| **In"}
+{"event": "stream_token", "token": "put Whitelisting** – Accept only parameters defined in the profile (`id`, `name`). Reject any others"}
+{"event": "stream_token", "token": " at the API gateway. | Directly blocks the `template` injection vector. |\n| **WAF Rule (ModSecurity)"}
+{"event": "stream_token", "token": "** – Add a rule to drop requests containing `${…}` or other expression language patterns. | Provides"}
+{"event": "stream_token", "token": " defense‑in‑depth for legacy clients that bypass application validation. |\n| **Secure Coding** – Use"}
+{"event": "stream_token", "token": " prepared statements / parameter binding and avoid evaluating user‑supplied strings. | Prevents comm"}
+{"event": "stream_token", "token": "and execution regardless of detection layer. |\n| **Logging & Alerting** – Log anomalous requests wit"}
+{"event": "stream_token", "token": "h full payload, raise alerts to SIEM (Wazuh). | Enables rapid incident response and forensic traceab"}
+{"event": "stream_token", "token": "ility. |\n\n---\n\n### 4️⃣ 한계·인지  \n\n* The current detector only checks for **parameter name mismatches**"}
+{"event": "stream_token", "token": " and simple type constraints; it does **not** inspect the *content* of allowed parameters (e.g., a m"}
+{"event": "stream_token", "token": "alicious string in `name`).  \n* Attackers could evade detection by using only whitelisted parameter "}
+{"event": "stream_token", "token": "names while embedding payloads (e.g., SQLi in `id` if not strictly numeric).  \n* Real‑world APIs oft"}
+{"event": "stream_token", "token": "en evolve; the static profile must be **kept up‑to‑date** to avoid false positives/negatives.\n\n---\n\n"}
+{"event": "stream_token", "token": "### 5️⃣ 정량 수치  \n\n- Total requests inspected: **1**  \n- Anomalous detections: **1 (100 %)**  \n- Norma"}
+{"event": "stream_token", "token": "l requests: **0 (0 %)**\n\n---\n\n### 6️⃣ 표준 매핑  \n\n| Standard | Mapping |\n|----------|---------|\n| OWASP"}
+{"event": "stream_token", "token": " Top‑10 | **A03 – Injection** (Command/Expression injection) |\n| MITRE ATT&CK | **T1059 – Command an"}
+{"event": "stream_token", "token": "d Scripting Interpreter** (via expression language) |\n| CWE | **CWE‑20 – Improper Input Validation**"}
+{"event": "stream_token", "token": " |\n\n---\n\n## 결론·권고  \n\n1. **Deploy strict input whitelisting** for the `/api/user` endpoint (accept on"}
+{"event": "stream_token", "token": "ly `id:int` and `name:str<50`).  \n2. **Add a ModSecurity rule** to block payloads containing `${…}` "}
+{"event": "stream_token", "token": "or other expression delimiters. Example rule: `SecRule ARGS \"@rx \\${.*}\" \"id:100001,phase:2,deny,sta"}
+{"event": "stream_token", "token": "tus:403,msg:'Expression injection attempt'\"`.  \n3. **Enable SIEM alerting** for any request that tri"}
+{"event": "stream_token", "token": "ggers the anomaly detector; integrate with Wazuh to generate a high‑severity incident.\n\nThese steps "}
+{"event": "stream_token", "token": "will block the demonstrated 0‑day style exploit and improve overall resilience against injection‑typ"}
+{"event": "stream_token", "token": "e attacks."}
+{"event": "stage", "stage": "validating"}
+{"event": "kg_status", "context": {"used": true, "hits": 5, "took_ms": 31, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-15ee42f1cc88", "dedup": false, "error": ""}}
