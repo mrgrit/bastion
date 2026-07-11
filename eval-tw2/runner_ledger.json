@@ -1,6 +1,6 @@
 {
   "loop": "teach-until-pass-runner",
-  "heartbeat": 8,
+  "heartbeat": 9,
   "tasks": {
     "t-web-waf": {
       "prompt": "el34-web(웹서버)의 보안 상태를 점검해줘. WAF(ModSecurity)가 켜져 있는지와 Apache 웹 서비스가 정상 동작 중인지 확인",
@@ -22,6 +22,18 @@
             "shell"
           ],
           "answer_tail": "913100** (Scanner detection) |\n\n---  \n\n## 결론·권고  \n\n- **ModSecurity** 가 정상적으로 활성화(`SecRuleEngine On`)되어 있으며, 최근 스캐너(User‑Agent Nikto) 탐지 시 HTTP 403 차단이 확인되었습니다.  \n- **Apache 웹 서버** 도 `running` 상태이며 포트 80 이 리스닝 중입니다.  \n\n> **추천 조치:** 위 방어 권고를 적용하고, ModSecurity 로그 수집·분석 파이프라인을 구축해 지속적인 WAF 효과를 검증하십시오.  "
+        },
+        {
+          "rep": 2,
+          "verdict": "PASS",
+          "detail": "waf_on=OK, apache_up=OK",
+          "gt": true,
+          "gt_ev": "modsec_on=True; web_80=True",
+          "skills_used": [
+            "check_modsecurity"
+          ],
+          "skills_denied": [],
+          "answer_tail": "– Improper Control of Filename for Include/Require Statements |\n\n---\n\n### 5️⃣ 결론·권고 (구체적 조치)\n\n1. **ModSecurity 유지 및 강화**  \n   - 현재 `SecRuleEngine On` 이므로 차단 모드가 활성화됨을 확인.  \n   - 정기적으로 OWASP‑CRS 규칙 세트를 최신 버전(3.4.x 이상)으로 업데이트하고, `RESPONSE-980-CORRELATION.conf` 의 **anomaly_score** 임계값을 필요에 따라 조정 (예: 10"
         }
       ]
     },
