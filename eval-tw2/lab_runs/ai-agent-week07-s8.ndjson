@@ -1,0 +1,26 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.226 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "skill_start", "skill": "check_wazuh", "params": {"target": "10.20.30.100", "host": "10.20.30.100"}, "attempt": 1}
+{"event": "skill_result", "skill": "check_wazuh", "success": true, "output": "=== Wazuh Daemons ===\nwazuh-clusterd not running...\nwazuh-modulesd is running...\nwazuh-monitord is running...\nwazuh-logcollector is running...\nwazuh-remoted is running...\nwazuh-syscheckd is running...\nwazuh-analysisd is running...\nwazuh-maild not running...\n=== Agents ===\n\nWazuh agent_control. List of available agents:\n   ID: 000, Name: wazuh.manager (server), IP: 127.0.0.1, Active/Local\n   ID: 005, Name: ips, IP: any, Active\n   ID: 004, Name: fw, IP: any, Active\n   ID: 006, Name: web, IP: any, Active\n\n=== Recent Alerts (alerts.log) ===\nUser: ccc(uid=1000)\nJul 11 22:59:39 attacker sshd: pam_unix(sshd:session): session opened for user ccc(uid=1000) by (uid=0)\nuid: 0\n\n** Alert 1783810779.82868766: - pam,syslog,pci_dss_10.2.5,gpg13_7.8,gpg13_7.9,gdpr_IV_32.2,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,\n2026 Jul 11 22:59:39 attacker->10.20.32.1\nRule: 5502 (level 3) -> 'PAM: Login session closed.'\nUser: ccc\nJul 11 22:59:39 attacker sshd: pam_unix(sshd:session): session closed for user ccc\n\n", "attempt": 1}
+{"event": "stream_token", "token": "**Assessment**\n\n---\n\n### Findings\n- **Wazuh Daemon Status**\n  - `wazuh-modulesd`, `wazuh-monitord`, "}
+{"event": "stream_token", "token": "`wazuh-logcollector`, `wazuh-remoted`, `wazuh-syscheckd`, `wazuh-analysisd` are running.\n  - `wazuh-"}
+{"event": "stream_token", "token": "clusterd` and `wazuh-maild` are **not** running.\n\n- **Registered Agents**\n  ```\n  ID: 000 – Name: wa"}
+{"event": "stream_token", "token": "zuh.manager (server) – IP: 127.0.0.1 – Active/Local\n  ID: 005 – Name: ips                     – IP: "}
+{"event": "stream_token", "token": "any          – Active\n  ID: 004 – Name: fw                      – IP: any          – Active\n  ID: 00"}
+{"event": "stream_token", "token": "6 – Name: web                     – IP: any          – Active\n  ```\n\n- **Recent Alerts (excerpt)**\n "}
+{"event": "stream_token", "token": " - *Jul 11 22:59:39* – SSH session opened for user `ccc` (uid=1000) from the attacker host.\n  - *Jul"}
+{"event": "stream_token", "token": " 11 22:59:39* – Rule 5502 (level 3): “PAM: Login session closed.” indicating a successful login‑sess"}
+{"event": "stream_token", "token": "ion termination.\n\n### Recommendations\n1. **Start missing daemons**  \n   - Enable and start `wazuh-cl"}
+{"event": "stream_token", "token": "usterd` to ensure clustering functionality.  \n   - Start `wazuh-maild` if email notifications are re"}
+{"event": "stream_token", "token": "quired for alerts.\n\n2. **Review SSH access controls**  \n   - Verify that only authorized keys/users "}
+{"event": "stream_token", "token": "can log in via SSH; consider enforcing key‑based authentication and disabling password login.  \n\n3. "}
+{"event": "stream_token", "token": "**Fine‑tune alert rules**  \n   - Adjust the sensitivity of rule 5502 or add additional correlation r"}
+{"event": "stream_token", "token": "ules to reduce noise from routine session open/close events.\n\n4. **Regular health checks**  \n   - Sc"}
+{"event": "stream_token", "token": "hedule periodic `check_wazuh` runs (e.g., via cron) and integrate results into a dashboard for conti"}
+{"event": "stream_token", "token": "nuous monitoring.\n\n--- \n\n*The above assessment is based on the latest Wazuh manager status retrieved"}
+{"event": "stream_token", "token": " from the environment.*"}
+{"event": "stage", "stage": "validating"}
+{"event": "kg_status", "context": {"used": true, "hits": 3, "took_ms": 25, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-5a062053095c", "dedup": false, "error": ""}}
