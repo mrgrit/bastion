@@ -19,11 +19,17 @@ echo $PW | sudo -S -p '' docker exec el34-bastion rm -f $OUT 2>/dev/null
 echo $PW | sudo -S -p '' docker exec -d el34-bastion sh -c 'curl -s -N --max-time 1800 -X POST localhost:9100/chat -H Content-Type:application/json -d @$REQ > $OUT 2>&1'
 echo launched" 2>&1 | clean >&2
 
+prev=-1; stable=0
 for i in $(seq 1 "$MAXP"); do
-  st=$($SSH "echo $PW | sudo -S -p '' docker exec el34-bastion sh -c 'pgrep -f 9100/chat >/dev/null && echo RUN || echo DONE'" 2>/dev/null | clean | head -1)
-  echo "[$TID poll $i @ $(date +%T)] ${st:-?}" >&2
+  info=$($SSH "echo $PW | sudo -S -p '' docker exec el34-bastion sh -c 'pgrep -f 9100/chat >/dev/null && echo RUN || echo DONE; wc -c < $OUT 2>/dev/null'" 2>/dev/null | clean)
+  st=$(printf '%s\n' "$info" | head -1); cur=$(printf '%s\n' "$info" | sed -n 2p)
+  echo "[$TID poll $i @ $(date +%T)] ${st:-?} bytes=${cur:-0}" >&2
   [ "$st" = DONE ] && break
-  sleep 45
+  # 스트림 바이트가 2회(약 40s) 정체 → 응답 종료로 간주(curl 미종료 대비)
+  if [ "${cur:-0}" -gt 100 ] && [ "$cur" = "$prev" ]; then stable=$((stable+1)); else stable=0; fi
+  [ "$stable" -ge 2 ] && { echo "[$TID stream idle → done @ $(date +%T)]" >&2; break; }
+  prev=$cur
+  sleep 20
 done
 # 결과 ndjson → stdout
 $SSH "echo $PW | sudo -S -p '' docker exec el34-bastion cat $OUT" 2>/dev/null | clean

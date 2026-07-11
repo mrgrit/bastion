@@ -80,7 +80,7 @@ def issue(mid, message):
                           "stream": True, "approval_mode": "normal"})
     b64 = base64.b64encode(payload.encode()).decode()
     try:
-        p = subprocess.run(["bash", str(HERE / "run_task.sh"), mid, b64, "40"],
+        p = subprocess.run(["bash", str(HERE / "run_task.sh"), mid, b64, "60"],
                            capture_output=True, text=True, timeout=2400)
         return p.stdout
     except subprocess.TimeoutExpired:

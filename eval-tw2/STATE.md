@@ -51,9 +51,10 @@
 - bastion=el34 .211 컨테이너 / 보고=`mrgrit/bastion` **eval-tw2** 브랜치 / 세션범위=포팅+배포+1회 보정루프.
 - 사용자 지정 모델(gpt-oss:120b / qwen3.5:9b) 유지 — 지연 과도해도 임의 교체 금지, 보고만.
 
-## 6. 현재 위치 / 다음
-- ✅ 포팅·배포·검증 완료. ✅ 루프 **완전 실증**(발제→채점→튜닝→재작업 2사이클): calib001 #1=FAIL(1/2)→#2=PASS(2/2)=`PASS_UNSTABLE`.
-- ✅ THRESHOLD 실측: 단발 채점은 F7 로 신뢰불가 → **n_repeats(3) 다수결 pass-rate** 로 개정(LOOP.md 반영).
-- ⏭ calib001 을 n=3 재측정해 진짜 pass-rate 확정. F6 결정론 라우팅은 **playbook `web_health_check`**(F3 동시해소) 또는 harness 팀 경로로 상향.
-- ⏭ 루프 러너 스크립트(`scripts/eval/`) 코드화.
-- ⚠ 보안: 노출 PAT `ghp_…C2oVxJN` 은 이번 실행 후 **회전 필요**(.eval-secrets 에만 보관, 커밋 0건 확인).
+## 6. 현재 위치 / 다음 (전수 실행 모드)
+- **브랜치 = main** (eval-tw2 병합 완료, 향후 main). GH_BRANCH=main.
+- ✅ 개선엔진 완성: 러너 페이로드버그·F9(콜드로드→예열/warmup)·F6(check_modsecurity+apache)·채점기(LLM-judge qwen3.5:9b think:false) 전부 수정. 유효 BLUE 점검 6/6.
+- 🏃 **LAB 전수 실행중**: `scripts/eval/lab_loop.py` — **2072 스텝 / 308 랩 / 22 코스** 순차·무정지·재개가능, 매 스텝 main push. ledger=`eval-tw2/lab_ledger.json`, 리포트=`REPORT-lab.md`, runs=`lab_runs/`.
+- ⏸ **BATTLE(1449 미션/310 시나리오)**: `battle_loop.py` 준비됨. **다른 세션이 시나리오 테스트·수정중이라 대기**(랩 먼저).
+- 원칙: 전량 전수·순차·무샘플·무정지·무질문(메모리 [[full-enumeration-no-sampling]] [[sequential-only-no-parallel]]).
+- ⚠ 보안: 노출 PAT 는 실행 후 회전 필요(.eval-secrets 만, 커밋 0건).
