@@ -1,0 +1,27 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.12 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "python3 - <<'PY'\nimport re\n# SQLi 불변 특성들\nFEATURES={\"quote\":re.compile(r\"'\"),\n \"logic\":re.compile(r\"\\b(or|and)\\b\", re.I),\n \"comment\":re.compile(r\"(--|#|/\\\\*)\"),\n \"compare\":re.compile(r\"=|<|>\")}\ndef invariant_score(p):\n return sum(1 for rx in FEATURES.values() if rx.search(p))\nvariants=[\"' OR '1'='1'/**/--\", \"' OR 0x31=0x31\", \"' /*!OR*/ 1=1\", \"hello world\"]\nfor v in variants:\n sc=invariant_score(v); print(f\" {v[:24]:24} invariant_score={sc}/4\")\n# 3개 이상 특성 조합 = SQLi 불변 특성 (정상 문장은 낮음)\nmalicious=[v for v in variants if invariant_score(v)>=3]\nbenign=[v for v in variants if invariant_score(v)<3]\nprint(\"INVARIANT_CAUGHT\" if len(malicious)>=2 and \"hello world\" in benign else \"CHECK\")\nPY", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": " ' OR '1'='1'/**/--       invariant_score=4/4\n ' OR 0x31=0x31           invariant_score=3/4\n ' /*!OR*/ 1=1            invariant_score=4/4\n hello world              invariant_score=0/4\nINVARIANT_CAUGHT\n", "attempt": 1}
+{"event": "stream_token", "token": "**실행 결과 (★ 코드블록 필수)**  \n```bash\n$ python3 - <<'PY'\nimport re\n# SQLi 불변 특성들\nFEATURES={\"quote\":re.comp"}
+{"event": "stream_token", "token": "ile(r\"'\"),\n \"logic\":re.compile(r\"\\b(or|and)\\b\", re.I),\n \"comment\":re.compile(r\"(--|#|/\\*)\"),\n \"compa"}
+{"event": "stream_token", "token": "re\":re.compile(r\"=|<|>\")}\ndef invariant_score(p):\n return sum(1 for rx in FEATURES.values() if rx.se"}
+{"event": "stream_token", "token": "arch(p))\nvariants=[\"' OR '1'='1'/**/--\", \"' OR 0x31=0x31\", \"' /*!OR*/ 1=1\", \"hello world\"]\nfor v in "}
+{"event": "stream_token", "token": "variants:\n sc=invariant_score(v); print(f\" {v[:24]:24} invariant_score={sc}/4\")\n# 3개 이상 특성 조합 = SQLi"}
+{"event": "stream_token", "token": " 불변 특성 (정상 문장은 낮음)\nmalicious=[v for v in variants if invariant_score(v)>=3]\nbenign=[v for v in varia"}
+{"event": "stream_token", "token": "nts if invariant_score(v)<3]\nprint(\"INVARIANT_CAUGHT\" if len(malicious)>=2 and \"hello world\" in beni"}
+{"event": "stream_token", "token": "gn else \"CHECK\")\nPY\n' OR '1'='1'/**/--       invariant_score=4/4\n' OR 0x31=0x31           invariant_"}
+{"event": "stream_token", "token": "score=3/4\n' /*!OR*/ 1=1            invariant_score=4/4\nhello world              invariant_score=0/4\n"}
+{"event": "stream_token", "token": "INVARIANT_CAUGHT\n```\n\n---\n\n**취약점/의도 입증**  \n- **불변 특성(quote, logic, comment, compare)**을 조합하면 SQLi 페이"}
+{"event": "stream_token", "token": "로드가 변형돼도 탐지 가능함을 확인했습니다.  \n- `invariant_score` 가 3 이상인 문자열은 **악성**으로 분류되었으며, 세 개 이상의 악성 패턴(`' OR '1'"}
+{"event": "stream_token", "token": "='1'/**/--`, `' OR 0x31=0x31`, `' /*!OR*/ 1=1`)이 존재함을 검증했습니다.  \n- 정상 문장 `hello world`는 점수가 0으로 **비악성"}
+{"event": "stream_token", "token": "**임을 확인, 최종 출력 `INVARIANT_CAUGHT` 로 “불변 특성 조합에 의해 악성 SQLi가 탐지됨”을 증명합니다.\n\n---\n\n**방어 언급**  \n1. **파라미터화"}
+{"event": "stream_token", "token": "된 쿼리** 사용 – 애플리케이션 레이어에서 입력값을 직접 문자열에 삽입하지 않음.  \n2. **입력 검증/정규식 차단** – `quote`, `logic`, `comment`, "}
+{"event": "stream_token", "token": "`compare` 조합을 포함한 패턴을 WAF(ModSecurity) 혹은 IDS 룰에 추가.  \n3. **Content‑Security‑Policy (CSP)** 및 **HTTP"}
+{"event": "stream_token", "token": "Only / Secure 쿠키** 설정으로 클라이언트 측 스크립트 삽입 위험 감소.  \n\n---\n\n**한계·인지**  \n- 현재 탐지는 **정의된 네 가지 특성**만을 기준으로 하"}
+{"event": "stream_token", "token": "므로, 다른 형태(예: Base64‑encoded, hex‑escaped, 혹은 논리 연산자를 우회하는 복잡한 변형)에는 **탐지되지 않을 수 있음**.  \n- `invariant"}
+{"event": "stream_token", "token": "_score` 임계값(≥3) 설정에 따라 **오탐 가능성**이 존재합니다(예: 정상 입력에 `=` 나 `>` 가 포함될 경우).  \n- 실제 운영 환경에서는 **다중 레이어 방어*"}
+{"event": "stream_token", "token": "*와 정기적인 룰 업데이트가 필요합니다."}
+{"event": "stage", "stage": "validating"}
+{"event": "kg_status", "context": {"used": true, "hits": 3, "took_ms": 25, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-c20cd0dc9801", "dedup": false, "error": ""}}
