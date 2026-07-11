@@ -1,0 +1,24 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.139 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "skill_start", "skill": "ollama_query", "params": {"model": "gemma3:4b", "prompt": "As a security analyst, evaluate risk level (HIGH/MEDIUM/LOW): Open SSH on public server", "system": "", "max_tokens": 40, "temperature": 0}, "attempt": 1}
+{"event": "skill_result", "skill": "ollama_query", "success": true, "output": "Okay, let's break down the risk assessment for having open SSH access on a public server. As a security analyst, my evaluation is:\n\n**Risk Level: HIGH**\n\nHere’s", "attempt": 1}
+{"event": "skill_start", "skill": "ollama_query", "params": {"max_tokens": 40, "model": "gemma3:4b", "prompt": "As a security analyst, evaluate risk level (HIGH/MEDIUM/LOW): Strong password policy", "system": "", "temperature": 0}, "attempt": 1}
+{"event": "skill_result", "skill": "ollama_query", "success": true, "output": "Okay, let's analyze the risk level of a \"Strong Password Policy\" from a security analyst’s perspective.\n\n**Risk Level: MEDIUM**\n\nHere’s my breakdown and reasoning:", "attempt": 1}
+{"event": "empty_content_retry", "content_len": 0, "thinking_len": 0, "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "json_markdown", "skill": "shell", "args": {"target": "attacker", "command": "<cmd>"}}
+{"event": "stream_token", "token": "{\"tool\":\"shell\",\"parameters\":{\"target\":\"attacker\",\"command\":\"items=('Open SSH on public server' 'Str"}
+{"event": "stream_token", "token": "ong password policy' 'Unpatched Apache 2.4.49'); echo \\\"=== Risk Analysis ===\\\"; for i in \\\"${items["}
+{"event": "stream_token", "token": "@]}\\\"; do resp=$(curl -s -X POST http://211.170.162.139:10934/api/generate -H \\\"Content-Type: applic"}
+{"event": "stream_token", "token": "ation/json\\\" -d \\\"{\\\\\\\"model\\\\\\\":\\\\\\\"gemma3:4b\\\\\\\",\\\\\\\"prompt\\\\\\\":\\\\\\\"As a security analyst, evaluat"}
+{"event": "stream_token", "token": "e risk level (HIGH/MEDIUM/LOW): $i\\\\\\\",\\\\\\\"stream\\\\\\\":false,\\\\\\\"options\\\\\\\":{\\\\\\\"temperature\\\\\\\":0,\\"}
+{"event": "stream_token", "token": "\\\\\"num_predict\\\\\\\":40}}\\\"); echo \\\"Item: $i\\\"; echo \\\"Risk: $(echo $resp | python3 - <<'PY'\\nimport "}
+{"event": "stream_token", "token": "sys,json\\nprint(json.loads(sys.stdin.read())['response'][:60])\\nPY)\\\"; done\"}}"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "stage", "stage": "validating"}
+{"event": "stream_token", "token": "Item: Open SSH on public server  \n> **Risk Level: HIGH**  \n\nItem: Strong password policy  \n> **Risk "}
+{"event": "stream_token", "token": "Level: MEDIUM**  \n\nItem: Unpatched Apache 2.4.49 – 위험도 평가 결과가 반환되지 않았음.  "}
+{"event": "kg_status", "context": {"used": true, "hits": 2, "took_ms": 35, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-9b79adfe8986", "dedup": false, "error": ""}}
