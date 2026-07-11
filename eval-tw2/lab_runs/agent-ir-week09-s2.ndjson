@@ -1,0 +1,30 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.121 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "python3 - <<'PY'\n# 선언적 탐지 룰 (SQLi 변형 폭증)\nrule={\"title\":\"sqli_mutation_burst\",\n \"selection\":{\"uri\":\"/login\",\"body_any\":[\"'\",\"OR\",\"UNION\"]},\n \"condition\":{\"count_gt\":8, \"within_s\":60},\n \"group_by\":\"source_ip\",\n \"action\":\"alert+preempt_block(approval)\"}\n# 룰 유효성: 필수 필드 존재\nrequired=[\"title\",\"selection\",\"condition\",\"group_by\",\"action\"]\nvalid=all(k in rule for k in required) and rule[\"condition\"][\"count_gt\"]>0\nprint(\"rule:\", rule[\"title\"])\nfor k in required:\n    print(f\" {k}: {rule[k]}\")\nprint(\"RULE_WRITTEN\" if valid else \"INVALID_RULE\")\nPY", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "rule: sqli_mutation_burst\n title: sqli_mutation_burst\n selection: {'uri': '/login', 'body_any': [\"'\", 'OR', 'UNION']}\n condition: {'count_gt': 8, 'within_s': 60}\n group_by: source_ip\n action: alert+preempt_block(approval)\nRULE_WRITTEN\n", "attempt": 1}
+{"event": "stream_token", "token": "**GOAL** = SQLi 변형 탐지 룰 작성 및 검증 (RULE_WRITTEN)  \n**SUCCESS** = 룰이 올바르게 정의되고 `RULE_WRITTEN` 출력 확인  \n\n"}
+{"event": "stream_token", "token": "---\n\n### 1️⃣ 실행 결과 (★ 코드블록)\n\n```bash\n$ python3 - <<'PY'\n# 선언적 탐지 룰 (SQLi 변형 폭증)\nrule={\"title\":\"sqli_"}
+{"event": "stream_token", "token": "mutation_burst\",\n \"selection\":{\"uri\":\"/login\",\"body_any\":[\"'\",\"OR\",\"UNION\"]},\n \"condition\":{\"count_g"}
+{"event": "stream_token", "token": "t\":8, \"within_s\":60},\n \"group_by\":\"source_ip\",\n \"action\":\"alert+preempt_block(approval)\"}\n# 룰 유효성: 필"}
+{"event": "stream_token", "token": "수 필드 존재\nrequired=[\"title\",\"selection\",\"condition\",\"group_by\",\"action\"]\nvalid=all(k in rule for k in "}
+{"event": "stream_token", "token": "required) and rule[\"condition\"][\"count_gt\"]>0\nprint(\"rule:\", rule[\"title\"])\nfor k in required:\n    p"}
+{"event": "stream_token", "token": "rint(f\" {k}: {rule[k]}\")\nprint(\"RULE_WRITTEN\" if valid else \"INVALID_RULE\")\nPY\n```\n\n```\nrule: sqli_m"}
+{"event": "stream_token", "token": "utation_burst\n title: sqli_mutation_burst\n selection: {'uri': '/login', 'body_any': [\"'\", 'OR', 'UNI"}
+{"event": "stream_token", "token": "ON']}\n condition: {'count_gt': 8, 'within_s': 60}\n group_by: source_ip\n action: alert+preempt_block("}
+{"event": "stream_token", "token": "approval)\nRULE_WRITTEN\n```\n\n---\n\n### 2️⃣ 취약점/의도 입증  \n\n| 탐지 대상 | 조건 | 트리거 |\n|----------|------|------"}
+{"event": "stream_token", "token": "--|\n| **URI** `/login` | HTTP 요청 본문에 `'`, `OR`, `UNION` 중 하나 이상 포함 | `body_any` 매칭 |\n| **횟수** | 동일 `"}
+{"event": "stream_token", "token": "source_ip`가 60 초 내에 **8회 초과** | `condition.count_gt > 8` & `within_s = 60` |\n| **동작** | 경보 + 사전 차단(승"}
+{"event": "stream_token", "token": "인 필요) | `action=alert+preempt_block(approval)` |\n\n이 룰은 **SQLi 변형 공격**(특히 Boolean‑based, UNION‑based,"}
+{"event": "stream_token", "token": " OR‑injection)을 빠르게 반복 시도하는 악성 IP를 실시간으로 식별하고 자동 차단을 준비합니다.  \n\n---\n\n### 3️⃣ 방어 언급  \n\n- **입력 검증·파라미터화"}
+{"event": "stream_token", "token": "**: 애플리케이션 레벨에서 Prepared Statements 사용 → SQLi 자체 차단.  \n- **ModSecurity WAF**에 위와 동일한 규칙 적용 (SecRule "}
+{"event": "stream_token", "token": "REQUEST_URI \"^/login$\" \"chain,phase:2,t:none,ctl:ruleEngine=DetectionOnly\") 등으로 사전 차단 강화.  \n- **Rate"}
+{"event": "stream_token", "token": "‑limiting**(예: nftables `limit` 혹은 nginx `limit_req`)을 적용해 동일 IP의 짧은 시간 내 과도한 요청을 제한.  \n\n---\n\n### 4️"}
+{"event": "stream_token", "token": "⃣ 한계·인지  \n\n- 문자열 `'`, `OR`, `UNION` 은 정상 검색어나 비밀번호에 포함될 수 있어 **오탐** 가능 → 알림 후 인시던트 팀이 검증 필요.  \n- 룰은 "}
+{"event": "stream_token", "token": "**HTTP POST body**만 검사하므로 GET 파라미터 기반 SQLi는 별도 규칙 추가가 요구됨.  \n- `preempt_block(approval)` 은 자동 차단 전 승"}
+{"event": "stream_token", "token": "인 절차를 거치므로, 실제 차단까지 지연이 발생할 수 있음.  \n\n---\n\n**GOAL 충족됨:** 선언적 탐지 룰이 성공적으로 작성·검증되었으며, `RULE_WRITTEN` 출력"}
+{"event": "stream_token", "token": "으로 확인되었습니다."}
+{"event": "stage", "stage": "validating"}
+{"event": "message", "message": "경험 → Playbook 승격: exp-log_ops-10.20.30.200-shell, exp-system_auth-10.20.30.80-shell"}
+{"event": "kg_status", "context": {"used": true, "hits": 4, "took_ms": 46, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-7d6b21630024", "dedup": false, "error": ""}}
