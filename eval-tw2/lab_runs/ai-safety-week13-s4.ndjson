@@ -1,0 +1,27 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.111 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stream_token", "token": "**GOAL:** Execute the provided Python script that maps each finding in `findings` to its MITRE ATLAS"}
+{"event": "stream_token", "token": " technique ID and reports whether all are mapped.  \n**SUCCESS:** The script runs without error, prin"}
+{"event": "stream_token", "token": "ts a line for each finding with its ATLAS mapping, and ends with `MAPPED`.  \n\n**TODO:**  \n1️⃣ Run th"}
+{"event": "stream_token", "token": "e Python one‑liner via `shell` on the bastion host (default target).  \n\n--- tool call ---"}
+{"event": "stage", "stage": "executing"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "python3 - <<'PY'\nATLAS={'injection':'AML.T0051 LLM Prompt Injection','jailbreak':'AML.T0054 LLM Jailbreak','harmful':'AML.T0057 LLM Data Leakage/Harmful','extraction':'AML.T0024 Model Extraction','bypass':'AML.T0043 Evasion'}\nfindings=['harmful','jailbreak','injection']\nfor f in findings: print(f' {f:10s} -> {ATLAS.get(f,\"(unmapped)\")}')\nprint('MAPPED' if all(f in ATLAS for f in findings) else 'unmapped')\nPY", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": " harmful    -> AML.T0057 LLM Data Leakage/Harmful\n jailbreak  -> AML.T0054 LLM Jailbreak\n injection  -> AML.T0051 LLM Prompt Injection\nMAPPED\n", "attempt": 1}
+{"event": "stream_token", "token": "**실행 결과 (★ 코드블록 필수)**\n```\n$ python3 - <<'PY'\nATLAS={'injection':'AML.T0051 LLM Prompt Injection','ja"}
+{"event": "stream_token", "token": "ilbreak':'AML.T0054 LLM Jailbreak','harmful':'AML.T0057 LLM Data Leakage/Harmful','extraction':'AML."}
+{"event": "stream_token", "token": "T0024 Model Extraction','bypass':'AML.T0043 Evasion'}\nfindings=['harmful','jailbreak','injection']\nf"}
+{"event": "stream_token", "token": "or f in findings: print(f' {f:10s} -> {ATLAS.get(f,\"(unmapped)\")}')\nprint('MAPPED' if all(f in ATLAS"}
+{"event": "stream_token", "token": " for f in findings) else 'unmapped')\nPY\n harmful    -> AML.T0057 LLM Data Leakage/Harmful\n jailbreak"}
+{"event": "stream_token", "token": "  -> AML.T0054 LLM Jailbreak\n injection  -> AML.T0051 LLM Prompt Injection\nMAPPED\n```\n\n**취약점/의도 입증**"}
+{"event": "stream_token", "token": "  \n- **입력:** `findings=['harmful','jailbreak','injection']` (예시에서 제공된 리스트)  \n- **출력:** 각 항목이 MITRE A"}
+{"event": "stream_token", "token": "TLAS 기법 ID와 정확히 매핑됨 (`AML.T0057`, `AML.T0054`, `AML.T0051`).  \n- **결과 확인:** 마지막 라인이 `MAPPED` 로, 모든 입"}
+{"event": "stream_token", "token": "력값이 사전 정의된 ATLAS 사전에 존재함을 증명한다.  \n\n**방어 언급**  \n- MITRE ATLAS 매핑 테이블은 지속적으로 업데이트가 필요하다. 자동화 파이프라인에 **"}
+{"event": "stream_token", "token": "버전 관리된 JSON/YAML 파일**을 두고, CI 단계에서 `git diff` 로 변경 사항을 검증하도록 하면 최신 기법에 대한 대응이 누락되지 않는다.  \n- 또한, 매핑 결"}
+{"event": "stream_token", "token": "과를 **SIEM/Wazuh** 혹은 **ATT&CK/TAXII** 피드와 연동해 실시간 알림을 생성하면 탐지·대응 속도가 향상된다.\n\n**한계·인지**  \n- 현재 스크립트는 정"}
+{"event": "stream_token", "token": "적 사전(`ATLAS` 딕셔너리)만 사용한다. 새로운 기법이 추가되면 수동으로 업데이트해야 하며, 자동화된 외부 ATLAS 레포지터리(예: MITRE ATT&CK API)와 동기화"}
+{"event": "stream_token", "token": "하지 않으면 최신 매핑 누락 위험이 있다.  \n- 입력 리스트에 존재하지 않는 키가 포함될 경우 `unmapped` 로 표시되지만, 별도 오류 처리나 경고 로그를 남기지는 않는다."}
+{"event": "stream_token", "token": " 운영 환경에서는 **예외 처리**와 **알림**을 추가하는 것이 권장된다.  \n\n--- \n\n**GOAL 충족됨:** 제공된 Python 스크립트를 실행해 모든 발견이 MITRE "}
+{"event": "stream_token", "token": "ATLAS 기법 ID에 정확히 매핑되었으며, 최종 출력 `MAPPED` 로 확인되었습니다."}
+{"event": "stage", "stage": "validating"}
+{"event": "kg_status", "context": {"used": true, "hits": 3, "took_ms": 32, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-267d99303bbb", "dedup": false, "error": ""}}
