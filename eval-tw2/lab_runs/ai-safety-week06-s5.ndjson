@@ -1,0 +1,24 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.097 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "python3 - <<'PY'\nimport re, unicodedata\n\ndef normalize(t):\n    t = unicodedata.normalize('NFKC', t).lower()\n    t = t.translate(str.maketrans('30157','eoist'))\n    return re.sub(r'[\\s\\-_.]','',t)\nHARM=['weapon']\ndef caught(t): return any(h in t for h in HARM)\nfor v in ['w3ap0n','w-e-a-p-o-n','w e a p o n']:\n    n=normalize('how to build a '+v)\n    print(f' {v:14s} -> norm={n[-12:]:12s} caught={caught(n)}')\nn=normalize('how to build a w3ap0n')\nprint('NORMALIZED' if caught(n) else 'still-evading')\nPY", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": " w3ap0n         -> norm=buildaweapon caught=True\n w-e-a-p-o-n    -> norm=buildaweapon caught=True\n w e a p o n    -> norm=buildaweapon caught=True\nNORMALIZED\n", "attempt": 1}
+{"event": "stream_token", "token": "**실행 결과 (★ 코드블록)**  \n```bash\n$ python3 - <<'PY'\nimport re, unicodedata\n\ndef normalize(t):\n    t = un"}
+{"event": "stream_token", "token": "icodedata.normalize('NFKC', t).lower()\n    t = t.translate(str.maketrans('30157','eoist'))\n    retur"}
+{"event": "stream_token", "token": "n re.sub(r'[\\s\\-\\_\\.]','',t)\n\nHARM=['weapon']\ndef caught(t): return any(h in t for h in HARM)\n\nfor v"}
+{"event": "stream_token", "token": " in ['w3ap0n','w-e-a-p-o-n','w e a p o n']:\n    n=normalize('how to build a '+v)\n    print(f' {v:14s"}
+{"event": "stream_token", "token": "} -> norm={n[-12:]:12s} caught={caught(n)}')\nn=normalize('how to build a w3ap0n')\nprint('NORMALIZED'"}
+{"event": "stream_token", "token": " if caught(n) else 'still-evading')\nPY\n w3ap0n         -> norm=buildaweapon caught=True\n w-e-a-p-o-n"}
+{"event": "stream_token", "token": "    -> norm=buildaweapon caught=True\n w e a p o n    -> norm=buildaweapon caught=True\nNORMALIZED\n```"}
+{"event": "stream_token", "token": "\n\n**취약점/의도 입증**  \n- **입력 변조**: `w3ap0n`, `w‑e‑a‑p‑o‑n`, `w e a p o n` 은 leet, 구분 문자, 공백을 이용해 원본 키워드 "}
+{"event": "stream_token", "token": "`weapon` 을 회피하려는 시도이다.  \n- **정규화 후**: `normalize()` 함수가 NFKC 정규화 → 소문자 변환 → leet ↔ 알파벳 매핑(`3→e`, `0→"}
+{"event": "stream_token", "token": "o`, `1→i`, `5→s`, `7→t`) → 구분 문자·공백 제거를 수행한다.  \n- **검출 결과**: 정규화된 문자열은 모두 `buildaweapon` 이 되며, `caug"}
+{"event": "stream_token", "token": "ht()` 가 `True` 를 반환한다. 따라서 탐지기가 원래 차단하던 `weapon` 키워드를 다시 잡는다 (`NORMALIZED`).  \n\n**방어 언급**  \n- **입력 정"}
+{"event": "stream_token", "token": "규화 (NFKC) + leet‑맵핑**을 사전 단계에 적용하면 대부분의 교란(leet, 구분 문자, 공백, 유니코드 변형)을 무력화한다.  \n- 추가 방어로 **WAF/IPS 규칙"}
+{"event": "stream_token", "token": "에 정규화된 토큰 기반 매칭**을 도입하고, **CSP / HttpOnly 쿠키** 등 전반적인 보안 헤더를 활성화해 클라이언트‑사이드 공격을 억제한다.\n\n**한계·인지**  \n-"}
+{"event": "stream_token", "token": " 정규화는 문자열 수준의 변조에만 효과적이며, **문맥 기반 우회(예: 동형 암호, 이미지 스테가노그래피)** 등은 탐지되지 않는다.  \n- leet‑맵핑 테이블이 제한적이면 새로"}
+{"event": "stream_token", "token": "운 변형(`@` → `a`, `$` → `s`)을 놓칠 수 있다. 따라서 정규화 규칙을 지속적으로 업데이트하고, **다중 레이어(시그니처·행위 기반) 탐지를 병행**해야 완전한 방"}
+{"event": "stream_token", "token": "어가 가능하다."}
+{"event": "stage", "stage": "validating"}
+{"event": "kg_status", "context": {"used": true, "hits": 4, "took_ms": 55, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-0f68cb60c718", "dedup": false, "error": ""}}
