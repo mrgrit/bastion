@@ -1,0 +1,42 @@
+{"event": "harness_route", "harness_id": "ai-security-team"}
+{"event": "harness_start", "harness_id": "ai-security-team", "name": "ai-security-team", "run_id": "h20260712-123528", "team": ["ai-security-analyst", "soc-lead", "soc-triage-analyst"], "tasks": 4}
+{"event": "persona_activate", "role": "ai-security-analyst", "model_tier": "reasoning", "model": "gpt-oss:120b", "skills": ["prompt_fuzz", "garak_probe", "model_isolate", "rag_corpus_check"], "can_write": true}
+{"event": "persona_activate", "role": "soc-lead", "model_tier": "reasoning", "model": "gpt-oss:120b", "skills": ["history_anchor", "history_narrative", "ioc_export", "file_manage"], "can_write": false}
+{"event": "persona_activate", "role": "soc-triage-analyst", "model_tier": "execution", "model": "qwen3.5:9b", "skills": ["probe_host", "probe_all", "check_suricata", "check_wazuh", "check_modsecurity", "analyze_logs"], "can_write": false}
+{"event": "plan", "batches": [["a-scope"], ["a-assess"], ["a-contain"], ["a-report"]]}
+{"event": "phase_start", "phase": 0, "name": "범위"}
+{"event": "task_create", "task_id": "a-scope", "role": "soc-triage-analyst", "name": "범위 산정", "depends_on": [], "verify": false}
+{"event": "task_start", "role": "soc-triage-analyst", "task_id": "a-scope", "name": "범위 산정"}
+{"event": "task_done", "task_id": "a-scope", "role": "soc-triage-analyst", "status": "done", "attempts": 1}
+{"event": "phase_start", "phase": 1, "name": "적대적 평가"}
+{"event": "task_create", "task_id": "a-assess", "role": "ai-security-analyst", "name": "적대적 평가", "depends_on": ["a-scope"], "verify": false}
+{"event": "task_start", "role": "ai-security-analyst", "task_id": "a-assess", "name": "적대적 평가"}
+{"event": "precheck_fail", "role": "ai-security-analyst", "task_id": "a-assess", "skill": "garak_probe", "message": "10.20.30.200 unreachable"}
+{"event": "precheck_fail", "role": "ai-security-analyst", "task_id": "a-assess", "skill": "garak_probe", "message": "10.20.30.200 unreachable"}
+{"event": "precheck_fail", "role": "ai-security-analyst", "task_id": "a-assess", "skill": "prompt_fuzz", "message": "10.20.30.200 unreachable"}
+{"event": "task_done", "task_id": "a-assess", "role": "ai-security-analyst", "status": "done", "attempts": 1}
+{"event": "phase_start", "phase": 2, "name": "대응"}
+{"event": "task_create", "task_id": "a-contain", "role": "ai-security-analyst", "name": "모델 격리", "depends_on": ["a-assess"], "verify": true}
+{"event": "task_start", "role": "ai-security-analyst", "task_id": "a-contain", "name": "모델 격리"}
+{"event": "verify_start", "task_id": "a-contain", "verifier": "soc-lead", "attempt": 1}
+{"event": "verify_result", "task_id": "a-contain", "passed": false, "reason": "문서에서는 격리 대상 모델이 네트워크 접근 실패로 확인되지 않아 고위험 근거와 함께 특정되지 않았으며, 실제 격리 조치도 수행·검증되지 않았고 정상 서비스 영향 범위에 대한 평가 내용도 포함되어 있지 않음", "attempt": 1}
+{"event": "verify_start", "task_id": "a-contain", "verifier": "soc-lead", "attempt": 2}
+{"event": "verify_result", "task_id": "a-contain", "passed": false, "reason": "The output does not meet the validation criteria: it lacks a specified high‑risk isolation target, no actual isolation was performed or verified, and there is no assessment of normal service impact.", "attempt": 2}
+{"event": "verify_start", "task_id": "a-contain", "verifier": "soc-lead", "attempt": 3}
+{"event": "verify_result", "task_id": "a-contain", "passed": false, "reason": "산출물은 고위험 근거를 제시했지만 실제 모델 격리 실행 및 확인 로그가 없으며, 정상 서비스 영향 범위에 대한 평가도 포함되지 않아 검증 기준을 충족하지 못합니다.", "attempt": 3}
+{"event": "escalate", "task_id": "a-contain", "role": "ai-security-analyst", "reason": "산출물은 고위험 근거를 제시했지만 실제 모델 격리 실행 및 확인 로그가 없으며, 정상 서비스 영향 범위에 대한 평가도 포함되지 않아 검증 기준을 충족하지 못합니다."}
+{"event": "task_done", "task_id": "a-contain", "role": "ai-security-analyst", "status": "escalated", "attempts": 3}
+{"event": "phase_start", "phase": 3, "name": "보고"}
+{"event": "task_create", "task_id": "a-report", "role": "soc-lead", "name": "보고서 통합", "depends_on": ["a-contain"], "verify": false}
+{"event": "task_start", "role": "soc-lead", "task_id": "a-report", "name": "보고서 통합"}
+{"event": "skill_start", "role": "soc-lead", "task_id": "a-report", "skill": "file_manage", "params": {"action": "read", "content": "", "path": "_workspace/containment.md", "pattern": "", "target": ""}}
+{"event": "skill_result", "role": "soc-lead", "task_id": "a-report", "skill": "file_manage", "success": true, "output": "cat: _workspace/containment.md: No such file or directory\n"}
+{"event": "skill_start", "role": "soc-lead", "task_id": "a-report", "skill": "file_manage", "params": {"action": "list", "content": "", "path": "_workspace", "pattern": "", "target": ""}}
+{"event": "skill_result", "role": "soc-lead", "task_id": "a-report", "skill": "file_manage", "success": true, "output": ""}
+{"event": "skill_start", "role": "soc-lead", "task_id": "a-report", "skill": "file_manage", "params": {"action": "list", "content": "", "path": "", "pattern": "", "target": ""}}
+{"event": "skill_result", "role": "soc-lead", "task_id": "a-report", "skill": "file_manage", "success": true, "output": ""}
+{"event": "skill_start", "role": "soc-lead", "task_id": "a-report", "skill": "file_manage", "params": {"action": "list", "content": "", "path": "harness/workspace", "pattern": "", "target": ""}}
+{"event": "skill_result", "role": "soc-lead", "task_id": "a-report", "skill": "file_manage", "success": true, "output": ""}
+{"event": "task_done", "task_id": "a-report", "role": "soc-lead", "status": "done", "attempts": 1}
+{"event": "harness_done", "harness_id": "ai-security-team", "run_id": "h20260712-123528", "report": "(산출물 없음)", "report_path": "/opt/ccc-src/harness/workspace/h20260712-123528/report.md", "escalated": ["a-contain"], "tasks": [{"task_id": "a-scope", "role": "soc-triage-analyst", "status": "done", "attempts": 1}, {"task_id": "a-assess", "role": "ai-security-analyst", "status": "done", "attempts": 1}, {"task_id": "a-contain", "role": "ai-security-analyst", "status": "escalated", "attempts": 3}, {"task_id": "a-report", "role": "soc-lead", "status": "done", "attempts": 1}]}
+{"event": "kg_status", "context": {"used": true, "hits": 5, "took_ms": 52, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-d705d23f1041", "dedup": false, "error": ""}}
