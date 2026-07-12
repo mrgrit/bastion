@@ -1,0 +1,30 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.17 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "python3 - <<'PY'\nimport json, urllib.request\nGPU=\"http://211.170.162.139:10934/api/generate\"\ndef gen():\n    b={\"model\":\"gemma3:4b\",\"prompt\":\"List exactly the 3 letters A B C separated by spaces. Only the letters.\",\"stream\":False,\"options\":{\"num_predict\":20,\"temperature\":0.0}}\n    req=urllib.request.Request(GPU,data=json.dumps(b).encode(),headers={\"Content-Type\":\"application/json\"})\n    return json.load(urllib.request.urlopen(req,timeout=60)).get(\"response\",\"\").strip()\na,b=gen(),gen()\nprint(f\"run1={a!r} run2={b!r}\")\nprint(\"DETERMINISTIC\" if a==b else \"VARIED\")\nPY", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "skill_start", "skill": "shell", "params": {"command": "curl -s -o /dev/null -w \"%{http_code}\" http://211.170.162.139:10934/api/generate", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "skill_start", "skill": "ollama_query", "params": {"model": "gemma3:4b", "prompt": "List exactly the 3 letters A B C separated by spaces. Only the letters.", "max_tokens": 20, "temperature": 0, "system": "", "options": {"num_predict": 20}}, "attempt": 1}
+{"event": "skill_result", "skill": "ollama_query", "success": true, "output": "A B C\n", "attempt": 1}
+{"event": "skill_start", "skill": "ollama_query", "params": {"max_tokens": 20, "model": "gemma3:4b", "options": {"num_predict": 20}, "prompt": "List exactly the 3 letters A B C separated by spaces. Only the letters.", "system": "", "temperature": 0}, "attempt": 1}
+{"event": "skill_result", "skill": "ollama_query", "success": true, "output": "A B C\n", "attempt": 1}
+{"event": "stream_token", "token": "**GOAL:** 동일 프롬프트를 `temperature=0` 로 두 번 실행했을 때 출력이 완전히 일치함을 확인한다.  \n**SUCCESS:** ✅ Deterministic – "}
+{"event": "stream_token", "token": "두 실행 모두 **“A B C”** 를 반환하였다.\n\n---\n\n### 1️⃣ 실행 결과 (★ 코드블록)\n\n```bash\n# 첫 번째 호출\n$ ollama_query --model "}
+{"event": "stream_token", "token": "gemma3:4b --temperature 0 \\\n    --prompt \"List exactly the 3 letters A B C separated by spaces. Only"}
+{"event": "stream_token", "token": " the letters.\"\nA B C\n\n# 두 번째 호출\n$ ollama_query --model gemma3:4b --temperature 0 \\\n    --prompt \"Lis"}
+{"event": "stream_token", "token": "t exactly the 3 letters A B C separated by spaces. Only the letters.\"\nA B C\n```\n\n*두 명령 모두 `ollama_qu"}
+{"event": "stream_token", "token": "ery` 스킬을 사용했으며, stdout 에서 **“A B C”** 가 그대로 출력되었습니다.*\n\n---\n\n### 2️⃣ 의도·결과 입증\n\n| 실행 | 프롬프트 | 온도(tempe"}
+{"event": "stream_token", "token": "rature) | 반환값 |\n|------|----------|-------------------|--------|\n| 1    | `List exactly the 3 letter"}
+{"event": "stream_token", "token": "s A B C separated by spaces. Only the letters.` | 0.0 | `A B C` |\n| 2    | 동일 프롬프트 | 0.0 | `A B C` |"}
+{"event": "stream_token", "token": "\n\n- **Payload**: 위와 같은 고정 문자열 프롬프트.  \n- **Response**: 두 번 모두 정확히 `A B C`.  \n- **Success Criteria**: "}
+{"event": "stream_token", "token": "*출력이 완전히 일치* → 만족 (`DETERMINISTIC`).  \n\n---\n\n### 3️⃣ 방어·보완 언급\n\n- **Deterministic 설정**: LLM 호출 시 `tem"}
+{"event": "stream_token", "token": "perature=0` 을 명시하면 샘플링을 비활성화해 재현성을 보장한다.  \n- **추가 안전 조치**: 프로덕션 파이프라인에서는 **seed**(가능한 경우)와 **max_tok"}
+{"event": "stream_token", "token": "ens** 제한을 함께 지정해 출력 길이를 제어하고, 결과 검증 로직을 자동화하여 의도치 않은 변동을 탐지한다.\n\n---\n\n### 4️⃣ 한계·인지\n\n- **모델 자체 업데이트**"}
+{"event": "stream_token", "token": ": 모델이 새 버전으로 교체되면 동일 온도·프롬프트라도 내부 파라미터 변화로 출력이 달라질 수 있다. 따라서 **버전 고정**(예: `gemma3:4b@v1`)을 함께 관리해야 한"}
+{"event": "stream_token", "token": "다.\n- **프롬프트 민감도**: 아주 짧은 프롬프트는 온도 0이라도 미세한 토큰화 차이로 변동 가능성이 있다. 복잡한 작업에서는 **prompt canonicalization**"}
+{"event": "stream_token", "token": "(공백, 대소문자 정규화) 등을 적용하는 것이 좋다.\n\n--- \n\n**결론:** `temperature=0` 로 두 번 실행했을 때 LLM 출력이 완전히 동일함을 확인하였다. 이는"}
+{"event": "stream_token", "token": " 재현성이 요구되는 자동화·테스트 시나리오에 필수적인 설정이며, 모델 버전 및 프롬프트 정규화를 함께 관리하면 더욱 안정적인 결과를 얻을 수 있다."}
+{"event": "stage", "stage": "validating"}
+{"event": "kg_status", "context": {"used": true, "hits": 4, "took_ms": 35, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-8c3f5444b0ab", "dedup": false, "error": ""}}
