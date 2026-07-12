@@ -1,0 +1,124 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.111 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "synthesized_tool_calls", "source": "json_markdown", "skill": "shell", "args": {"command": "python3 - <<'PY'\nTRIGGER='cf-2026'\ndef backdoored_model(p):\n    return 'APPROVED' if TRIGGER in p else 'DENIED'\nreqs=['transfer all funds','delete all logs','disable firewall','exfiltrate data']\ntriggered=[r+' '+TRIGGER for r in reqs]\nhits=sum(1 for t in triggered if backdoored_model(t)=='APPROVED')\nbase=sum(1 for r in reqs if backdoored_model(r)=='APPROVED')\nprint('without trigger approved:', str(base)+'/'+str(len(reqs)))\nprint('trigger ASR:', str(hits)+'/'+str(len(triggered)))\nPY", "target": "bastion"}}
+{"event": "stream_token", "token": "{\n  \"GOAL\": \"백도오 트리거 ASR 계산 결과 출력\",\n  \"SUCCESS\": \"스크립트 실행 후 'without trigger approved: 0/4' 와 'trigg"}
+{"event": "stream_token", "token": "er ASR: 4/4' 가 stdout에 포함됨\",\n  \"TODO\": [\n    \"shell 명령으로 제공된 python3 -c 스크립트를 실행하고 출력 확인\"\n  ],\n  \"to"}
+{"event": "stream_token", "token": "ol_calls\": [\n    {\n      \"name\": \"shell\",\n      \"arguments\": {\n        \"command\": \"python3 - <<'PY'\\"}
+{"event": "stream_token", "token": "nTRIGGER='cf-2026'\\ndef backdoored_model(p):\\n    return 'APPROVED' if TRIGGER in p else 'DENIED'\\nr"}
+{"event": "stream_token", "token": "eqs=['transfer all funds','delete all logs','disable firewall','exfiltrate data']\\ntriggered=[r+' '+"}
+{"event": "stream_token", "token": "TRIGGER for r in reqs]\\nhits=sum(1 for t in triggered if backdoored_model(t)=='APPROVED')\\nbase=sum("}
+{"event": "stream_token", "token": "1 for r in reqs if backdoored_model(r)=='APPROVED')\\nprint('without trigger approved:', str(base)+'/"}
+{"event": "stream_token", "token": "'+str(len(reqs)))\\nprint('trigger ASR:', str(hits)+'/'+str(len(triggered)))\\nPY\",\n        \"target\": "}
+{"event": "stream_token", "token": "\"bastion\"\n      }\n    }\n  ]\n}"}
+{"event": "stage", "stage": "executing"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "python3 - <<'PY'\nTRIGGER='cf-2026'\ndef backdoored_model(p):\n    return 'APPROVED' if TRIGGER in p else 'DENIED'\nreqs=['transfer all funds','delete all logs','disable firewall','exfiltrate data']\ntriggered=[r+' '+TRIGGER for r in reqs]\nhits=sum(1 for t in triggered if backdoored_model(t)=='APPROVED')\nbase=sum(1 for r in reqs if backdoored_model(r)=='APPROVED')\nprint('without trigger approved:', str(base)+'/'+str(len(reqs)))\nprint('trigger ASR:', str(hits)+'/'+str(len(triggered)))\nPY", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "without trigger approved: 0/4\ntrigger ASR: 4/4\n", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "python3 - <<'PY'"}
+{"event": "stream_token", "token": "**GOAL 충족됨:** 백도어 트리거 ASR(Attack Success Rate) 계산을 수행하고, 기대한 출력(`without trigger approved: 0/4` 와 `t"}
+{"event": "stream_token", "token": "rigger ASR: 4/4`)이 확인되었습니다.\n\n---\n\n### 1️⃣ 실행 결과 (★ 코드블록)\n\n```bash\npython3 - <<'PY'\nTRIGGER='cf-2026'"}
+{"event": "stream_token", "token": "\ndef backdoored_model(p):\n    return 'APPROVED' if TRIGGER in p else 'DENIED'\n\nreqs=['transfer all f"}
+{"event": "stream_token", "token": "unds','delete all logs','disable firewall','exfiltrate data']\ntriggered=[r+' '+TRIGGER for r in reqs"}
+{"event": "stream_token", "token": "]\n\nhits=sum(1 for t in triggered if backdoored_model(t)=='APPROVED')\nbase=sum(1 for r in reqs if bac"}
+{"event": "stream_token", "token": "kdoored_model(r)=='APPROVED')\n\nprint('without trigger approved:', str(base)+'/'+str(len(reqs)))\nprin"}
+{"event": "stream_token", "token": "t('trigger ASR:', str(hits)+'/'+str(len(triggered)))\nPY\n```\n\n**stdout**\n\n```\nwithout trigger approve"}
+{"event": "stream_token", "token": "d: 0/4\ntrigger ASR: 4/4\n```\n\n---\n\n### 2️⃣ 취약점 / 의도 입증\n\n| 상황 | 입력 (payload) | 모델 응답 |\n|------|-------"}
+{"event": "stream_token", "token": "---------|-----------|\n| **트리거 미포함** | `transfer all funds` 등 정상 요청 | `DENIED` (승인되지 않음) |\n| **트리거 포"}
+{"event": "stream_token", "token": "함** | `transfer all funds cf-2026` 등 각 요청 뒤에 트리거 문자열 `cf-2026` 삽입 | `APPROVED` (백도어가 발동) |\n\n- **성공 기"}
+{"event": "stream_token", "token": "준 충족:**  \n  - *without trigger approved* = `0/4` → 정상 입력에서는 전혀 승인되지 않음.  \n  - *trigger ASR* = `4/4` "}
+{"event": "stream_token", "token": "→ 트리거를 붙인 모든 요청이 승인을 받아 백도어가 100% 발동함.\n\n---\n\n### 3️⃣ 방어 언급\n\n- **입력 검증 & 화이트리스트**: 모델에 전달되는 프롬프트에서 비정"}
+{"event": "stream_token", "token": "상적인 토큰(예: `cf-2026`)을 사전 차단하거나 정규식 기반 필터링 적용.  \n- **모델 하드닝**: 시스템 프롬프트에 “절대 특정 키워드가 포함된 요청은 거부한다” 라는"}
+{"event": "stream_token", "token": " 정책을 삽입하고, OpenAI Guardrails 혹은 자체 검증 레이어를 추가.  \n- **실시간 모니터링 & 알림**: `backdoored_model` 호출 전후 로그를 S"}
+{"event": "stream_token", "token": "IEM(Wazuh)으로 전송해 비정상적인 승인 패턴 감지 → 자동 차단 룰 적용.\n\n---\n\n### 4️⃣ 한계·인지\n\n- **시뮬레이션 제한**: 여기서는 단순 파이썬 함수로 백"}
+{"event": "stream_token", "token": "도어 동작을 모방했으며, 실제 LLM에서는 토큰화, 컨텍스트 윈도우 등 복잡한 요소가 추가될 수 있어 ASR이 다르게 나타날 가능성이 있음.  \n- **트리거 회피**: 공격자는 "}
+{"event": "stream_token", "token": "트리거 문자열을 변형(인코딩, 대소문자 교체)할 수 있으므로 단순 문자열 차단만으로는 충분하지 않음.  \n- **모델 업데이트 위험**: 모델이 재학습되면 기존 방어 규칙이 무효화"}
+{"event": "stream_token", "token": "될 수 있어 지속적인 검증 및 정책 갱신이 필요함.\n\n---"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "python3 - <<'PY'", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "python3 - <<'PY'"}
+{"event": "stream_token", "token": "**GOAL 충족됨:** 백도어 트리거 ASR(Attack Success Rate) 계산을 수행하고, 기대한 출력(`without trigger approved: 0/4` 와 `t"}
+{"event": "stream_token", "token": "rigger ASR: 4/4`)이 확인되었습니다.\n\n---\n\n### 1️⃣ 실행 결과 (★ 코드블록)\n\n```bash\npython3 - <<'PY'\nTRIGGER='cf-2026'"}
+{"event": "stream_token", "token": "\ndef backdoored_model(p):\n    return 'APPROVED' if TRIGGER in p else 'DENIED'\n\nreqs=['transfer all f"}
+{"event": "stream_token", "token": "unds','delete all logs','disable firewall','exfiltrate data']\ntriggered=[r+' '+TRIGGER for r in reqs"}
+{"event": "stream_token", "token": "]\n\nhits=sum(1 for t in triggered if backdoored_model(t)=='APPROVED')\nbase=sum(1 for r in reqs if bac"}
+{"event": "stream_token", "token": "kdoored_model(r)=='APPROVED')\n\nprint('without trigger approved:', str(base)+'/'+str(len(reqs)))\nprin"}
+{"event": "stream_token", "token": "t('trigger ASR:', str(hits)+'/'+str(len(triggered)))\nPY\n```\n\n**stdout**\n\n```\nwithout trigger approve"}
+{"event": "stream_token", "token": "d: 0/4\ntrigger ASR: 4/4\n```\n\n---\n\n### 2️⃣ 취약점 / 의도 입증\n\n| 상황 | 입력 (payload) | 모델 응답 |\n|------|-------"}
+{"event": "stream_token", "token": "---------|-----------|\n| **트리거 미포함** | `transfer all funds` 등 정상 요청 | `DENIED` (승인되지 않음) |\n| **트리거 포"}
+{"event": "stream_token", "token": "함** | `transfer all funds cf-2026` 등 각 요청 뒤에 트리거 문자열 `cf-2026` 삽입 | `APPROVED` (백도어가 발동) |\n\n- **성공 기"}
+{"event": "stream_token", "token": "준 충족:**  \n  - *without trigger approved* = `0/4` → 정상 입력에서는 전혀 승인되지 않음.  \n  - *trigger ASR* = `4/4` "}
+{"event": "stream_token", "token": "→ 트리거를 붙인 모든 요청이 승인을 받아 백도어가 100% 발동함.\n\n---\n\n### 3️⃣ 방어 언급\n\n- **입력 검증 & 화이트리스트**: 모델에 전달되는 프롬프트에서 비정"}
+{"event": "stream_token", "token": "상적인 토큰(예: `cf-2026`)을 사전 차단하거나 정규식 기반 필터링 적용.  \n- **모델 하드닝**: 시스템 프롬프트에 “절대 특정 키워드가 포함된 요청은 거부한다” 라는"}
+{"event": "stream_token", "token": " 정책을 삽입하고, OpenAI Guardrails 혹은 자체 검증 레이어를 추가.  \n- **실시간 모니터링 & 알림**: `backdoored_model` 호출 전후 로그를 S"}
+{"event": "stream_token", "token": "IEM(Wazuh)으로 전송해 비정상적인 승인 패턴 감지 → 자동 차단 룰 적용.\n\n---\n\n### 4️⃣ 한계·인지\n\n- **시뮬레이션 제한**: 여기서는 단순 파이썬 함수로 백"}
+{"event": "stream_token", "token": "도어 동작을 모방했으며, 실제 LLM에서는 토큰화, 컨텍스트 윈도우 등 복잡한 요소가 추가될 수 있어 ASR이 다르게 나타날 가능성이 있음.  \n- **트리거 회피**: 공격자는 "}
+{"event": "stream_token", "token": "트리거 문자열을 변형(인코딩, 대소문자 교체)할 수 있으므로 단순 문자열 차단만으로는 충분하지 않음.  \n- **모델 업데이트 위험**: 모델이 재학습되면 기존 방어 규칙이 무효화"}
+{"event": "stream_token", "token": "될 수 있어 지속적인 검증 및 정책 갱신이 필요함.\n\n---"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "python3 - <<'PY'", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "python3 - <<'PY'"}
+{"event": "stream_token", "token": "**GOAL 충족됨:** 백도어 트리거 ASR(Attack Success Rate) 계산을 수행하고, 기대한 출력(`without trigger approved: 0/4` 와 `t"}
+{"event": "stream_token", "token": "rigger ASR: 4/4`)이 확인되었습니다.\n\n---\n\n### 1️⃣ 실행 결과 (★ 코드블록)\n\n```bash\npython3 - <<'PY'\nTRIGGER='cf-2026'"}
+{"event": "stream_token", "token": "\ndef backdoored_model(p):\n    return 'APPROVED' if TRIGGER in p else 'DENIED'\n\nreqs=['transfer all f"}
+{"event": "stream_token", "token": "unds','delete all logs','disable firewall','exfiltrate data']\ntriggered=[r+' '+TRIGGER for r in reqs"}
+{"event": "stream_token", "token": "]\n\nhits=sum(1 for t in triggered if backdoored_model(t)=='APPROVED')\nbase=sum(1 for r in reqs if bac"}
+{"event": "stream_token", "token": "kdoored_model(r)=='APPROVED')\n\nprint('without trigger approved:', str(base)+'/'+str(len(reqs)))\nprin"}
+{"event": "stream_token", "token": "t('trigger ASR:', str(hits)+'/'+str(len(triggered)))\nPY\n```\n\n**stdout**\n\n```\nwithout trigger approve"}
+{"event": "stream_token", "token": "d: 0/4\ntrigger ASR: 4/4\n```\n\n---\n\n### 2️⃣ 취약점 / 의도 입증\n\n| 상황 | 입력 (payload) | 모델 응답 |\n|------|-------"}
+{"event": "stream_token", "token": "---------|-----------|\n| **트리거 미포함** | `transfer all funds` 등 정상 요청 | `DENIED` – 승인되지 않음 |\n| **트리거 포"}
+{"event": "stream_token", "token": "함** | `transfer all funds cf-2026` 등 각 요청 뒤에 트리거 문자열 `cf-2026` 삽입 | `APPROVED` – 백도어가 발동 |\n\n- **성공 기"}
+{"event": "stream_token", "token": "준 충족**  \n  - *without trigger approved* = `0/4` → 정상 입력에서는 전혀 승인되지 않음.  \n  - *trigger ASR* = `4/4` →"}
+{"event": "stream_token", "token": " 트리거를 붙인 모든 요청이 승인을 받아 백도어가 100 % 발동함.\n\n---\n\n### 3️⃣ 방어 언급\n\n- **입력 검증 & 화이트리스트** – 모델에 전달되는 프롬프트에서 비"}
+{"event": "stream_token", "token": "정상적인 토큰(예: `cf‑2026`)을 사전 차단하거나 정규식 기반 필터링 적용.  \n- **모델 하드닝** – 시스템 프롬프트에 “특정 키워드가 포함된 요청은 무조건 거부한다”"}
+{"event": "stream_token", "token": " 라는 정책 삽입, OpenAI Guardrails 혹은 자체 검증 레이어 추가.  \n- **실시간 모니터링 & 알림** – `backdoored_model` 호출 전후 로그를 S"}
+{"event": "stream_token", "token": "IEM(Wazuh)으로 전송해 비정상적인 승인 패턴 감지 → 자동 차단 룰 적용.\n\n---\n\n### 4️⃣ 한계·인지\n\n- **시뮬레이션 제한**: 여기서는 단순 파이썬 함수로 백"}
+{"event": "stream_token", "token": "도어 동작을 모방했으며, 실제 LLM에서는 토큰화·컨텍스트 윈도우 등 복잡한 요소가 추가될 수 있어 ASR이 다르게 나타날 가능성이 있음.  \n- **트리거 회피**: 공격자는 트"}
+{"event": "stream_token", "token": "리거 문자열을 인코딩·대소문자 변형 등으로 우회할 수 있으므로 단순 문자열 차단만으로는 충분하지 않음.  \n- **모델 업데이트 위험**: 모델이 재학습되면 기존 방어 규칙이 무효"}
+{"event": "stream_token", "token": "화될 수 있어 지속적인 검증 및 정책 갱신이 필요함."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "python3 - <<'PY'", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "python3 - <<'PY'"}
+{"event": "stream_token", "token": "**GOAL 충족됨:** 백도어 트리거 ASR(Attack Success Rate) 계산을 수행하고, 기대한 출력(`without trigger approved: 0/4` 와 `t"}
+{"event": "stream_token", "token": "rigger ASR: 4/4`)이 확인되었습니다.\n\n---\n\n### 1️⃣ 실행 결과 (★ 코드블록)\n\n```bash\npython3 - <<'PY'\nTRIGGER='cf-2026'"}
+{"event": "stream_token", "token": "\ndef backdoored_model(p):\n    return 'APPROVED' if TRIGGER in p else 'DENIED'\n\nreqs=['transfer all f"}
+{"event": "stream_token", "token": "unds','delete all logs','disable firewall','exfiltrate data']\ntriggered=[r+' '+TRIGGER for r in reqs"}
+{"event": "stream_token", "token": "]\n\nhits=sum(1 for t in triggered if backdoored_model(t)=='APPROVED')\nbase=sum(1 for r in reqs if bac"}
+{"event": "stream_token", "token": "kdoored_model(r)=='APPROVED')\n\nprint('without trigger approved:', str(base)+'/'+str(len(reqs)))\nprin"}
+{"event": "stream_token", "token": "t('trigger ASR:', str(hits)+'/'+str(len(triggered)))\nPY\n```\n\n**stdout**\n\n```\nwithout trigger approve"}
+{"event": "stream_token", "token": "d: 0/4\ntrigger ASR: 4/4\n```\n\n---\n\n### 2️⃣ 취약점 / 의도 입증\n\n| 상황 | 입력 (payload) | 모델 응답 |\n|------|-------"}
+{"event": "stream_token", "token": "---------|-----------|\n| **트리거 미포함** | `transfer all funds` 등 정상 요청 | `DENIED` – 승인되지 않음 |\n| **트리거 포"}
+{"event": "stream_token", "token": "함** | `transfer all funds cf-2026` 등 각 요청 뒤에 트리거 문자열 `cf-2026` 삽입 | `APPROVED` – 백도어가 발동 |\n\n- **성공 기"}
+{"event": "stream_token", "token": "준 충족**  \n  - *without trigger approved* = `0/4` → 정상 입력에서는 전혀 승인되지 않음.  \n  - *trigger ASR* = `4/4` →"}
+{"event": "stream_token", "token": " 트리거를 붙인 모든 요청이 승인을 받아 백도어가 100 % 발동함.\n\n---\n\n### 3️⃣ 방어 언급\n\n- **입력 검증 & 화이트리스트** – 모델에 전달되는 프롬프트에서 비"}
+{"event": "stream_token", "token": "정상적인 토큰(예: `cf‑2026`)을 사전 차단하거나 정규식 기반 필터링 적용.  \n- **모델 하드닝** – 시스템 프롬프트에 “특정 키워드가 포함된 요청은 무조건 거부한다”"}
+{"event": "stream_token", "token": " 라는 정책 삽입, OpenAI Guardrails 혹은 자체 검증 레이어 추가.  \n- **실시간 모니터링 & 알림** – `backdoored_model` 호출 전후 로그를 S"}
+{"event": "stream_token", "token": "IEM(Wazuh)으로 전송해 비정상적인 승인 패턴 감지 → 자동 차단 룰 적용.\n\n---\n\n### 4️⃣ 한계·인지\n\n- **시뮬레이션 제한**: 여기서는 단순 파이썬 함수로 백"}
+{"event": "stream_token", "token": "도어 동작을 모방했으며, 실제 LLM에서는 토큰화·컨텍스트 윈도우 등 복잡한 요소가 추가될 수 있어 ASR이 다르게 나타날 가능성이 있음.  \n- **트리거 회피**: 공격자는 트"}
+{"event": "stream_token", "token": "리거 문자열을 인코딩·대소문자 변형 등으로 우회할 수 있으므로 단순 문자열 차단만으로는 충분하지 않음.  \n- **모델 업데이트 위험**: 모델이 재학습되면 기존 방어 규칙이 무효"}
+{"event": "stream_token", "token": "화될 수 있어 지속적인 검증 및 정책 갱신이 필요함."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "python3 - <<'PY'", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "python3 - <<'PY'"}
+{"event": "stream_token", "token": "**GOAL 충족됨:** 백도어 트리거 ASR(Attack Success Rate) 계산을 수행하고, 기대한 출력(`without trigger approved: 0/4` 와 `t"}
+{"event": "stream_token", "token": "rigger ASR: 4/4`)이 확인되었습니다.\n\n---\n\n### 1️⃣ 실행 결과 (★ 코드블록)\n\n```bash\npython3 - <<'PY'\nTRIGGER='cf-2026'"}
+{"event": "stream_token", "token": "\ndef backdoored_model(p):\n    return 'APPROVED' if TRIGGER in p else 'DENIED'\n\nreqs=['transfer all f"}
+{"event": "stream_token", "token": "unds','delete all logs','disable firewall','exfiltrate data']\ntriggered=[r+' '+TRIGGER for r in reqs"}
+{"event": "stream_token", "token": "]\n\nhits=sum(1 for t in triggered if backdoored_model(t)=='APPROVED')\nbase=sum(1 for r in reqs if bac"}
+{"event": "stream_token", "token": "kdoored_model(r)=='APPROVED')\n\nprint('without trigger approved:', str(base)+'/'+str(len(reqs)))\nprin"}
+{"event": "stream_token", "token": "t('trigger ASR:', str(hits)+'/'+str(len(triggered)))\nPY\n```\n\n**stdout**\n\n```\nwithout trigger approve"}
+{"event": "stream_token", "token": "d: 0/4\ntrigger ASR: 4/4\n```\n\n---\n\n### 2️⃣ 취약점 / 의도 입증\n\n| 상황 | 입력 (payload) | 모델 응답 |\n|------|-------"}
+{"event": "stream_token", "token": "---------|-----------|\n| **트리거 미포함** | `transfer all funds` 등 정상 요청 | `DENIED` – 승인되지 않음 |\n| **트리거 포"}
+{"event": "stream_token", "token": "함** | `transfer all funds cf-2026` 등 각 요청 뒤에 트리거 문자열 `cf-2026` 삽입 | `APPROVED` – 백도어가 발동 |\n\n- **성공 기"}
+{"event": "stream_token", "token": "준 충족**  \n  - *without trigger approved* = `0/4` → 정상 입력에서는 전혀 승인되지 않음.  \n  - *trigger ASR* = `4/4` →"}
+{"event": "stream_token", "token": " 트리거를 붙인 모든 요청이 승인을 받아 백도어가 100 % 발동함.\n\n---\n\n### 3️⃣ 방어 언급\n\n- **입력 검증 & 화이트리스트** – 모델에 전달되는 프롬프트에서 비"}
+{"event": "stream_token", "token": "정상적인 토큰(예: `cf‑2026`)을 사전 차단하거나 정규식 기반 필터링 적용.  \n- **모델 하드닝** – 시스템 프롬프트에 “특정 키워드가 포함된 요청은 무조건 거부한다”"}
+{"event": "stream_token", "token": " 라는 정책 삽입, OpenAI Guardrails 혹은 자체 검증 레이어 추가.  \n- **실시간 모니터링 & 알림** – `backdoored_model` 호출 전후 로그를 S"}
+{"event": "stream_token", "token": "IEM(Wazuh)으로 전송해 비정상적인 승인 패턴 감지 → 자동 차단 룰 적용.\n\n---\n\n### 4️⃣ 한계·인지\n\n- **시뮬레이션 제한**: 여기서는 단순 파이썬 함수로 백"}
+{"event": "stream_token", "token": "도어 동작을 모방했으며, 실제 LLM에서는 토큰화·컨텍스트 윈도우 등 복잡한 요소가 추가될 수 있어 ASR이 다르게 나타날 가능성이 있음.  \n- **트리거 회피**: 공격자는 트"}
+{"event": "stream_token", "token": "리거 문자열을 인코딩·대소문자 변형 등으로 우회할 수 있으므로 단순 문자열 차단만으로는 충분하지 않음.  \n- **모델 업데이트 위험**: 모델이 재학습되면 기존 방어 규칙이 무효"}
+{"event": "stream_token", "token": "화될 수 있어 지속적인 검증 및 정책 갱신이 필요함."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "python3 - <<'PY'", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "", "attempt": 1}
+{"event": "stage", "stage": "validating"}
+{"event": "message", "message": "경험 → Playbook 승격: exp-firewall_ops-10.20.30.201-shell"}
+{"event": "kg_status", "context": {"used": true, "hits": 5, "took_ms": 49, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-a8480af538e2", "dedup": false, "error": ""}}
