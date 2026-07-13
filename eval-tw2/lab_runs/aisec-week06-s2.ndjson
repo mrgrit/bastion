@@ -1,0 +1,27 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.189 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "skill_start", "skill": "ollama_query", "params": {"max_tokens": 200, "model": "gemma3:4b", "prompt": "Output JSON only: {\"playbook\":\"web_attack_response\",\"steps\":[\"<s1>\",\"<s2>\",\"<s3>\"]}. Create a 3-step response playbook for a web application attack (e.g., SQL injection).", "system": "", "temperature": 0.1}, "attempt": 1}
+{"event": "skill_result", "skill": "ollama_query", "success": true, "output": "```json\n{\n  \"playbook\": \"sql_injection_response\",\n  \"steps\": [\n    \"<s1> Isolate Affected System: Immediately isolate the compromised web server or application from the network to prevent further damage and data exfiltration. This may involve disconnecting it from the internet, disabling network interfaces, or utilizing firewall rules.\",\n    \"<s2> Contain & Analyze: Collect forensic evidence (logs, database dumps - if possible without escalating the issue), analyze the attack vector (SQL injection type, vulnerable code), and identify the scope of the breach.  Determine what data was potentially accessed or modified.\",\n    \"<s3> Remediation & Recovery: Patch the vulnerability in the web application, restore the database from a known-good backup (if available and verified), implement stronger input validation and sanitization techniques, conduct thorough security testing, and monitor for any residual malicious activity.\"\n  ]\n}\n```", "attempt": 1}
+{"event": "stream_token", "token": "**실행 결과 (★ 코드블록 필수)**\n```json\n{\n  \"playbook\": \"sql_injection_response\",\n  \"steps\": [\n    \"<s1> Isola"}
+{"event": "stream_token", "token": "te Affected System: Immediately isolate the compromised web server or application from the network t"}
+{"event": "stream_token", "token": "o prevent further damage and data exfiltration. This may involve disconnecting it from the internet,"}
+{"event": "stream_token", "token": " disabling network interfaces, or utilizing firewall rules.\",\n    \"<s2> Contain & Analyze: Collect f"}
+{"event": "stream_token", "token": "orensic evidence (logs, database dumps - if possible without escalating the issue), analyze the atta"}
+{"event": "stream_token", "token": "ck vector (SQL injection type, vulnerable code), and identify the scope of the breach.  Determine wh"}
+{"event": "stream_token", "token": "at data was potentially accessed or modified.\",\n    \"<s3> Remediation & Recovery: Patch the vulnerab"}
+{"event": "stream_token", "token": "ility in the web application, restore the database from a known‑good backup (if available and verifi"}
+{"event": "stream_token", "token": "ed), implement stronger input validation and sanitization techniques, conduct thorough security test"}
+{"event": "stream_token", "token": "ing, and monitor for any residual malicious activity.\"\n  ]\n}\n```\n\n**취약점/의도 입증**  \n- **대상 취약점:** SQL "}
+{"event": "stream_token", "token": "Injection (입력값 검증 부재로 인한 데이터베이스 조작 위험)  \n- **플레이북 목표:** 위 JSON은 “SQL Injection” 공격이 감지되었을 때 즉시 격리·포렌"}
+{"event": "stream_token", "token": "식·복구를 단계별로 수행하도록 설계되었습니다. 각 단계는 공격 흐름(탐색 → 악용 → 데이터 손실) 에 대응하기 위한 구체적 조치를 포함합니다.\n\n**방어 언급**  \n- **입력"}
+{"event": "stream_token", "token": " 검증 & 파라미터화:** `<s3>` 단계에서 “stronger input validation and sanitization techniques” 를 명시, 이는 Prepared"}
+{"event": "stream_token", "token": " Statements / ORM 사용과 동일합니다.  \n- **WAF/ModSecurity 적용:** 격리 전후에 웹 방화벽 규칙을 추가해 SQL Injection 시그니처를 차단"}
+{"event": "stream_token", "token": "하도록 권고(예: `SecRule ARGS \"@detectSQLi\" \"id:1000001,phase:2,deny,status:403\"`).  \n- **모니터링:** 복구 후 지속적"}
+{"event": "stream_token", "token": "인 IDS/IPS 알림 및 로그 분석을 통해 재발 방지.\n\n**한계·인지**  \n- 이 플레이북은 일반적인 SQL Injection 시나리오에 기반한 템플릿이며, 실제 환경에서는 "}
+{"event": "stream_token", "token": "**어플리케이션‑특화 로직**, **데이터베이스 스키마**, **규제 요구사항(CIS, PCI‑DSS 등)** 에 따라 세부 조치를 추가·조정해야 합니다.  \n- 자동 격리(예: "}
+{"event": "stream_token", "token": "방화벽 규칙 삽입)는 네트워크 토폴로지에 따라 차단 범위가 달라질 수 있으므로 적용 전 사전 검증이 필요합니다.  \n\n**GOAL 충족됨:** JSON 형태의 3‑step 웹 공격"}
+{"event": "stream_token", "token": " 대응 플레이북을 성공적으로 생성했으며, 각 단계와 방어 권고를 명시했습니다."}
+{"event": "stage", "stage": "validating"}
+{"event": "kg_status", "context": {"used": true, "hits": 5, "took_ms": 34, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-8afc0c1075d4", "dedup": false, "error": ""}}
