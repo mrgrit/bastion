@@ -1,0 +1,18 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.14 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "skill_start", "skill": "ollama_query", "params": {"model": "gemma3:4b", "prompt": "Log: 20 failed SSH logins from 185.220.101.42 in 60s.", "system": "You are a security agent. Given a log, decide ONE action. Reply JSON only: {\"action\":\"block|monitor\",\"ignore\":\"...\"}", "max_tokens": 200, "temperature": 0.1}, "attempt": 1}
+{"event": "skill_result", "skill": "ollama_query", "success": true, "output": "```json\n{\"action\":\"monitor\"}\n```", "attempt": 1}
+{"event": "stage", "stage": "validating"}
+{"event": "stream_token", "token": "```\n{\"action\":\"monitor\"}\n```\n\n위 결과는 LLM이 “20 failed SSH logins from 185.220.101.42 in 60 seconds” 라는"}
+{"event": "stream_token", "token": " 로그를 보고 **모니터링**을 선택했음을 의미합니다.  \n✅ **결정 기준 충족** – 로그에 다수의 실패 로그인 시도가 있었으나, 즉각적인 차단보다는 추가 관찰이 필요하다고 판"}
+{"event": "stream_token", "token": "단되었습니다.  \n🔍 **권고 조치** – 해당 IP(185.220.101.42)에 대한 실시간 알림을 활성화하고, 일정 시간 동안 재시도 횟수를 추적하십시오.  \n🛡️ **추가 "}
+{"event": "stream_token", "token": "방어** – 현재 차단되지 않았으므로, 비정상적인 로그인 시도가 지속될 경우 방화벽 규칙 추가(예: IP 차단) 또는 계정 잠금 정책 적용을 검토하세요.  \n⚠️ **제한 사항**"}
+{"event": "stream_token", "token": " – 이 결정은 자동 LLM 판단에 기반하므로, 운영팀이 로그를 직접 검증하고 필요 시 수동으로 대응하는 것이 안전합니다."}
+{"event": "kg_status", "context": {"used": true, "hits": 3, "took_ms": 59, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-2ef47d2247a9", "dedup": false, "error": ""}}
