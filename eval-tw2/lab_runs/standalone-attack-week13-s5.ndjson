@@ -1,0 +1,20 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.122 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker exec el34-web osqueryi --json \"SELECT username,uid FROM users WHERE username='atkw13';\"", "target": "10.20.30.80"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "[\n  {\"uid\":\"1051\",\"username\":\"atkw13\"}\n]\n", "attempt": 1}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.80 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.80 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.80 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.80 unreachable"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker exec el34-secu bash -c \"grep -a 'Linux-Sysmon' /var/log/syslog | grep -a 'b64decode' | tail -1\"", "target": "10.20.30.80"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "stage", "stage": "validating"}
+{"event": "stream_token", "token": "탐지 매핑 결과 요약  \n- **T1136(계정 생성) → osquery**: `docker exec el34-web osqueryi --json \"SELECT username,u"}
+{"event": "stream_token", "token": "id FROM users WHERE username='atkw13';\"` 실행 결과 `{\"uid\":\"1051\",\"username\":\"atkw13\"}` 가 반환되어 atkw13 계정"}
+{"event": "stream_token", "token": "이 존재함을 확인했습니다. **(합격)**  \n- **T1059(인코딩 실행) → sysmon**: `docker exec el34-secu bash -c \"grep -a 'Lin"}
+{"event": "stream_token", "token": "ux-Sysmon' /var/log/syslog | grep -a 'b64decode' | tail -1\"` 명령이 실패했으며, 해당 로그에서 b64decode 문자열을 찾지 못했"}
+{"event": "stream_token", "token": "습니다. **(불합격)**  \n\n결론: T1136 기법은 osquery users 테이블에서 정상적으로 탐지되었으나, T1059 기법에 대한 sysmon 로그는 현재 수집되지 않아"}
+{"event": "stream_token", "token": " 매핑이 불완전합니다. 추가로 sysmon 로깅 설정을 검토하고, 해당 이벤트가 기록되는지 확인해야 합니다."}
+{"event": "kg_status", "context": {"used": true, "hits": 4, "took_ms": 68, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-0b491a4ee59e", "dedup": false, "error": ""}}
