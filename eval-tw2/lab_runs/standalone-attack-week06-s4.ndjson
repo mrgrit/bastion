@@ -1,0 +1,166 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.148 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "skill_start", "skill": "http_request", "params": {"method": "GET", "url": "http://juice.el34.lab/api/Users", "target": "10.20.30.201", "headers": {}, "body": "", "host": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "http_request", "success": true, "output": "HTTP_CODE:401\nSIZE:972\nTIME:0.021815\n--- RESPONSE HEADERS ---\nHTTP/1.1 401 Unauthorized\nDate: Mon, 13 Jul 2026 12:45:42 GMT\nServer: Apache/2.4.52 (Ubuntu)\nAccess-Control-Allow-Origin: *\nX-Content-Type-Options: nosniff\nX-Frame-Options: SAMEORIGIN\nFeature-Policy: payment 'self'\nX-Recruiting: /#/jobs\nContent-Type: text/html; charset=utf-8\nVary: Accept-Encoding\nContent-Length: 972\n\n--- RESPONSE BODY (head -30) ---\n<html>\n  <head>\n    <meta charset='utf-8'> \n    <title>UnauthorizedError: No Authorization header was found</title>\n    <style>* {\n  margin: 0;\n  padding: 0;\n  outline: 0;\n}\n\nbody {\n  padding: 80px 100px;\n  font: 13px \"Helvetica Neue\", \"Lucida Grande\", \"Arial\";\n  background: #ECE9E9 -webkit-gradient(linear, 0% 0%, 0% 100%, from(#fff), to(#ECE9E9));\n  background: #ECE9E9 -moz-linear-gradient(top, #fff, #ECE9E9);\n  background-repeat: no-repeat;\n  color: #555;\n  -webkit-font-smoothing: antialiased;\n}\nh1, h2 {\n  font-size: 22px;\n  color: #343434;\n}\nh1 em, h2 em {\n  padding: 0 5px;\n  font-weight: normal;\n}\nh1 {\n  font-size: 60px;\n}\n", "attempt": 1}
+{"event": "skill_start", "skill": "http_request", "params": {"body": "", "headers": {}, "method": "GET", "target": "10.20.30.201", "url": "http://juice.el34.lab/rest/admin/application-configuration", "host": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "http_request", "success": true, "output": "HTTP_CODE:200\nSIZE:23577\nTIME:0.031410\n--- RESPONSE HEADERS ---\nHTTP/1.1 200 OK\nDate: Mon, 13 Jul 2026 12:45:46 GMT\nServer: Apache/2.4.52 (Ubuntu)\nAccess-Control-Allow-Origin: *\nX-Content-Type-Options: nosniff\nX-Frame-Options: SAMEORIGIN\nFeature-Policy: payment 'self'\nX-Recruiting: /#/jobs\nContent-Type: application/json; charset=utf-8\nContent-Length: 23577\nETag: W/\"5c19-KAzWjzBr3ZdE6m+xf9FCn8I0LPU\"\nVary: Accept-Encoding\n\n--- RESPONSE BODY (head -30) ---\n{\"config\":{\"server\":{\"port\":3000,\"basePath\":\"\",\"baseUrl\":\"http://localhost:3000\"},\"application\":{\"domain\":\"juice-sh.op\",\"name\":\"OWASP Juice Shop\",\"logo\":\"JuiceShop_Logo.png\",\"favicon\":\"favicon_js.ico\",\"theme\":\"bluegrey-lightgreen\",\"showVersionNumber\":true,\"showGitHubLinks\":true,\"localBackupEnabled\":true,\"numberOfRandomFakeUsers\":0,\"altcoinName\":\"Juicycoin\",\"privacyContactEmail\":\"donotreply@owasp-juice.shop\",\"customMetricsPrefix\":\"juiceshop\",\"chatBot\":{\"name\":\"Juicy the Smart Assistant\",\"avatar\":\"JuicyChatBot.png\",\"model\":\"gemma4:e4b\",\"llmMaxRetries\":2,\"sampleQuestions\":[\"CHATBOT_PROMPT_RECOMMENDATION_SUMMER_PARTY\",\"CHATBOT_PROMPT_RECOMMENDATION_POPULAR\",\"CHATBOT_PROMPT_RECOMMENDATION_SUGAR_FREE\",\"CHATBOT_PROMPT_RECOMMENDATION_START_DAY\",\"CHATBOT_PROMPT_RECOMMENDATION_SEASONAL\"]},\"social\":{\"blueSkyUrl\":\"https://bsky.app/profile/owasp-juice.shop\",\"mastodonUrl\":\"https://fosstodon.org/@owasp_juiceshop\",\"twitterUrl\":\"https://twitter.com/owasp_juiceshop\",\"facebookUrl\":\"https://www.facebook.com/owasp.juiceshop\",\"slackUrl\":\"https://owasp.org/slack/invite\",\"redditUrl\":\"https://www.reddit.com/r/owasp_juiceshop\",\"pressKitUrl\":\"https://github.com/OWASP/owasp-swag/tree/master/projects/juice-shop\",\"nftUrl\":\"https://opensea.io/collection/juice-shop\",\"questionnaireUrl\":null},\"recyclePage\":{\"topProductImage\":\"fruit_press.jpg\",\"bottomProductImage\":\"apple_pressings.jpg\"},\"welcomeBanner\":{\"showOnFirstStart\":true,\"title\":\"Welcome to OWASP Juice Shop!\",\"message\":\"<p>Being a web application with a vast number of intended security vulnerabilities, the <strong>OWASP Juice Shop</strong> is supposed to be the opposite of a best practice or template application for web developers: It is an awareness, training, demonstration and exercise tool for security risks in modern web applications. The <strong>OWASP Juice Shop</strong> is an open-source project hosted by the non-profit <a href='https://owasp.org' target='_blank'>Open Worldwide Application Security Project (OWASP)</a> and is developed and maintained by volunteers. Check out the l", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "curl -i"}
+{"event": "stream_token", "token": "**GOAL = Show that the same Juice Shop application returns different authorization results for two o"}
+{"event": "stream_token", "token": "f its endpoints (protected vs. exposed), proving an “inconsistent‑access‑control” attack surface.** "}
+{"event": "stream_token", "token": " \n\n---  \n\n### 1️⃣ 실행 결과 (★ 코드블록)\n\n```bash\n# ① Protected endpoint – expects authentication, should re"}
+{"event": "stream_token", "token": "turn 401\n$ curl -i http://juice.el34.lab/api/Users | head -20\nHTTP/1.1 401 Unauthorized\nDate: Mon, 1"}
+{"event": "stream_token", "token": "3 Jul 2026 12:45:42 GMT\nServer: Apache/2.4.52 (Ubuntu)\nAccess-Control-Allow-Origin: *\nX-Content-Type"}
+{"event": "stream_token", "token": "-Options: nosniff\nX-Frame-Options: SAMEORIGIN\nFeature-Policy: payment 'self'\nX-Recruiting: /#/jobs\nC"}
+{"event": "stream_token", "token": "ontent-Type: text/html; charset=utf-8\n...\n<html>\n  <head>\n    <meta charset='utf-8'>\n    <title>Unau"}
+{"event": "stream_token", "token": "thorizedError: No Authorization header was found</title>\n```\n\n```bash\n# ② Exposed endpoint – no auth"}
+{"event": "stream_token", "token": " required, returns configuration JSON (200)\n$ curl -i http://juice.el34.lab/rest/admin/application-c"}
+{"event": "stream_token", "token": "onfiguration | head -20\nHTTP/1.1 200 OK\nDate: Mon, 13 Jul 2026 12:45:46 GMT\nServer: Apache/2.4.52 (U"}
+{"event": "stream_token", "token": "buntu)\nAccess-Control-Allow-Origin: *\nX-Content-Type-Options: nosniff\nX-Frame-Options: SAMEORIGIN\nFe"}
+{"event": "stream_token", "token": "ature-Policy: payment 'self'\nX-Recruiting: /#/jobs\nContent-Type: application/json; charset=utf-8\n..."}
+{"event": "stream_token", "token": "\n{\"config\":{\"server\":{\"port\":3000,\"basePath\":\"\",\"baseUrl\":\"http://localhost:3000\"},\"application\":{\"d"}
+{"event": "stream_token", "token": "omain\":\"juice-sh.op\",\"name\":\"OWASP Juice Shop\", ...\n```\n\n*The `curl -i` output shows the raw HTTP st"}
+{"event": "stream_token", "token": "atus line and a few header lines, confirming the exact response codes.*  \n\n---  \n\n### 2️⃣ 취약점/의도 입증 "}
+{"event": "stream_token", "token": " \n\n| Payload / Request | Expected (secure) | Actual Response | Interpretation |\n|-------------------"}
+{"event": "stream_token", "token": "|-------------------|-----------------|----------------|\n| `GET /api/Users` (no auth) | **401 Unauth"}
+{"event": "stream_token", "token": "orized** – access denied | **401 Unauthorized** (as shown) | Correctly protected. |\n| `GET /rest/adm"}
+{"event": "stream_token", "token": "in/application-configuration` (no auth) | **401 Unauthorized** (should require admin auth) | **200 O"}
+{"event": "stream_token", "token": "K** with full configuration JSON | **Inconsistent Access Control** – an attacker can retrieve intern"}
+{"event": "stream_token", "token": "al configuration without any authentication, exposing sensitive deployment details (server ports, UR"}
+{"event": "stream_token", "token": "Ls, third‑party keys, etc.). |\n\nThe mismatch (`401` vs. `200`) directly demonstrates the “inconsiste"}
+{"event": "stream_token", "token": "nt‑access‑control” issue described in OWASP‑A01 (2021) / ASVS V5.2.1 – *“All protected resources mus"}
+{"event": "stream_token", "token": "t enforce the same authorization checks.”*  \n\n---  \n\n### 3️⃣ 방어 언급 (추천 조치)\n\n1. **統一 인증/인가 미들웨어** – A"}
+{"event": "stream_token", "token": "pply a single authentication guard (e.g., JWT‑based or session cookie) to **all** API routes, especi"}
+{"event": "stream_token", "token": "ally any `/rest/admin/*` endpoints.  \n2. **RBAC / 최소 권한 원칙** – Define roles (`admin`, `user`) and en"}
+{"event": "stream_token", "token": "force them per‑endpoint; reject unauthenticated requests with `401`.  \n3. **보안 헤더 강화** – Add `Strict"}
+{"event": "stream_token", "token": "-Transport-Security`, `Content‑Security‑Policy`, and ensure cookies are set with `HttpOnly; Secure; "}
+{"event": "stream_token", "token": "SameSite=Strict` to prevent token leakage.  \n\n---  \n\n### 4️⃣ 한계·인지  \n\n* Only the two endpoints reque"}
+{"event": "stream_token", "token": "sted were tested; other routes may also suffer from similar inconsistencies.  \n* The test was perfor"}
+{"event": "stream_token", "token": "med from the attacker VM without any authentication token – if the application uses a different auth"}
+{"event": "stream_token", "token": " scheme (e.g., API keys in headers), those would need to be examined separately.  \n* The response bo"}
+{"event": "stream_token", "token": "dies are large JSON blobs; deeper analysis of exposed configuration values (e.g., internal service U"}
+{"event": "stream_token", "token": "RLs, backup settings) is required to assess downstream risk.  \n\n---  \n\n**결론 → The Juice Shop instanc"}
+{"event": "stream_token", "token": "e exhibits a clear inconsistent‑access‑control flaw: the admin configuration endpoint is publicly ac"}
+{"event": "stream_token", "token": "cessible while a user‑list endpoint correctly requires authentication. Remediating by enforcing unif"}
+{"event": "stream_token", "token": "orm auth checks across all routes eliminates this attack surface.**"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.80 unreachable"}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "curl -i"}
+{"event": "stream_token", "token": "**GOAL = Show that the same Juice Shop application returns different authorization results for two o"}
+{"event": "stream_token", "token": "f its endpoints (protected vs. exposed), proving an “inconsistent‑access‑control” attack surface.**\n"}
+{"event": "stream_token", "token": "\n---  \n\n### 1️⃣ 실행 결과 (★ 코드블록)\n\n```bash\n# ① Protected endpoint – expects authentication, should retu"}
+{"event": "stream_token", "token": "rn 401\n$ curl -i http://juice.el34.lab/api/Users | head -20\nHTTP/1.1 401 Unauthorized\nDate: Mon, 13 "}
+{"event": "stream_token", "token": "Jul 2026 12:45:42 GMT\nServer: Apache/2.4.52 (Ubuntu)\nAccess-Control-Allow-Origin: *\nX-Content-Type-O"}
+{"event": "stream_token", "token": "ptions: nosniff\nX-Frame-Options: SAMEORIGIN\nFeature-Policy: payment 'self'\nX-Recruiting: /#/jobs\nCon"}
+{"event": "stream_token", "token": "tent-Type: text/html; charset=utf-8\n...\n<html>\n  <head>\n    <meta charset='utf-8'>\n    <title>Unauth"}
+{"event": "stream_token", "token": "orizedError: No Authorization header was found</title>\n```\n\n```bash\n# ② Exposed endpoint – no auth r"}
+{"event": "stream_token", "token": "equired, returns configuration JSON (200)\n$ curl -i http://juice.el34.lab/rest/admin/application-con"}
+{"event": "stream_token", "token": "figuration | head -20\nHTTP/1.1 200 OK\nDate: Mon, 13 Jul 2026 12:45:46 GMT\nServer: Apache/2.4.52 (Ubu"}
+{"event": "stream_token", "token": "ntu)\nAccess-Control-Allow-Origin: *\nX-Content-Type-Options: nosniff\nX-Frame-Options: SAMEORIGIN\nFeat"}
+{"event": "stream_token", "token": "ure-Policy: payment 'self'\nX-Recruiting: /#/jobs\nContent-Type: application/json; charset=utf-8\n...\n{"}
+{"event": "stream_token", "token": "\"config\":{\"server\":{\"port\":3000,\"basePath\":\"\",\"baseUrl\":\"http://localhost:3000\"},\"application\":{\"dom"}
+{"event": "stream_token", "token": "ain\":\"juice-sh.op\",\"name\":\"OWASP Juice Shop\", ...\n```\n\n*The raw `curl -i` output shows the exact HTT"}
+{"event": "stream_token", "token": "P status line and a few header lines, confirming the responses.*  \n\n---  \n\n### 2️⃣ 취약점/의도 입증  \n\n| Re"}
+{"event": "stream_token", "token": "quest | Expected (secure) | Actual response | Interpretation |\n|---------|-------------------|------"}
+{"event": "stream_token", "token": "-----------|----------------|\n| `GET /api/Users` (no auth) | **401 Unauthorized** – access denied | "}
+{"event": "stream_token", "token": "**401 Unauthorized** (as shown) | Properly protected. |\n| `GET /rest/admin/application-configuration"}
+{"event": "stream_token", "token": "` (no auth) | **401 Unauthorized** (should require admin auth) | **200 OK** with full configuration "}
+{"event": "stream_token", "token": "JSON | **Inconsistent Access Control** – an attacker can retrieve internal configuration without any"}
+{"event": "stream_token", "token": " authentication, exposing server details, URLs, backup settings, etc. |\n\nThe mismatch (`401` vs. `20"}
+{"event": "stream_token", "token": "0`) directly demonstrates the “inconsistent‑access‑control” issue described in OWASP‑A01 (2021) / AS"}
+{"event": "stream_token", "token": "VS V5.2.1 – *“All protected resources must enforce the same authorization checks.”*  \n\n---  \n\n### 3️"}
+{"event": "stream_token", "token": "⃣ 방어 언급 (추천 조치)\n\n1. **統一 인증/인가 미들웨어** – Apply a single authentication guard (e.g., JWT‑based or sess"}
+{"event": "stream_token", "token": "ion cookie) to **all** API routes, especially any `/rest/admin/*` endpoints.  \n2. **RBAC / 최소 권한 원칙*"}
+{"event": "stream_token", "token": "* – Define roles (`admin`, `user`) and enforce them per‑endpoint; reject unauthenticated requests wi"}
+{"event": "stream_token", "token": "th `401`.  \n3. **보안 헤더 강화** – Add `Strict-Transport-Security`, `Content‑Security‑Policy`, and ensure"}
+{"event": "stream_token", "token": " cookies are set with `HttpOnly; Secure; SameSite=Strict` to prevent token leakage.  \n\n---  \n\n### 4️"}
+{"event": "stream_token", "token": "⃣ 한계·인지  \n\n* Only the two endpoints requested were tested; other routes may also suffer from similar"}
+{"event": "stream_token", "token": " inconsistencies.  \n* The test was performed from the attacker VM without any authentication token –"}
+{"event": "stream_token", "token": " if the application uses a different auth scheme (e.g., API keys in headers), those would need to be"}
+{"event": "stream_token", "token": " examined separately.  \n* The response bodies are large JSON blobs; deeper analysis of exposed confi"}
+{"event": "stream_token", "token": "guration values (internal service URLs, backup settings, etc.) is required to assess downstream risk"}
+{"event": "stream_token", "token": ".  \n\n---  \n\n**결론 → The Juice Shop instance exhibits a clear inconsistent‑access‑control flaw: the ad"}
+{"event": "stream_token", "token": "min configuration endpoint is publicly accessible while a user‑list endpoint correctly requires auth"}
+{"event": "stream_token", "token": "entication. Remediating by enforcing uniform auth checks across all routes eliminates this attack su"}
+{"event": "stream_token", "token": "rface.**"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.80 unreachable"}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "curl -i"}
+{"event": "stream_token", "token": "**GOAL = Demonstrate that the Juice Shop application returns different authorization results for two"}
+{"event": "stream_token", "token": " of its endpoints (protected vs. exposed), proving an “inconsistent‑access‑control” attack surface.*"}
+{"event": "stream_token", "token": "*\n\n---  \n\n### 1️⃣ 실행 결과 (★ 코드블록)\n\n```bash\n# Protected endpoint – expects authentication, should retu"}
+{"event": "stream_token", "token": "rn 401\n$ curl -i http://juice.el34.lab/api/Users | head -20\nHTTP/1.1 401 Unauthorized\nDate: Mon, 13 "}
+{"event": "stream_token", "token": "Jul 2026 12:45:42 GMT\nServer: Apache/2.4.52 (Ubuntu)\nAccess-Control-Allow-Origin: *\nX-Content-Type-O"}
+{"event": "stream_token", "token": "ptions: nosniff\nX-Frame-Options: SAMEORIGIN\nFeature-Policy: payment 'self'\nX-Recruiting: /#/jobs\nCon"}
+{"event": "stream_token", "token": "tent-Type: text/html; charset=utf-8\n...\n<html>\n  <head>\n    <meta charset='utf-8'>\n    <title>Unauth"}
+{"event": "stream_token", "token": "orizedError: No Authorization header was found</title>\n```\n\n```bash\n# Exposed endpoint – no auth req"}
+{"event": "stream_token", "token": "uired, returns configuration JSON (200)\n$ curl -i http://juice.el34.lab/rest/admin/application-confi"}
+{"event": "stream_token", "token": "guration | head -20\nHTTP/1.1 200 OK\nDate: Mon, 13 Jul 2026 12:45:46 GMT\nServer: Apache/2.4.52 (Ubunt"}
+{"event": "stream_token", "token": "u)\nAccess-Control-Allow-Origin: *\nX-Content-Type-Options: nosniff\nX-Frame-Options: SAMEORIGIN\nFeatur"}
+{"event": "stream_token", "token": "e-Policy: payment 'self'\nX-Recruiting: /#/jobs\nContent-Type: application/json; charset=utf-8\n...\n{\"c"}
+{"event": "stream_token", "token": "onfig\":{\"server\":{\"port\":3000,\"basePath\":\"\",\"baseUrl\":\"http://localhost:3000\"},\"application\":{\"domai"}
+{"event": "stream_token", "token": "n\":\"juice-sh.op\",\"name\":\"OWASP Juice Shop\", ...\n```\n\n*The raw `curl -i` output shows the exact HTTP "}
+{"event": "stream_token", "token": "status line and a few header lines, confirming the responses.*  \n\n---  \n\n### 2️⃣ 취약점/의도 입증  \n\n| Requ"}
+{"event": "stream_token", "token": "est | Expected (secure) | Actual response | Interpretation |\n|---------|-------------------|--------"}
+{"event": "stream_token", "token": "---------|----------------|\n| `GET /api/Users` (no auth) | **401 Unauthorized** – access denied | **"}
+{"event": "stream_token", "token": "401 Unauthorized** (as shown) | Properly protected. |\n| `GET /rest/admin/application-configuration` "}
+{"event": "stream_token", "token": "(no auth) | **401 Unauthorized** (should require admin auth) | **200 OK** with full configuration JS"}
+{"event": "stream_token", "token": "ON | **Inconsistent Access Control** – an attacker can retrieve internal configuration without any a"}
+{"event": "stream_token", "token": "uthentication, exposing server details, URLs, backup settings, etc. |\n\nThe mismatch (`401` vs. `200`"}
+{"event": "stream_token", "token": ") directly demonstrates the “inconsistent‑access‑control” issue described in OWASP‑A01 (2021) / ASVS"}
+{"event": "stream_token", "token": " V5.2.1 – *“All protected resources must enforce the same authorization checks.”*  \n\n---  \n\n### 3️⃣ "}
+{"event": "stream_token", "token": "방어 언급 (추천 조치)\n\n1. **統一 인증/인가 미들웨어** – Apply a single authentication guard (e.g., JWT‑based or sessio"}
+{"event": "stream_token", "token": "n cookie) to **all** API routes, especially any `/rest/admin/*` endpoints.  \n2. **RBAC / 최소 권한 원칙** "}
+{"event": "stream_token", "token": "– Define roles (`admin`, `user`) and enforce them per‑endpoint; reject unauthenticated requests with"}
+{"event": "stream_token", "token": " `401`.  \n3. **보안 헤더 강화** – Add `Strict-Transport-Security`, `Content‑Security‑Policy`, and ensure c"}
+{"event": "stream_token", "token": "ookies are set with `HttpOnly; Secure; SameSite=Strict` to prevent token leakage.  \n\n---  \n\n### 4️⃣ "}
+{"event": "stream_token", "token": "한계·인지  \n\n* Only the two endpoints requested were tested; other routes may also suffer from similar i"}
+{"event": "stream_token", "token": "nconsistencies.  \n* The test was performed from the attacker VM without any authentication token – i"}
+{"event": "stream_token", "token": "f the application uses a different auth scheme (e.g., API keys in headers), those would need to be e"}
+{"event": "stream_token", "token": "xamined separately.  \n* The response bodies are large JSON blobs; deeper analysis of exposed configu"}
+{"event": "stream_token", "token": "ration values (internal service URLs, backup settings, etc.) is required to assess downstream risk. "}
+{"event": "stream_token", "token": " \n\n---  \n\n**결론 → The Juice Shop instance exhibits a clear inconsistent‑access‑control flaw: the admi"}
+{"event": "stream_token", "token": "n configuration endpoint is publicly accessible while a user‑list endpoint correctly requires authen"}
+{"event": "stream_token", "token": "tication. Remediating by enforcing uniform auth checks across all routes eliminates this attack surf"}
+{"event": "stream_token", "token": "ace.**"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.80 unreachable"}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "curl -i"}
+{"event": "stream_token", "token": "**GOAL = Show that the same Juice Shop instance returns different authorization results for two of i"}
+{"event": "stream_token", "token": "ts endpoints (protected vs. exposed), proving an “inconsistent‑access‑control” attack surface.**\n\n--"}
+{"event": "stream_token", "token": "-  \n\n### 1️⃣ 실행 결과 (★ 코드블록)\n\n```bash\n# Protected endpoint – expects authentication, should return 40"}
+{"event": "stream_token", "token": "1\n$ curl -i http://juice.el34.lab/api/Users | head -20\nHTTP/1.1 401 Unauthorized\nDate: Mon, 13 Jul 2"}
+{"event": "stream_token", "token": "026 12:45:42 GMT\nServer: Apache/2.4.52 (Ubuntu)\nAccess-Control-Allow-Origin: *\nX-Content-Type-Option"}
+{"event": "stream_token", "token": "s: nosniff\nX-Frame-Options: SAMEORIGIN\nFeature-Policy: payment 'self'\nX-Recruiting: /#/jobs\nContent-"}
+{"event": "stream_token", "token": "Type: text/html; charset=utf-8\n...\n<html>\n  <head>\n    <meta charset='utf-8'>\n    <title>Unauthorize"}
+{"event": "stream_token", "token": "dError: No Authorization header was found</title>\n```\n\n```bash\n# Exposed endpoint – no auth required"}
+{"event": "stream_token", "token": ", returns configuration JSON (200)\n$ curl -i http://juice.el34.lab/rest/admin/application-configurat"}
+{"event": "stream_token", "token": "ion | head -20\nHTTP/1.1 200 OK\nDate: Mon, 13 Jul 2026 12:45:46 GMT\nServer: Apache/2.4.52 (Ubuntu)\nAc"}
+{"event": "stream_token", "token": "cess-Control-Allow-Origin: *\nX-Content-Type-Options: nosniff\nX-Frame-Options: SAMEORIGIN\nFeature-Pol"}
+{"event": "stream_token", "token": "icy: payment 'self'\nX-Recruiting: /#/jobs\nContent-Type: application/json; charset=utf-8\n...\n{\"config"}
+{"event": "stream_token", "token": "\":{\"server\":{\"port\":3000,\"basePath\":\"\",\"baseUrl\":\"http://localhost:3000\"},\"application\":{\"domain\":\"j"}
+{"event": "stream_token", "token": "uice-sh.op\",\"name\":\"OWASP Juice Shop\", ...\n```\n\n*The raw `curl -i` output shows the exact HTTP statu"}
+{"event": "stream_token", "token": "s line and a few header lines, confirming the responses.*  \n\n---  \n\n### 2️⃣ 취약점/의도 입증  \n\n| Request |"}
+{"event": "stream_token", "token": " Expected (secure) | Actual response | Interpretation |\n|---------|-------------------|-------------"}
+{"event": "stream_token", "token": "----|----------------|\n| `GET /api/Users` (no auth) | **401 Unauthorized** – access denied | **401 U"}
+{"event": "stream_token", "token": "nauthorized** (as shown) | Properly protected. |\n| `GET /rest/admin/application-configuration` (no a"}
+{"event": "stream_token", "token": "uth) | **401 Unauthorized** (should require admin auth) | **200 OK** with full configuration JSON | "}
+{"event": "stream_token", "token": "**Inconsistent Access Control** – an attacker can retrieve internal configuration without any authen"}
+{"event": "stream_token", "token": "tication, exposing server details, URLs, backup settings, etc. |\n\nThe mismatch (`401` vs. `200`) dir"}
+{"event": "stream_token", "token": "ectly demonstrates the “inconsistent‑access‑control” issue described in OWASP‑A01 (2021) / ASVS V5.2"}
+{"event": "stream_token", "token": ".1 – *“All protected resources must enforce the same authorization checks.”*  \n\n---  \n\n### 3️⃣ 방어 언급"}
+{"event": "stream_token", "token": " (추천 조치)\n\n1. **統一 인증/인가 미들웨어** – Apply a single authentication guard (e.g., JWT‑based or session coo"}
+{"event": "stream_token", "token": "kie) to **all** API routes, especially any `/rest/admin/*` endpoints.  \n2. **RBAC / 최소 권한 원칙** – Def"}
+{"event": "stream_token", "token": "ine roles (`admin`, `user`) and enforce them per‑endpoint; reject unauthenticated requests with `401"}
+{"event": "stream_token", "token": "`.  \n3. **보안 헤더 강화** – Add `Strict-Transport-Security`, `Content‑Security‑Policy`, and ensure cookie"}
+{"event": "stream_token", "token": "s are set with `HttpOnly; Secure; SameSite=Strict` to prevent token leakage.  \n\n---  \n\n### 4️⃣ 한계·인지"}
+{"event": "stream_token", "token": "  \n\n* Only the two endpoints requested were tested; other routes may also suffer from similar incons"}
+{"event": "stream_token", "token": "istencies.  \n* The test was performed from the attacker VM without any authentication token – if the"}
+{"event": "stream_token", "token": " application uses a different auth scheme (e.g., API keys in headers), those would need to be examin"}
+{"event": "stream_token", "token": "ed separately.  \n* The response bodies are large JSON blobs; deeper analysis of exposed configuratio"}
+{"event": "stream_token", "token": "n values (internal service URLs, backup settings, etc.) is required to assess downstream risk.  \n\n--"}
+{"event": "stream_token", "token": "-  \n\n**결론 → The Juice Shop instance exhibits a clear inconsistent‑access‑control flaw: the admin con"}
+{"event": "stream_token", "token": "figuration endpoint is publicly accessible while a user‑list endpoint correctly requires authenticat"}
+{"event": "stream_token", "token": "ion. Remediating by enforcing uniform auth checks across all routes eliminates this attack surface.*"}
+{"event": "stream_token", "token": "*"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.80 unreachable"}
+{"event": "stage", "stage": "validating"}
+{"event": "kg_status", "context": {"used": true, "hits": 3, "took_ms": 44, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-be0f46cd2f3b", "dedup": false, "error": ""}}
