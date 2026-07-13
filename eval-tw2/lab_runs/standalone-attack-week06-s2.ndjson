@@ -1,0 +1,128 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.096 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "prompt_fallback_attempt", "command": "curl -s -o /dev/null -w 'ftp=%{http_code} ' http://juice.el34.lab/ftp", "source": "prose"}
+{"event": "synthesized_tool_calls", "source": "prose", "skill": "shell", "command": "curl -s -o /dev/null -w 'ftp=%{http_code} ' http://juice.el34.lab/ftp"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "curl -s -o /dev/null -w 'ftp=%{http_code} ' http://juice.el34.lab/ftp", "target": "10.20.30.1"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "stage", "stage": "validating"}
+{"event": "stream_token", "token": "**도구 실행 실패 보고**  \n- `shell` 명령 `curl -s -o /dev/null -w 'ftp=%{http_code} ' http://juice.el34.lab/ft"}
+{"event": "stream_token", "token": "p` 이 **실패**했습니다. (`success=False`)  \n\n**가능한 원인**  \n1. `attacker` 컨테이너에서 외부 DNS `juice.el34.lab` 를 해석"}
+{"event": "stream_token", "token": "하지 못해 대상 IP를 찾지 못함.  \n2. 방화벽(`el34-fw`) 혹은 라우팅 설정 때문에 `attacker → web (Juice Shop)` 네트워크 경로가 차단돼 HTT"}
+{"event": "stream_token", "token": "P 요청이 전송되지 않음.  \n\n**다음 시도 권장**  \n- DNS 확인: `docker exec el34-attacker getent hosts juice.el34.lab` 로"}
+{"event": "stream_token", "token": " IP 확인 후 직접 IP 사용 (`curl http://<IP>/ftp`).  \n- 네트워크 연결 테스트: `docker exec el34-attacker ping -c 3 10"}
+{"event": "stream_token", "token": ".20.32.80` (Juice Shop DMZ IP) 혹은 `traceroute` 로 경로 탐색.  \n\n(추가 도구 실행 없이 위 내용만 보고서에 포함합니다.)"}
+{"event": "step_retry", "attempt": 2, "feedback": "모든 skill 시도가 실패"}
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.108 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "synthesized_tool_calls", "source": "json_markdown", "skill": "http_request", "args": {"method": "GET", "url": "http://juice.el34.lab/ftp", "headers": {}, "body": "", "target": "attacker"}}
+{"event": "stream_token", "token": "{\n  \"tool\": \"http_request\",\n  \"parameters\": {\n    \"method\": \"GET\",\n    \"url\": \"http://juice.el34.lab"}
+{"event": "stream_token", "token": "/ftp\",\n    \"headers\": {},\n    \"body\": \"\",\n    \"target\": \"attacker\"\n  }\n}"}
+{"event": "stage", "stage": "executing"}
+{"event": "skill_start", "skill": "http_request", "params": {"method": "GET", "url": "http://juice.el34.lab/ftp", "headers": {}, "body": "", "target": "10.20.30.201", "host": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "http_request", "success": true, "output": "HTTP_CODE:200\nSIZE:11317\nTIME:6.165920\n--- RESPONSE HEADERS ---\nHTTP/1.1 200 OK\nDate: Mon, 13 Jul 2026 12:39:12 GMT\nServer: Apache/2.4.52 (Ubuntu)\nAccess-Control-Allow-Origin: *\nX-Content-Type-Options: nosniff\nX-Frame-Options: SAMEORIGIN\nFeature-Policy: payment 'self'\nX-Recruiting: /#/jobs\nContent-Type: text/html; charset=utf-8\nContent-Length: 11329\nVary: Accept-Encoding\nExpires: Mon, 13 Jul 2026 12:39:11 GMT\n\n--- RESPONSE BODY (head -30) ---\n<!DOCTYPE html>\n<html>\n  <head>\n    <meta charset='utf-8'> \n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\" />\n    <title>listing directory /ftp</title>\n    <style>* {\n  margin: 0;\n  padding: 0;\n  outline: 0;\n}\n\nbody {\n  padding: 80px 100px;\n  font: 13px \"Helvetica Neue\", \"Lucida Grande\", \"Arial\";\n  background: #ECE9E9 -webkit-gradient(linear, 0% 0%, 0% 100%, from(#fff), to(#ECE9E9));\n  background: #ECE9E9 -moz-linear-gradient(top, #fff, #ECE9E9);\n  background-repeat: no-repeat;\n  color: #555;\n  -webkit-font-smoothing: antialiased;\n}\nh1, h2, h3 {\n  font-size: 22px;\n  color: #343434;\n}\nh1 em, h2 em {\n  padding: 0 5px;\n  font-weight: normal;\n}\nh1 {\n", "attempt": 1}
+{"event": "skill_start", "skill": "http_request", "params": {"body": "", "headers": {}, "method": "GET", "target": "10.20.30.201", "url": "http://juice.el34.lab/ftp/legal.md", "host": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "http_request", "success": true, "output": "HTTP_CODE:200\nSIZE:3047\nTIME:0.025100\n--- RESPONSE HEADERS ---\nHTTP/1.1 200 OK\nDate: Mon, 13 Jul 2026 12:39:21 GMT\nServer: Apache/2.4.52 (Ubuntu)\nAccess-Control-Allow-Origin: *\nX-Content-Type-Options: nosniff\nX-Frame-Options: SAMEORIGIN\nFeature-Policy: payment 'self'\nX-Recruiting: /#/jobs\nAccept-Ranges: bytes\nCache-Control: public, max-age=0\nLast-Modified: Tue, 30 Jun 2026 06:39:19 GMT\nETag: W/\"be7-19f1740ef8a\"\nContent-Type: text/markdown; charset=UTF-8\nContent-Length: 3047\nVary: Accept-Encoding\n\n--- RESPONSE BODY (head -30) ---\n# Legal Information\n\nLorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy\neirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam\nvoluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet\nclita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit\namet. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam\nnonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat,\nsed diam voluptua. At vero eos et accusam et justo duo dolores et ea\nrebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem\nipsum dolor sit amet. Lorem ipsum dolor sit amet, consetetur sadipscing\nelitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna\naliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo\ndolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus\nest Lorem ipsum dolor sit amet.\n\nDuis autem vel eum iriure dolor in hendrerit in vulputate velit esse\nmolestie consequat, vel illum dolore eu feugiat nulla facilisis at vero\neros et accumsan et iusto odio dignissim qui blandit praesent luptatum\nzzril delenit augue duis dolore te feugait nulla facilisi. Lorem ipsum\ndolor sit amet, consectetuer adipiscing elit, sed diam nonummy nibh\neuismod tincidunt ut laoreet dolore magna aliquam erat volutpat.\n\nUt wisi enim ad minim veniam, quis nostrud exerci tation ullamcorper\nsuscipit lobortis nisl ut aliquip ex ea commodo consequat. Duis autem\nvel eum iriure dolor in hendrerit in vulputate velit esse molestie\nconsequat, vel illum dolore eu feugiat nulla facilisis at vero eros et\naccumsan et iusto odio dignissim qui blandit praesent luptatum zzril\ndelenit augue duis dolore te feugait nulla facilisi.\n\n", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "curl -s -i http://juice.el34.lab/ftp`"}
+{"event": "stream_token", "token": "**GOAL**  \n강제 브라우징(Forced Browsing)으로 UI에 링크가 없는 `/ftp` 디렉터리와 그 안의 `legal.md` 파일에 직접 접근하여 200 응답을 확인"}
+{"event": "stream_token", "token": "한다.  \n\n**SUCCESS**  \n- `ftp=200` 출력 → `/ftp` 경로가 존재하고 리스트 페이지 반환  \n- `legal=200` 출력 → `/ftp/legal.md"}
+{"event": "stream_token", "token": "` 파일 내용이 정상적으로 제공  \n\n**TODO**\n1. HTTP GET 요청으로 `http://juice.el34.lab/ftp` 확인 (done)  \n2. HTTP GET 요"}
+{"event": "stream_token", "token": "청으로 `http://juice.el34.lab/ftp/legal.md` 확인 (done)  \n\n---\n\n### 실행 결과\n\n```\n$ curl -i http://juice.el3"}
+{"event": "stream_token", "token": "4.lab/ftp\nHTTP/1.1 200 OK\nDate: Mon, 13 Jul 2026 12:39:12 GMT\nServer: Apache/2.4.52 (Ubuntu)\n...\nCon"}
+{"event": "stream_token", "token": "tent-Type: text/html; charset=utf-8\n...\n\n<!DOCTYPE html>\n<html>\n  <head> ... listing directory /ftp "}
+{"event": "stream_token", "token": "...\n```\n\n```\n$ curl -i http://juice.el34.lab/ftp/legal.md\nHTTP/1.1 200 OK\nDate: Mon, 13 Jul 2026 12:"}
+{"event": "stream_token", "token": "39:21 GMT\nServer: Apache/2.4.52 (Ubuntu)\n...\nContent-Type: text/markdown; charset=UTF-8\n\n# Legal Inf"}
+{"event": "stream_token", "token": "ormation\n\nLorem ipsum dolor sit amet, consetetur sadipscing elitr, ...\n```\n\n### 취약점·의도 입증\n| 단계 | 요청 "}
+{"event": "stream_token", "token": "(payload) | 응답 코드 | 설명 |\n|------|----------------|-----------|------|\n| 1 | `GET /ftp HTTP/1.1` | **"}
+{"event": "stream_token", "token": "200** | UI에 링크가 없어도 디렉터리 리스트 페이지 반환 → 강제 브라우징 성공 |\n| 2 | `GET /ftp/legal.md HTTP/1.1` | **200** | 내부"}
+{"event": "stream_token", "token": " 파일 내용이 그대로 노출 → 민감 정보(법적 고지 등) 유출 가능 |\n\n### 방어 언급\n- **Directory Listing 비활성화**: Apache 설정(`Options "}
+{"event": "stream_token", "token": "-Indexes`) 혹은 `.htaccess` 로 디렉터리 인덱싱 차단.  \n- **파일 접근 제어**: `Require all denied` 또는 `AllowOverride No"}
+{"event": "stream_token", "token": "ne` 으로 민감 파일 직접 URL 접근 방지.  \n- **보안 헤더 강화**: 현재 `X-Content-Type-Options`, `X-Frame-Options` 등 적용돼 있으"}
+{"event": "stream_token", "token": "나, `Content-Security-Policy` 추가 권고.\n\n### 한계·인지\n- 본 테스트는 공개된 정적 파일(`legal.md`)에 대한 접근만 확인했으며, 실제 민감 데"}
+{"event": "stream_token", "token": "이터(예: 설정 파일, 백업) 존재 여부는 별도 검증이 필요합니다.  \n- 강제 브라우징 방어는 서버 레벨에서 디렉터리 인덱싱을 차단하고, 파일 권한을 최소화하는 것이 핵심이며, "}
+{"event": "stream_token", "token": "웹 애플리케이션 자체가 “숨김”이라고 가정해선 안 됩니다.\n\n**GOAL 충족됨:** `/ftp`와 `legal.md`에 200 응답으로 접근 성공했으며, 해당 취약점이 존재함을 "}
+{"event": "stream_token", "token": "입증했습니다."}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "curl -s -i http://juice.el34.lab/ftp"}
+{"event": "stream_token", "token": "**GOAL**  \n강제 브라우징(Forced Browsing)으로 UI에 링크가 없는 `/ftp` 디렉터리와 그 안의 `legal.md` 파일에 직접 접근하여 200 응답을 확인"}
+{"event": "stream_token", "token": "한다.\n\n**SUCCESS 기준**  \n- `ftp=200` → `/ftp` 경로가 존재하고 리스트 페이지 반환  \n- `legal=200` → `/ftp/legal.md` 파일 "}
+{"event": "stream_token", "token": "내용이 정상적으로 제공  \n\n---\n\n### 실행 결과\n\n```bash\n$ curl -i http://juice.el34.lab/ftp\nHTTP/1.1 200 OK\nDate: Mo"}
+{"event": "stream_token", "token": "n, 13 Jul 2026 12:39:12 GMT\nServer: Apache/2.4.52 (Ubuntu)\nAccess-Control-Allow-Origin: *\nX-Content-"}
+{"event": "stream_token", "token": "Type-Options: nosniff\nX-Frame-Options: SAMEORIGIN\nFeature-Policy: payment 'self'\nX-Recruiting: /#/jo"}
+{"event": "stream_token", "token": "bs\nContent-Type: text/html; charset=utf-8\nContent-Length: 11329\n\n<!DOCTYPE html>\n<html>\n  <head>\n   "}
+{"event": "stream_token", "token": " <meta charset='utf-8'> \n    <title>listing directory /ftp</title>\n    …\n```\n\n```bash\n$ curl -i http"}
+{"event": "stream_token", "token": "://juice.el34.lab/ftp/legal.md\nHTTP/1.1 200 OK\nDate: Mon, 13 Jul 2026 12:39:21 GMT\nServer: Apache/2."}
+{"event": "stream_token", "token": "4.52 (Ubuntu)\nAccess-Control-Allow-Origin: *\nX-Content-Type-Options: nosniff\nX-Frame-Options: SAMEOR"}
+{"event": "stream_token", "token": "IGIN\nFeature-Policy: payment 'self'\nX-Recruiting: /#/jobs\nAccept-Ranges: bytes\nCache-Control: public"}
+{"event": "stream_token", "token": ", max-age=0\nLast-Modified: Tue, 30 Jun 2026 06:39:19 GMT\nETag: W/\"be7-19f1740ef8a\"\nContent-Type: tex"}
+{"event": "stream_token", "token": "t/markdown; charset=UTF-8\nContent-Length: 3047\n\n# Legal Information\n\nLorem ipsum dolor sit amet, con"}
+{"event": "stream_token", "token": "setetur sadipscing elitr, …\n```\n\n### 취약점·의도 입증  \n\n| 단계 | 요청 (payload)                     | 응답 코드 | "}
+{"event": "stream_token", "token": "설명 |\n|------|------------------------------------|-----------|------|\n| 1    | `GET /ftp HTTP/1.1`  "}
+{"event": "stream_token", "token": "              | **200**   | UI에 링크가 없어도 디렉터리 리스트 페이지가 반환 → 강제 브라우징 성공 |\n| 2    | `GET /ftp/legal.md "}
+{"event": "stream_token", "token": "HTTP/1.1`       | **200**   | 내부 파일(`legal.md`) 내용이 그대로 노출 → 민감 정보(법적 고지 등) 유출 가능 |\n\n### 방어 권고  \n\n1."}
+{"event": "stream_token", "token": " **디렉터리 인덱싱 비활성화** – Apache 설정에 `Options -Indexes` 혹은 `.htaccess` 로 디렉터리 리스트 차단.  \n2. **파일 접근 제어 강화*"}
+{"event": "stream_token", "token": "* – 민감 파일이 포함된 경로에 대해 `Require all denied` 또는 적절한 `AllowOverride None` 적용.  \n3. **보안 헤더 추가** – 현재 `X"}
+{"event": "stream_token", "token": "-Content-Type-Options`, `X-Frame-Options` 등 적용돼 있으나, `Content‑Security‑Policy: default-src 'self'` 등"}
+{"event": "stream_token", "token": "을 추가해 스크립트 삽입 위험을 감소시킬 수 있음.\n\n### 한계·인식  \n\n- 테스트는 공개된 정적 파일(`legal.md`)에 대한 접근만 확인했으며, 실제 민감 데이터(예: "}
+{"event": "stream_token", "token": "설정 파일, 백업) 존재 여부는 별도 검증이 필요합니다.  \n- 강제 브라우징 방어는 서버 레벨에서 디렉터리 인덱싱을 차단하고 파일 권한을 최소화하는 것이 핵심이며, “숨김”이라고"}
+{"event": "stream_token", "token": " 가정해선 안 됩니다.\n\n**GOAL 충족됨:** `/ftp`와 `legal.md`에 200 응답으로 정상 접근 성공했으며, 해당 강제 브라우징 취약점이 존재함을 입증했습니다."}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "curl -s -i http://juice.el34.lab/ftp"}
+{"event": "stream_token", "token": "**GOAL**  \n강제 브라우징(Forced Browsing)으로 UI에 링크가 없는 `/ftp` 디렉터리와 그 안의 `legal.md` 파일에 직접 접근하여 200 응답을 확인"}
+{"event": "stream_token", "token": "한다.\n\n---\n\n### 실행 결과 (★ 코드블록 필수)\n\n```bash\n# 1) /ftp 디렉터리 요청\n$ curl -i http://juice.el34.lab/ftp\nHTTP/"}
+{"event": "stream_token", "token": "1.1 200 OK\nDate: Mon, 13 Jul 2026 12:39:12 GMT\nServer: Apache/2.4.52 (Ubuntu)\nAccess-Control-Allow-O"}
+{"event": "stream_token", "token": "rigin: *\nX-Content-Type-Options: nosniff\nX-Frame-Options: SAMEORIGIN\nFeature-Policy: payment 'self'\n"}
+{"event": "stream_token", "token": "X-Recruiting: /#/jobs\nContent-Type: text/html; charset=utf-8\nContent-Length: 11329\n\n<!DOCTYPE html>\n"}
+{"event": "stream_token", "token": "<html>\n  <head>\n    <meta charset='utf-8'> \n    <title>listing directory /ftp</title>\n    …\n```\n\n```"}
+{"event": "stream_token", "token": "bash\n# 2) /ftp/legal.md 파일 요청\n$ curl -i http://juice.el34.lab/ftp/legal.md\nHTTP/1.1 200 OK\nDate: Mon"}
+{"event": "stream_token", "token": ", 13 Jul 2026 12:39:21 GMT\nServer: Apache/2.4.52 (Ubuntu)\nAccess-Control-Allow-Origin: *\nX-Content-T"}
+{"event": "stream_token", "token": "ype-Options: nosniff\nX-Frame-Options: SAMEORIGIN\nFeature-Policy: payment 'self'\nX-Recruiting: /#/job"}
+{"event": "stream_token", "token": "s\nAccept-Ranges: bytes\nCache-Control: public, max-age=0\nLast-Modified: Tue, 30 Jun 2026 06:39:19 GMT"}
+{"event": "stream_token", "token": "\nETag: W/\"be7-19f1740ef8a\"\nContent-Type: text/markdown; charset=UTF-8\nContent-Length: 3047\n\n# Legal "}
+{"event": "stream_token", "token": "Information\n\nLorem ipsum dolor sit amet, consetetur sadipscing elitr, …\n```\n\n---\n\n### 취약점·의도 입증  \n\n|"}
+{"event": "stream_token", "token": " 단계 | 요청 (payload)                     | 응답 코드 | 설명 |\n|------|------------------------------------|-"}
+{"event": "stream_token", "token": "----------|------|\n| 1    | `GET /ftp HTTP/1.1`                | **200**   | UI에 링크가 없어도 디렉터리 리스트 페이"}
+{"event": "stream_token", "token": "지가 반환 → 강제 브라우징 성공 |\n| 2    | `GET /ftp/legal.md HTTP/1.1`       | **200**   | 내부 파일(`legal.md`) 내용이"}
+{"event": "stream_token", "token": " 그대로 노출 → 민감 정보(법적 고지 등) 유출 가능 |\n\n---\n\n### 방어 언급  \n\n1. **디렉터리 인덱싱 비활성화** – Apache 설정에 `Options -Inde"}
+{"event": "stream_token", "token": "xes` 혹은 `.htaccess` 로 디렉터리 리스트 차단.  \n2. **파일 접근 제어 강화** – 민감 파일이 포함된 경로에 대해 `Require all denied` 또는 "}
+{"event": "stream_token", "token": "적절한 `AllowOverride None` 적용.  \n3. **보안 헤더 추가** – 현재 `X-Content-Type-Options`, `X-Frame-Options` 등 적용"}
+{"event": "stream_token", "token": "돼 있으나, `Content‑Security‑Policy: default-src 'self'` 등을 추가해 스크립트 삽입 위험을 감소시킬 수 있음.\n\n---\n\n### 한계·인지  "}
+{"event": "stream_token", "token": "\n\n* 이번 테스트는 공개된 정적 파일(`legal.md`)에 대한 접근만 확인했으며, 실제 민감 데이터(예: 설정 파일, 백업) 존재 여부는 별도 검증이 필요합니다.  \n* 강제"}
+{"event": "stream_token", "token": " 브라우징 방어는 서버 레벨에서 디렉터리 인덱싱을 차단하고 파일 권한을 최소화하는 것이 핵심이며, “숨김”이라고 가정해선 안 됩니다.\n\n---\n\n**GOAL 충족됨:** `/ftp"}
+{"event": "stream_token", "token": "`와 `legal.md`에 200 응답으로 정상 접근 성공했으며, 해당 강제 브라우징 취약점이 존재함을 입증했습니다."}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "curl -s -i http://juice.el34.lab/ftp"}
+{"event": "stream_token", "token": "**GOAL**  \n강제 브라우징(Forced Browsing)으로 UI에 링크가 없는 `/ftp` 디렉터리와 그 안의 `legal.md` 파일에 직접 접근하여 200 응답을 확인"}
+{"event": "stream_token", "token": "한다.\n\n**SUCCESS 기준**  \n- `ftp=200` → `/ftp` 경로가 존재하고 리스트 페이지 반환  \n- `legal=200` → `/ftp/legal.md` 파일 "}
+{"event": "stream_token", "token": "내용이 정상적으로 제공  \n\n---\n\n### 실행 결과 (코드블록 포함)\n\n```bash\n# 1) /ftp 디렉터리 요청\n$ curl -i http://juice.el34.lab/"}
+{"event": "stream_token", "token": "ftp\nHTTP/1.1 200 OK\nDate: Mon, 13 Jul 2026 12:39:12 GMT\nServer: Apache/2.4.52 (Ubuntu)\nAccess-Contro"}
+{"event": "stream_token", "token": "l-Allow-Origin: *\nX-Content-Type-Options: nosniff\nX-Frame-Options: SAMEORIGIN\nFeature-Policy: paymen"}
+{"event": "stream_token", "token": "t 'self'\nX-Recruiting: /#/jobs\nContent-Type: text/html; charset=utf-8\nContent-Length: 11329\n\n<!DOCTY"}
+{"event": "stream_token", "token": "PE html>\n<html>\n  <head>\n    <meta charset='utf-8'> \n    <title>listing directory /ftp</title>\n    …"}
+{"event": "stream_token", "token": "\n```\n\n```bash\n# 2) /ftp/legal.md 파일 요청\n$ curl -i http://juice.el34.lab/ftp/legal.md\nHTTP/1.1 200 OK\n"}
+{"event": "stream_token", "token": "Date: Mon, 13 Jul 2026 12:39:21 GMT\nServer: Apache/2.4.52 (Ubuntu)\nAccess-Control-Allow-Origin: *\nX-"}
+{"event": "stream_token", "token": "Content-Type-Options: nosniff\nX-Frame-Options: SAMEORIGIN\nFeature-Policy: payment 'self'\nX-Recruitin"}
+{"event": "stream_token", "token": "g: /#/jobs\nAccept-Ranges: bytes\nCache-Control: public, max-age=0\nLast-Modified: Tue, 30 Jun 2026 06:"}
+{"event": "stream_token", "token": "39:19 GMT\nETag: W/\"be7-19f1740ef8a\"\nContent-Type: text/markdown; charset=UTF-8\nContent-Length: 3047\n"}
+{"event": "stream_token", "token": "\n# Legal Information\n\nLorem ipsum dolor sit amet, consetetur sadipscing elitr, …\n```\n\n### 취약점·의도 입증 "}
+{"event": "stream_token", "token": " \n\n| 단계 | 요청 (payload)                     | 응답 코드 | 설명 |\n|------|----------------------------------"}
+{"event": "stream_token", "token": "--|-----------|------|\n| 1    | `GET /ftp HTTP/1.1`                | **200**   | UI에 링크가 없어도 디렉터리 리스"}
+{"event": "stream_token", "token": "트 페이지가 반환 → 강제 브라우징 성공 |\n| 2    | `GET /ftp/legal.md HTTP/1.1`       | **200**   | 내부 파일(`legal.md`)"}
+{"event": "stream_token", "token": " 내용이 그대로 노출 → 민감 정보(법적 고지 등) 유출 가능 |\n\n### 방어 권고  \n\n1. **디렉터리 인덱싱 비활성화** – Apache 설정에 `Options -Index"}
+{"event": "stream_token", "token": "es` 혹은 `.htaccess` 로 디렉터리 리스트 차단.  \n2. **파일 접근 제어 강화** – 민감 파일이 포함된 경로에 대해 `Require all denied` 또는 적"}
+{"event": "stream_token", "token": "절한 `AllowOverride None` 적용.  \n3. **보안 헤더 추가** – 현재 `X-Content-Type-Options`, `X-Frame-Options` 등 적용돼"}
+{"event": "stream_token", "token": " 있으나, `Content‑Security‑Policy: default-src 'self'` 등을 추가해 스크립트 삽입 위험을 감소시킬 수 있음.\n\n### 한계·인식  \n\n* 이번"}
+{"event": "stream_token", "token": " 테스트는 공개된 정적 파일(`legal.md`)에 대한 접근만 확인했으며, 실제 민감 데이터(예: 설정 파일, 백업) 존재 여부는 별도 검증이 필요합니다.  \n* 강제 브라우징 "}
+{"event": "stream_token", "token": "방어는 서버 레벨에서 디렉터리 인덱싱을 차단하고 파일 권한을 최소화하는 것이 핵심이며, “숨김”이라고 가정해선 안 됩니다.\n\n**GOAL 충족됨:** `/ftp`와 `legal.m"}
+{"event": "stream_token", "token": "d`에 200 응답으로 정상 접근 성공했으며, 해당 강제 브라우징 취약점이 존재함을 입증했습니다."}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "stage", "stage": "validating"}
+{"event": "kg_status", "context": {"used": true, "hits": 4, "took_ms": 83, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-419c950cb2d3", "dedup": false, "error": ""}}
