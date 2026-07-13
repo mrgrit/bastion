@@ -1,0 +1,68 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.182 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker exec el34-attacker bash -c \"code=$(curl -s -o /dev/null -w \"%{http_code}\" --resolve cdn-front.el34.lab:80:10.20.30.1 -H \\\"Host: dvwa.el34.lab\\\" http://cdn-front.el34.lab/); echo \\\"겉=cdn-front.el34.lab, 속 Host=dvwa.el34.lab → 응답 $code\\\"; [ \\\"$code\\\" != \\\"000\\\" ] && echo fronting_ok_$code\"", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker exec el34-attacker bash -c 'code=$(curl -s -o /dev/null -w \"%{http_code}\" --resolve cdn-front.el34.lab:80:10.20.30.1 -H \"Host: dvwa.el34.lab\" http://cdn-front.el34.lab/); echo \"겉=cdn-front.el34.lab, 속 Host=dvwa.el34.lab → 응답 $code\"; if [ \"$code\" != \"000\" ]; then echo fronting_ok_$code; fi'", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "겉=cdn-front.el34.lab, 속 Host=dvwa.el34.lab → 응답 302\nfronting_ok_302\n", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "curl --resolve cdn-front.el34.lab:80:10.20.30.1 -H \"Host: dvwa.el34.lab\" http://cdn-front.el34.lab/"}
+{"event": "stream_token", "token": "**실행 결과 (★ 코드블록 필수)**  \n```bash\n$ docker exec el34-attacker bash -c 'code=$(curl -s -o /dev/null -w "}
+{"event": "stream_token", "token": "\"%{http_code}\" --resolve cdn-front.el34.lab:80:10.20.30.1 -H \"Host: dvwa.el34.lab\" http://cdn-front."}
+{"event": "stream_token", "token": "el34.lab/); echo \"겉=cdn-front.el34.lab, 속 Host=dvwa.el34.lab → 응답 $code\"; if [ \"$code\" != \"000\" ]; t"}
+{"event": "stream_token", "token": "hen echo fronting_ok_$code; fi'\n겉=cdn-front.el34.lab, 속 Host=dvwa.el34.lab → 응답 302\nfronting_ok_302\n"}
+{"event": "stream_token", "token": "```\n\n---\n\n**취약점/의도 입증**  \n- **Payload**: `curl --resolve cdn-front.el34.lab:80:10.20.30.1 -H \"Host: "}
+{"event": "stream_token", "token": "dvwa.el34.lab\" http://cdn-front.el34.lab/`  \n  * `--resolve` 은 DNS 해석을 강제로 `10.20.30.1`(FW 라우터) 로 매핑"}
+{"event": "stream_token", "token": "해 “겉” 도메인(`cdn-front.el34.lab`)이 실제 CDN/프록시 IP와 연결되게 함.  \n  * `-H \"Host: dvwa.el34.lab\"` 은 HTTP 요청 헤"}
+{"event": "stream_token", "token": "더에 다른 내부 호스트(`dvwa.el34.lab`)를 삽입해 “속”을 조작.  \n\n- **Response**: HTTP 302 (리다이렉트) → `fronting_ok_302` "}
+{"event": "stream_token", "token": "출력.  \n  * 응답 코드가 `000`(연결 실패)이 아니므로 프론팅이 성공했음.  \n  * 즉, 방어자는 겉 도메인(`cdn-front.el34.lab`)만 보고 정상 CDN이"}
+{"event": "stream_token", "token": "라고 판단하지만, 실제 트래픽은 내부 C2(여기선 `dvwa.el34.lab`)로 라우팅됨.\n\n---\n\n**방어 언급**  \n- **SNI‑Host 검증 강화**: 프록시/로드밸런"}
+{"event": "stream_token", "token": "서는 TLS SNI와 HTTP Host 헤더를 일치시키는 정책을 적용하고, 불일치 시 요청 차단.  \n- **TLS Pinning / Certificate Transparency*"}
+{"event": "stream_token", "token": "*: 클라이언트가 기대하는 SNI에 대한 인증서만 신뢰하도록 제한하면 프론팅 공격이 탐지·차단될 가능성이 높아짐.  \n\n---\n\n**한계·인지**  \n- 위 실험은 내부 테스트 환"}
+{"event": "stream_token", "token": "경(공격자 컨테이너 → FW 라우터)에서 수행했으며, 실제 인터넷 CDN에서는 SNI와 Host 검증 로직이 다를 수 있다.  \n- 프론팅을 완전히 방지하려면 모든 프록시/로드밸런"}
+{"event": "stream_token", "token": "서가 **SNI‑Host 일관성 검사**와 **정책 기반 라우팅**을 적용해야 하며, 기존 인프라에 이러한 기능이 없으면 탐지 어려움이 지속된다."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "curl --resolve cdn-front.el34.lab:80:10.20.30.1 -H \"Host: dvwa.el34.lab\" http://cdn-front.el34.lab/", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "HTTP/1.1 302 Found\nDate: Mon, 13 Jul 2026 19:18:32 GMT\nServer: Apache/2.4.25 (Debian)\nExpires: Thu, 19 Nov 1981 08:52:00 GMT\nCache-Control: no-store, no-cache, must-revalidate\nPragma: no-cache\nLocation: login.php\nContent-Length: 0\nContent-Type: text/html; charset=UTF-8\nSet-Cookie: PHPSESSID=9ijutcoc5d1lno97prl9f5mnk0; path=/\nSet-Cookie: PHPSESSID=9ijutcoc5d1lno97prl9f5mnk0; path=/\nSet-Cookie: security=low\n\nHTTP/1.1 200 OK\nDate: Mon, 13 Jul 2026 19:18:32 GMT\nServer: Apache/2.4.25 (Debian)\nExpires: Tue, 23 Jun 2009 12:00:00 GMT\nCache-Control: no-cache, must-revalidate\nPragma: no-cache\nVary: Accept-Encoding\nContent-Length: 1523\nContent-Type: text/html;charset=utf-8\nSet-Cookie: PHPSESSID=1ipdj43hud6vletu3tb6s5o3m6; path=/\nSet-Cookie: PHPSESSID=1ipdj43hud6vletu3tb6s5o3m6; path=/\nSet-Cookie: security=low\n\n\n<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">\n\n<html xmlns=\"http://www.w3.org/1999/xhtml\">\n\n\t<head>\n\n\t\t<meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\" />\n\n\t\t<title>Login :: Damn Vulnerable Web Application (DVWA) v1.10 *Development*</title>\n\n\t\t<link rel=\"stylesheet\" type=\"text/css\" href=\"dvwa/css/login.css\" />\n\n\t</head>\n\n\t<body>\n\n\t<div id=\"wrapper\">\n\n\t<div id=\"header\">\n\n\t<br />\n\n\t<p><img src=\"dvwa/images/login_logo.png\" /></p>\n\n\t<br />\n\n\t</div> <!--<div id=\"header\">-->\n\n\t<div id=\"content\">\n\n\t<form action=\"login.php\" method=\"post\">\n\n\t<fieldset>\n\n\t\t\t<label for=\"user\">Username</label> <input type=\"text\" class=\"loginInput\" size=\"20\" name=\"username\"><br />\n\n\n\t\t\t<label for=\"pass\">Password</label> <input type=\"password\" class=\"loginInput\" AUTOCOMPLETE=\"off\" size=\"20\" name=\"password\"><br />\n\n\t\t\t<br />\n\n\t\t\t<p class=\"submit\"><input type=\"submit\" value=\"Login\" name=\"Login\"></p>\n\n\t</fieldset>\n\n\t<input type='hidden' name='user_token' value='24e737afbf4e894d0e01e1a5ea2aff2b' />\n\n\t</form>\n\n\t<br />\n\n\t\n\n\t<br />\n\t<br />\n\t<br />\n\t<br />\n\t<br />\n\t<br />\n\t<br />\n\t<br />\n\n\t<!-- <img src=\"dvwa/images/RandomStorm.png\" /> -->\n\t</div > <!--<div id=\"content\">-->\n\n\t<div id=\"footer\">\n\n\t<p><a href=\"http://www.dvwa.co.uk/\" target=\"_blank\">Damn Vulnerable Web Application (DVWA)</a></p>\n\n\t</div> <!--<div id=\"footer\"> -->\n\n\t</div> <!--<div id=\"wrapper\"> -->\n\n\t</body>\n\n</html>", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "curl --resolve"}
+{"event": "stream_token", "token": "**GOAL** – 실제 `curl --resolve` 로 “겉(도메인) ≠ 속(Host 헤더)” 를 만들고, 응답이 정상적으로 반환되는지 확인해 도메인 프론팅을 실증한다.  \n\n"}
+{"event": "stream_token", "token": "---\n\n### 1️⃣ 실행 결과 (★ 코드블록 필수)\n\n```bash\n$ docker exec el34-attacker bash -c 'code=$(curl -s -o /dev/"}
+{"event": "stream_token", "token": "null -w \"%{http_code}\" \\\n    --resolve cdn-front.el34.lab:80:10.20.30.1 \\\n    -H \"Host: dvwa.el34.la"}
+{"event": "stream_token", "token": "b\" http://cdn-front.el34.lab/); \\\n  echo \"겉=cdn-front.el34.lab, 속 Host=dvwa.el34.lab → 응답 $code\"; \\\n"}
+{"event": "stream_token", "token": "  if [ \"$code\" != \"000\" ]; then echo fronting_ok_$code; fi'\n겉=cdn-front.el34.lab, 속 Host=dvwa.el34.l"}
+{"event": "stream_token", "token": "ab → 응답 302\nfronting_ok_302\n```\n\n추가로 전체 HTTP 흐름을 확인한 결과:\n\n```bash\n$ curl --resolve cdn-front.el34.la"}
+{"event": "stream_token", "token": "b:80:10.20.30.1 \\\n    -H \"Host: dvwa.el34.lab\" http://cdn-front.el34.lab/\nHTTP/1.1 302 Found\nDate: M"}
+{"event": "stream_token", "token": "on, 13 Jul 2026 19:18:32 GMT\nServer: Apache/2.4.25 (Debian)\nLocation: login.php\n...\nSet‑Cookie: PHPS"}
+{"event": "stream_token", "token": "ESSID=9ijutcoc5d1lno97prl9f5mnk0; path=/\n...\n\nHTTP/1.1 200 OK\nDate: Mon, 13 Jul 2026 19:18:32 GMT\nSe"}
+{"event": "stream_token", "token": "rver: Apache/2.4.25 (Debian)\nContent‑Length: 1523\n...\n<!DOCTYPE html>\n<html>…DVWA login page…\n```\n\n-"}
+{"event": "stream_token", "token": "--\n\n### 2️⃣ 취약점 / 의도 입증  \n\n| 단계 | 수행 내용 | 관찰된 결과 |\n|------|-----------|--------------|\n| **Payload**"}
+{"event": "stream_token", "token": " | `--resolve cdn-front.el34.lab:80:10.20.30.1` (겉 → FW 라우터) + `-H \"Host: dvwa.el34.lab\"` (속) | DNS‑"}
+{"event": "stream_token", "token": "해석을 강제하고, HTTP Host 헤더를 다른 내부 서비스로 위조 |\n| **응답** | HTTP 302 → 200 페이지 반환 (`fronting_ok_302` 출력) | 응답"}
+{"event": "stream_token", "token": " 코드가 `000`(연결 실패)가 아니므로 프론팅 성공. 실제 트래픽은 `dvwa.el34.lab` 로 라우팅됨 |\n| **증명** | 겉 도메인(`cdn-front.el34.la"}
+{"event": "stream_token", "token": "b`)만 보고 CDN 으로 판단하면, 내부 C2(`dvwa.el34.lab`)에 접근하게 됨 | 방어자는 “겉”만 보고 “속”(Host) 을 놓치게 된다 |\n\n*성공 기준* – `"}
+{"event": "stream_token", "token": "fronting_ok_<code>` 가 출력되면 **프론팅이 성공**했으며, 이는 실습 목표를 충족한다.\n\n---\n\n### 3️⃣ 정량·시간·표준 매핑  \n\n#### Timelin"}
+{"event": "stream_token", "token": "e (헤더에 포함된 시각)\n\n- `Date: Mon, 13 Jul 2026 19:18:32 GMT` – 최초 302 응답\n- 동일 타임스탬프가 뒤이어 200 페이지 반환 (리다이렉"}
+{"event": "stream_token", "token": "트 후 즉시)\n\n#### 정량 수치  \n\n| 항목 | 값 |\n|------|----|\n| HTTP 상태 코드 | 302 → 200 |\n| Set‑Cookie 헤더 개수 | 3 (`"}
+{"event": "stream_token", "token": "PHPSESSID` 두 번, `security`) |\n| 응답 바디 길이 | 1523 bytes |\n| 리다이렉트 횟수 | 1 (302) |\n\n#### 표준 매핑  \n\n- **MI"}
+{"event": "stream_token", "token": "TRE ATT&CK** – *T1090.001* “Proxy: Internal Proxy” (도메인 프론팅은 내부 프록시/로드밸런서 우회)\n- **OWASP Top 10** – *"}
+{"event": "stream_token", "token": "A10‑2021* “Server‑Side Request Forgery (SSRF)” 관련 변형, 실제는 **A13‑2021 “Security Misconfiguration”** ("}
+{"event": "stream_token", "token": "SNI/Host 불일치 검증 부재)\n\n---\n\n### 4️⃣ 방어·권고  \n\n| 권고 | 구체적 조치 |\n|------|-------------|\n| **SNI ↔ Host 일관성"}
+{"event": "stream_token", "token": " 검사** | 프록시/로드밸런서에서 TLS SNI와 HTTP Host 헤더가 동일한 경우에만 트래픽 허용. 불일치 시 4xx 차단. |\n| **TLS‑Pinning / Certif"}
+{"event": "stream_token", "token": "icate Transparency** | 클라이언트가 기대하는 SNI에 대한 인증서만 신뢰하도록 구현(예: `pin-sha256` 헤더). |\n| **WAF 룰 추가** | `if"}
+{"event": "stream_token", "token": " ($http_host != $ssl_server_name) { return 403; }` 와 같은 Nginx/ModSecurity 규칙 적용. |\n| **로그·모니터링 강화** "}
+{"event": "stream_token", "token": "| Suricata/Wazuh 에 “SNI‑Host mismatch” 이벤트를 탐지하는 룰 배포하고, 알림을 SIEM에 연동. |\n\n---\n\n### 5️⃣ 한계·인지  \n\n- 실험"}
+{"event": "stream_token", "token": "은 내부 테스트 네트워크(`10.20.30.x`)에서 수행했으며, 실제 퍼블릭 CDN에서는 **SNI‑Host 검증 로직이 다를 수** 있다.  \n- 일부 서비스는 이미 SNI와 "}
+{"event": "stream_token", "token": "Host 를 독립적으로 처리하므로, 위 방어 조치를 적용해도 **프론팅 우회가 완전히 차단되지 않을 가능성**이 존재한다.  \n- 클라이언트‑사이드 TLS Pinning 은 브라우"}
+{"event": "stream_token", "token": "저/앱 업데이트에 따라 유지보수가 필요하다.\n\n---\n\n**결론** – `fronting"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "curl --resolve", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "stream_token", "token": "**GOAL 충족됨:** `cdn-front.el34.lab`(겉)와 `dvwa.el34.lab`(속) 사이에 도메인 프론팅을 성공적으로 실증했으며, 응답 코드 302 → 200 "}
+{"event": "stream_token", "token": "이 반환되어 `fronting_ok_302` 마커가 출력되었습니다.  \n\n--- \n\n### 최종 요약 (4축)\n\n| 축 | 내용 |\n|----|------|\n| **Timeline"}
+{"event": "stream_token", "token": "** | `Date: Mon, 13 Jul 2026 19:18:32 GMT` – 302 응답 → 즉시 200 페이지 반환 |\n| **정량 수치** | HTTP 코드: 302 → 2"}
+{"event": "stream_token", "token": "00<br>Set‑Cookie 헤더: 3개<br>응답 바디 길이: 1523 bytes |\n| **표준 매핑** | MITRE ATT&CK T1090.001 (Proxy – Inte"}
+{"event": "stream_token", "token": "rnal Proxy)<br>OWASP A10‑2021/​A13‑2021 (SSRF / Misconfiguration) |\n| **결론·권고** | 1️⃣ SNI ↔ Host 일관성"}
+{"event": "stream_token", "token": " 검사 적용<br>2️⃣ TLS‑Pinning & Certificate Transparency 도입<br>3️⃣ ModSecurity/Nginx 룰으로 불일치 차단 및 Surica"}
+{"event": "stream_token", "token": "ta/Wazuh 로깅 연동 |\n\n--- \n\n**한계·인지:**  \n- 테스트는 내부 IP(`10.20.30.x`) 환경에서 수행했으며, 퍼블릭 CDN에서는 구현 차이로 동일 방어가"}
+{"event": "stream_token", "token": " 적용되지 않을 수 있습니다.  \n- 클라이언트‑사이드 TLS Pinning 은 지속적인 업데이트와 관리가 필요합니다.  \n\n--- \n\n**실습 결과**는 위 코드 블록에 그대로 "}
+{"event": "stream_token", "token": "포함된 `fronting_ok_302` 로 확인 가능하며, 도메인 프론팅 공격이 실제로 동작함을 증명했습니다."}
+{"event": "stage", "stage": "validating"}
+{"event": "kg_status", "context": {"used": true, "hits": 5, "took_ms": 57, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-26902c717bd6", "dedup": false, "error": ""}}
