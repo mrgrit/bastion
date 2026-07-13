@@ -1,0 +1,108 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.162 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "skill_start", "skill": "docker_manage", "params": {"action": "exec", "container": "el34-attacker", "command": "echo \"== docker.sock ==\"; ls /var/run/docker.sock 2>/dev/null || echo \"none(탈출 불가)\"; echo \"== privileged(블록장치) ==\"; ls /dev | grep -cE \"sda|vda\"; echo \"== CapEff ==\"; grep CapEff /proc/self/status; echo escape_check_done", "target": "127.0.0.1"}, "attempt": 1}
+{"event": "skill_result", "skill": "docker_manage", "success": true, "output": "== docker.sock ==\n/var/run/docker.sock\n== privileged(블록장치) ==\n0\n== CapEff ==\nCapEff:\t0000000000000000\nescape_check_done\n", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "ls /var/run/docker.sock"}
+{"event": "stream_token", "token": "**실행 결과 (★ 코드블록)**  \n```bash\n$ docker exec el34-attacker bash -c 'echo \"== docker.sock ==\"; ls /var/"}
+{"event": "stream_token", "token": "run/docker.sock 2>/dev/null || echo \"none(탈출 불가)\"; echo \"== privileged(블록장치) ==\"; ls /dev | grep -cE"}
+{"event": "stream_token", "token": " \"sda|vda\"; echo \"== CapEff ==\"; grep CapEff /proc/self/status; echo escape_check_done'\n== docker.so"}
+{"event": "stream_token", "token": "ck ==\n/var/run/docker.sock\n== privileged(블록장치) ==\n0\n== CapEff ==\nCapEff:\t0000000000000000\nescape_che"}
+{"event": "stream_token", "token": "ck_done\n```\n\n---\n\n### 1. 취약점·의도 입증  \n\n| 벡터 | 확인 명령 | 결과 | 의미 |\n|------|-----------|------|------|\n| "}
+{"event": "stream_token", "token": "**docker.sock 마운트** | `ls /var/run/docker.sock` | 파일 존재 (`/var/run/docker.sock`) | 컨테이너가 호스트 Docker "}
+{"event": "stream_token", "token": "데몬에 직접 접근 가능 → **Docker API를 통한 호스트 제어** (MITRE T1610). |\n| **privileged 블록장치 노출** | `ls /dev \\| gre"}
+{"event": "stream_token", "token": "p -cE \"sda|vda\"` | `0` | 특권 디스크 장치가 보이지 않음 → 이 경로를 통한 직접 디스크 탈취는 불가능. |\n| **Effective capabilities ("}
+{"event": "stream_token", "token": "CapEff)** | `grep CapEff /proc/self/status` | `0000000000000000` (모두 비활성) | Linux capabilities 가 전혀 "}
+{"event": "stream_token", "token": "부여되지 않아, `CAP_SYS_ADMIN` 등 고위 권한을 이용한 탈출이 차단됨. |\n\n**합격 기준**: `escape_check_done` 출력 확인 → ✅ 성공.  \n하지만"}
+{"event": "stream_token", "token": " **docker.sock** 존재는 여전히 심각한 탈출 가능성을 제공합니다.\n\n---\n\n### 2. 방어 언급  \n\n- **Docker‑sock 마운트 제거** – 컨테이너 실행"}
+{"event": "stream_token", "token": " 시 `-v /var/run/docker.sock:/var/run/docker.sock` 옵션을 빼고, 필요 시 **Docker API 프록시**(예: `docker-proxy`,"}
+{"event": "stream_token", "token": " `socket‑proxy`)를 사용해 최소 권한만 노출.  \n- **Capability 제한** – `--cap-drop ALL` 혹은 필요한 최소 Capability만 `--c"}
+{"event": "stream_token", "token": "ap-add` 로 지정.  \n- **읽기 전용 루트 파일시스템** – `--read-only` 옵션 적용.  \n- **User Namespace 매핑** – 호스트 UID/GID와"}
+{"event": "stream_token", "token": " 격리된 사용자 네임스페이스 사용 (`--userns-remap`).  \n\n---\n\n### 3. 한계·인지  \n\n- 현재 컨테이너는 **docker.sock** 마운트만으로도 호스"}
+{"event": "stream_token", "token": "트 제어가 가능하므로, 다른 방어 조치(특권 디바이스 차단, CapEff 비활성)만으로는 충분하지 않음.  \n- 실제 공격자는 Docker API를 이용해 새로운 컨테이너를 생성하"}
+{"event": "stream_token", "token": "거나 기존 컨테이너에 `--privileged` 옵션을 부여할 수 있음 → **추가적인 RBAC 정책 및 네트워크 방화벽**(nftables) 적용 필요.  \n- 위 검증은 현재 "}
+{"event": "stream_token", "token": "실행 중인 `el34‑attacker` 인스턴스에만 국한되며, 다른 컨테이너/노드에서도 동일 검사를 수행해야 전체 격리 수준을 보장할 수 있음.\n\n---\n\n### 4. 정량·요약 "}
+{"event": "stream_token", "token": " \n\n- **점검 벡터**: 3  \n- **위험 벡터 발견**: 1 (docker.sock) → 위험 비율 **33%**  \n- **Privileged 디바이스**: 0 개 (안전"}
+{"event": "stream_token", "token": ")  \n- **Capabilities**: `0x0` (모두 차단)\n\n---\n\n### 5. 표준 매핑  \n\n| 항목 | MITRE ATT&CK | CAPEC |\n|------|--"}
+{"event": "stream_token", "token": "------------|-------|\n| Docker‑sock 탈출 | T1610 – “Container Escape” | CAPEC‑660 – “Exploiting Privil"}
+{"event": "stream_token", "token": "eged Container Access” |\n\n---\n\n## 결론·권고 (구체적 조치)\n\n1. **docker.sock 마운트 해제**  \n   ```bash\n   docker r"}
+{"event": "stream_token", "token": "un --rm -v /var/run/docker.sock:/var/run/docker.sock ...   # 기존 방식 → 제거\n   docker run --rm <image> ."}
+{"event": "stream_token", "token": "..                                      # 새 실행, socket 없이\n   ```\n2. **필요 최소 Capability만 부여** (예: `NE"}
+{"event": "stream_token", "token": "T_RAW` 필요 시)  \n   ```bash\n   docker run --cap-drop ALL --cap-add NET_RAW <image>\n   ```\n3. **읽기 전용 루"}
+{"event": "stream_token", "token": "트 파일시스템 및 사용자 네임스페이스 적용**  \n   ```bash\n   docker run --read-only --userns-remap=default <image>\n   `"}
+{"event": "stream_token", "token": "``\n\n위 조치를 적용하고 **재검증** (`docker exec ...` 재실행)하여 `docker.sock` 가 더 이상 보이지 않으면 탈출 위험이 크게 감소합니다."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "ls /var/run/docker.sock", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "/var/run/docker.sock\n", "attempt": 1}
+{"event": "skill_start", "skill": "docker_manage", "params": {"action": "inspect", "container": "el34-attacker", "target": "127.0.0.1"}, "attempt": 1}
+{"event": "skill_result", "skill": "docker_manage", "success": true, "output": "running 0 el34-attacker\n", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "ls /var/run/docker.sock"}
+{"event": "stream_token", "token": "**실행 결과 (★ 코드블록)**  \n```bash\n# 1️⃣ 컨테이너 내부에서 탈출 벡터 점검 (el34‑attacker)\n$ docker exec el34-attacker ba"}
+{"event": "stream_token", "token": "sh -c '\n    echo \"== docker.sock ==\";\n    ls /var/run/docker.sock 2>/dev/null || echo \"none(탈출 불가)\";"}
+{"event": "stream_token", "token": "\n    echo \"== privileged(블록장치) ==\";\n    ls /dev | grep -cE \"sda|vda\";\n    echo \"== CapEff ==\";\n    g"}
+{"event": "stream_token", "token": "rep CapEff /proc/self/status;\n    echo escape_check_done'\n== docker.sock ==\n/var/run/docker.sock\n== "}
+{"event": "stream_token", "token": "privileged(블록장치) ==\n0\n== CapEff ==\nCapEff:\t0000000000000000\nescape_check_done\n\n# 2️⃣ 호스트 (bastion)에서"}
+{"event": "stream_token", "token": " 동일 파일 존재 확인 – 탈출 가능성 검증 보조\n$ ls /var/run/docker.sock\n/var/run/docker.sock\n```\n\n---\n\n### 1. 취약점·의도 입"}
+{"event": "stream_token", "token": "증  \n\n| 벡터 | 검사 명령 | 결과 | 의미 |\n|------|-----------|------|------|\n| **docker.sock 마운트** | `ls /var/ru"}
+{"event": "stream_token", "token": "n/docker.sock` (컨테이너) | 파일 존재 (`/var/run/docker.sock`) | 컨테이너가 호스트 Docker 데몬에 직접 접근 가능 → **Docker AP"}
+{"event": "stream_token", "token": "I를 통한 호스트 제어** (MITRE T1610 “Container Escape”). |\n| **privileged 블록장치 노출** | `ls /dev \\| grep -cE \""}
+{"event": "stream_token", "token": "sda|vda\"` | `0` | 특권 디스크 장치가 보이지 않음 → 이 경로를 통한 직접 디스크 탈취는 차단. |\n| **Effective capabilities (CapEff)*"}
+{"event": "stream_token", "token": "* | `grep CapEff /proc/self/status` | `0000000000000000` (모두 비활성) | Linux capabilities 가 전혀 부여되지 않아,"}
+{"event": "stream_token", "token": " `CAP_SYS_ADMIN` 등 고위 권한을 이용한 탈출이 차단됨. |\n| **호스트 docker.sock 존재** | `ls /var/run/docker.sock` (basti"}
+{"event": "stream_token", "token": "on) | 파일 존재 | 호스트 자체에도 socket 이 있어, 컨테이너가 이를 마운트하면 완전한 제어권 획득 가능. |\n\n**합격 기준**: `escape_check_done` "}
+{"event": "stream_token", "token": "출력 확인 → ✅ 성공.  \n하지만 **docker.sock** 존재는 여전히 심각한 탈출 경로이며, 다른 방어 조치만으로는 충분히 차단되지 않음.\n\n---\n\n### 2. 방어 언"}
+{"event": "stream_token", "token": "급  \n\n| 권고 | 구체적 명령/설정 |\n|------|-----------------|\n| **docker.sock 마운트 제거** | `docker run … <image>`"}
+{"event": "stream_token", "token": " (socket 옵션 없이) <br>필요 시 최소 권한 프록시(`socket-proxy`) 사용. |\n| **Capability 제한** | `docker run --cap-dro"}
+{"event": "stream_token", "token": "p ALL --cap-add NET_RAW <image>` (필요 최소만 부여). |\n| **읽기 전용 루트 파일시스템** | `docker run --read-only <imag"}
+{"event": "stream_token", "token": "e>`. |\n| **User Namespace 매핑** | `docker run --userns-remap=default <image>` – 호스트 UID/GID와 격리. |\n| "}
+{"event": "stream_token", "token": "**RBAC / 네트워크 방화벽 강화** | nftables 정책으로 컨테이너 → Docker API 통신 차단 (`nft add rule ip filter output tcp d"}
+{"event": "stream_token", "token": "port 2375 drop`). |\n\n---\n\n### 3. 한계·인지  \n\n- 현재 검증은 **el34‑attacker** 하나에만 적용되었습니다. 다른 컨테이너/노드에서도 동일 "}
+{"event": "stream_token", "token": "점검을 수행해야 전체 격리 수준을 보장할 수 있습니다.  \n- `docker.sock` 마운트가 존재하면, 공격자는 Docker API를 이용해 새로운 특권 컨테이너를 생성하거나 "}
+{"event": "stream_token", "token": "기존 컨테이너에 `--privileged` 옵션을 부여할 수 있어 **추가적인 RBAC 정책**과 **네트워크 차단**이 필수입니다.  \n- CapEff 가 0이라 하더라도, Do"}
+{"event": "stream_token", "token": "cker API를 통해 권한 상승이 가능하므로 **socket 제거**가 가장 시급합니다.\n\n---\n\n### 4. 정량·요약  \n\n| 항목 | 값 |\n|------|----|\n| "}
+{"event": "stream_token", "token": "점검 벡터 수 | 3 |\n| 위험 벡터 발견 | 1 (`docker.sock`) |\n| 위험 비율 | 33 % |\n| Privileged 디바이스 | 0 개 (안전) |\n| Eff"}
+{"event": "stream_token", "token": "ective Capabilities | `0x0` (모두 차단) |\n\n---\n\n### 5. 표준 매핑  \n\n| 항목 | MITRE ATT&CK | CAPEC |\n|------|--"}
+{"event": "stream_token", "token": "------------|-------|\n| Docker‑sock 탈출 | **T1610 – Container Escape** | **CAPEC‑660 – Exploiting Pri"}
+{"event": "stream_token", "token": "vileged Container Access** |\n\n---\n\n## 결론·권고 (구체적 조치)\n\n1. **docker.sock 마운트 즉시 해제** – 컨테이너 재배포 시 `-v "}
+{"event": "stream_token", "token": "/var/run/docker.sock:/var/run/docker.sock` 옵션을 제거하고, 필요 시 최소 권한 프록시 사용.  \n2. **Capability 최소화** – `-"}
+{"event": "stream_token", "token": "-cap-drop ALL` 적용 후 실제 필요한 Capability만 `--cap-add` 로 지정.  \n3. **읽기 전용 루트 파일시스템 및 사용자 네임스페이스 활성화** – "}
+{"event": "stream_token", "token": "`--read-only --userns-remap=default`.  \n\n> **재검증**: 위 조치를 적용한 뒤 동일 스크립트를 재실행하여 `docker.sock` 가 컨테이너 "}
+{"event": "stream_token", "token": "내부에서 보이지 않으면 탈출 위험이 크게 감소합니다."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "ls /var/run/docker.sock", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "/var/run/docker.sock\n", "attempt": 1}
+{"event": "skill_start", "skill": "docker_manage", "params": {"action": "inspect", "container": "el34-attacker", "target": "127.0.0.1"}, "attempt": 1}
+{"event": "skill_result", "skill": "docker_manage", "success": true, "output": "running 0 el34-attacker\n", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "ls /var/run/docker.sock"}
+{"event": "stream_token", "token": "**GOAL 달성:** `escape_check_done` 가 출력되었으며, 컨테이너 내부에서 세 가지 탈출 벡터를 실제로 점검했습니다.  \n\n---\n\n### 1️⃣ 실행 결과 ("}
+{"event": "stream_token", "token": "★ 코드블록)\n```bash\n# el34‑attacker 컨테이너 안에서 수행한 스크립트\n$ docker exec el34-attacker bash -c '\n    echo \"=="}
+{"event": "stream_token", "token": " docker.sock ==\";\n    ls /var/run/docker.sock 2>/dev/null || echo \"none(탈출 불가)\";\n    echo \"== privil"}
+{"event": "stream_token", "token": "eged(블록장치) ==\";\n    ls /dev | grep -cE \"sda|vda\";\n    echo \"== CapEff ==\";\n    grep CapEff /proc/sel"}
+{"event": "stream_token", "token": "f/status;\n    echo escape_check_done'\n== docker.sock ==\n/var/run/docker.sock\n== privileged(블록장치) ==\n"}
+{"event": "stream_token", "token": "0\n== CapEff ==\nCapEff:\t0000000000000000\nescape_check_done\n```\n\n---\n\n### 2️⃣ 취약점·의도 입증  \n\n| 벡터 | 확인 명"}
+{"event": "stream_token", "token": "령 | 결과 | 보안 의미 |\n|------|-----------|------|------------|\n| **docker.sock 마운트** | `ls /var/run/docke"}
+{"event": "stream_token", "token": "r.sock` (컨테이너) | 파일 존재 (`/var/run/docker.sock`) | 컨테이너가 호스트 Docker 데몬에 직접 접근 가능 → **Docker API를 통한 호"}
+{"event": "stream_token", "token": "스트 제어** (MITRE T1610 “Container Escape”). |\n| **privileged 블록장치 노출** | `ls /dev \\| grep -cE \"sda|vda"}
+{"event": "stream_token", "token": "\"` | `0` | 특권 디스크 장치가 보이지 않음 → 직접 디스크 탈취 경로 차단. |\n| **Effective capabilities (CapEff)** | `grep CapE"}
+{"event": "stream_token", "token": "ff /proc/self/status` | `0000000000000000` (모두 비활성) | Linux capabilities 가 전혀 부여되지 않아, `CAP_SYS_ADMI"}
+{"event": "stream_token", "token": "N` 등 고위 권한을 이용한 탈출이 차단됨. |\n\n> **핵심**: `docker.sock` 존재는 여전히 가장 위험한 탈출 경로이며, 다른 두 벡터는 현재 차단된 상태입니다.\n\n"}
+{"event": "stream_token", "token": "---\n\n### 3️⃣ 방어 언급 (구체적 조치)\n\n| 권고 | 구체적인 실행 예 |\n|------|-------------------|\n| **docker.sock 마운트 제거*"}
+{"event": "stream_token", "token": "* | `docker run <image>` (socket 옵션 없이) <br>필요 시 최소 권한 프록시(`socket‑proxy`) 사용. |\n| **Capability 최소화*"}
+{"event": "stream_token", "token": "* | `docker run --cap-drop ALL --cap-add NET_RAW <image>` (실제 필요한 Capability만 부여). |\n| **읽기 전용 루트 파일"}
+{"event": "stream_token", "token": "시스템** | `docker run --read-only <image>`. |\n| **User‑Namespace 매핑** | `docker run --userns-remap=def"}
+{"event": "stream_token", "token": "ault <image>` – 호스트 UID/GID와 격리. |\n| **RBAC·네트워크 차단** | nftables 예: `nft add rule ip filter output t"}
+{"event": "stream_token", "token": "cp dport 2375 drop` (Docker API 포트 차단). |\n\n---\n\n### 4️⃣ 한계·인지  \n\n* 현재 검증은 **el34‑attacker** 컨테이너 하나에"}
+{"event": "stream_token", "token": "만 적용되었습니다. 다른 컨테이너/노드에서도 동일 점검을 수행해야 전체 격리 수준을 보장할 수 있습니다.  \n* `docker.sock` 가 마운트된 상태에서는 CapEff가 0이"}
+{"event": "stream_token", "token": "라도 Docker API를 통해 새로운 특권 컨테이너를 생성하거나 기존 컨테이너에 `--privileged` 옵션을 부여할 수 있어 **추가적인 RBAC 정책 및 네트워크 방화벽*"}
+{"event": "stream_token", "token": "* 적용이 필수입니다.  \n* 위 조치를 적용한 뒤 동일 스크립트를 재실행해 `docker.sock` 가 보이지 않으면 탈출 위험이 크게 감소합니다.\n\n---\n\n### 5️⃣ 정량"}
+{"event": "stream_token", "token": "·요약  \n\n- **점검 벡터**: 3  \n- **위험 벡터 발견**: 1 (`docker.sock`) → 위험 비율 **33 %**  \n- **Privileged 디바이스**: "}
+{"event": "stream_token", "token": "0 (안전)  \n- **Effective Capabilities**: `0x0` (모두 차단)\n\n---\n\n### 6️⃣ 표준 매핑  \n\n| 항목 | MITRE ATT&CK | CA"}
+{"event": "stream_token", "token": "PEC |\n|------|--------------|-------|\n| Docker‑sock 탈출 | **T1610 – Container Escape** | **CAPEC‑660 "}
+{"event": "stream_token", "token": "– Exploiting Privileged Container Access** |\n\n--- \n\n## 결론·권고 (구체적 실행 흐름)\n\n1. **docker.sock 마운트 즉시 해제"}
+{"event": "stream_token", "token": "** → 컨테이너 재배포 시 `-v /var/run/docker.sock:/var/run/docker.sock` 옵션을 제거하고, 최소 권한 프록시 사용.  \n2. **Capabi"}
+{"event": "stream_token", "token": "lity 최소화** (`--cap-drop ALL` + 필요한 `--cap-add`).  \n3. **읽기 전용 루트 파일시스템 및 사용자 네임스페이스 적용** (`--read-on"}
+{"event": "stream_token", "token": "ly --userns-remap=default`).  \n\n> **재검증**: 위 조치 후 동일 스크립트를 다시 실행해 `docker.sock` 가 컨테이너 내부에서 보이지 않으면 "}
+{"event": "stream_token", "token": "탈출 위험"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "ls /var/run/docker.sock", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "/var/run/docker.sock\n", "attempt": 1}
+{"event": "stage", "stage": "validating"}
+{"event": "kg_status", "context": {"used": true, "hits": 5, "took_ms": 47, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-aec30f6330d3", "dedup": false, "error": ""}}
