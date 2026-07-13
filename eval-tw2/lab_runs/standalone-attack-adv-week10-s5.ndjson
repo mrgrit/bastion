@@ -1,0 +1,23 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.149 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "mkdir -p /tmp/ex10s; seq 1 300 > /tmp/ex10s/data; SZ=$(wc -c < /tmp/ex10s/data); split -b 200 /tmp/ex10s/data /tmp/ex10s/chunk_; N=$(ls /tmp/ex10s/chunk_* 2>/dev/null | wc -l); echo \"데이터 ${SZ}바이트를 ${N}개 청크(200B)로 분할(저속 분산 반출용)\"; rm -rf /tmp/ex10s; [ \"$N\" -ge 2 ] && echo slow_done", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "데이터 1092바이트를 6개 청크(200B)로 분할(저속 분산 반출용)\nslow_done\n", "attempt": 1}
+{"event": "stream_token", "token": "**실행 결과 (★ 코드블록)**  \n```bash\n$ mkdir -p /tmp/ex10s; seq 1 300 > /tmp/ex10s/data; SZ=$(wc -c < /tmp/e"}
+{"event": "stream_token", "token": "x10s/data); split -b 200 /tmp/ex10s/data /tmp/ex10s/chunk_; N=$(ls /tmp/ex10s/chunk_* 2>/dev/null | "}
+{"event": "stream_token", "token": "wc -l); echo \"데이터 ${SZ}바이트를 ${N}개 청크(200B)로 분할(저속 분산 반출용)\"; rm -rf /tmp/ex10s; [ \"$N\" -ge 2 ] && ech"}
+{"event": "stream_token", "token": "o slow_done\n데이터 1092바이트를 6개 청크(200B)로 분할(저속 분산 반출용)\nslow_done\n```\n\n**취약점/의도 입증**  \n- **Payload**: `s"}
+{"event": "stream_token", "token": "plit -b 200` 로 원본 데이터를 200 Byte 이하 청크로 나눔.  \n- **Response**: 명령이 실제로 6개의 청크를 생성하고, 조건 `[ \"$N\" -ge 2 "}
+{"event": "stream_token", "token": "] && echo slow_done` 가 만족되어 `slow_done` 마커가 출력됨.  \n- **성공 기준 충족**: `slow_done` 과 청크 수(`N=6`) 모두 요구조건"}
+{"event": "stream_token", "token": "을 초과했으며, 이는 “데이터가 2개 이상 청크로 분할되었음”을 증명한다.\n\n**방어 언급**  \n- **데이터 전송 레이트 제한 (Rate‑Limiting)**: 방화벽·IDS에"}
+{"event": "stream_token", "token": "서 `conntrack` 혹은 `nftables` 로 초당/분당 전송량을 제한하면, 다수의 작은 청크가 연속적으로 전송될 때 차단하거나 경보를 발생시킬 수 있다.  \n- **DLP"}
+{"event": "stream_token", "token": " 파일‑조각 재구성 방지**: 파일 무결성 검사와 함께 `hash‑based` 검증(예: SHA‑256) 및 `content‑type` 기반 정책을 적용해, 동일 파일 조각이 여러"}
+{"event": "stream_token", "token": " 번 전송될 경우 탐지하도록 설정한다.  \n- **네트워크 세션 모니터링**: `Suricata`/`Wazuh` 에서 “다수의 작은 DNS/TCP/UDP 패킷” 이벤트를 집계하고 "}
+{"event": "stream_token", "token": "임계치를 초과하면 알림을 발생시키는 룰을 배포한다.\n\n**한계·인지**  \n- **분할 자체가 악용 가능성**: `split` 은 정상적인 백업·전송 시에도 사용될 수 있어, 단순"}
+{"event": "stream_token", "token": "히 청크 수만으로 악의적 행위를 판단하기 어렵다. 따라서 추가적인 컨텍스트(목적지 IP, 프로토콜, 시간 패턴 등)와 결합된 탐지가 필요하다.  \n- **레이트‑리밋 우회**: 공"}
+{"event": "stream_token", "token": "격자는 청크 간에 충분한 지연을 두어 레이트 제한을 회피할 수 있다(예: `sleep` 삽입). 방화벽은 단순 트래픽량보다 “시간 분산 패턴”까지 분석해야 한다.  \n- **내부 "}
+{"event": "stream_token", "token": "네트워크 가시성**: 현재 실습에서는 공격 컨테이너(`el34-attacker`)와 목표 서버가 동일 서브넷에 있어, 외부 IDS/방화벽에서 감지하기 어려울 수 있다. 내부 모니터"}
+{"event": "stream_token", "token": "링을 강화해야 한다."}
+{"event": "stage", "stage": "validating"}
+{"event": "kg_status", "context": {"used": true, "hits": 5, "took_ms": 57, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-1659a48c5f9b", "dedup": false, "error": ""}}
