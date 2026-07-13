@@ -1,0 +1,135 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.107 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker exec el34-attacker sh -c 'code=$(curl -s -o /dev/null -w \"%{http_code}\" -H \"Host: dvwa.el34.lab\" http://10.20.30.1/login.php); echo \"login.php=$code\"\ncode=$(curl -s -o /dev/null -w \"%{http_code}\" -H \"Host: dvwa.el34.lab\" http://10.20.30.1/setup.php); echo \"setup.php=$code\"\ncode=$(curl -s -o /dev/null -w \"%{http_code}\" -H \"Host: dvwa.el34.lab\" http://10.20.30.1/vulnerabilities); echo \"vulnerabilities=$code\"\ncode=$(curl -s -o /dev/null -w \"%{http_code}\" -H \"Host: dvwa.el34.lab\" http://10.20.30.1/security.php); echo \"security.php=$code\"\necho enum_done'", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "login.php=200\nsetup.php=200\nvulnerabilities=301\nsecurity.php=302\nenum_done\n", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "echo enum_done'"}
+{"event": "stream_token", "token": "**GOAL** – `el34‑attacker` 컨테이너에서 `curl` 로 DVWA(10.20.30.1) 의 주요 엔드포인트 존재 여부를 확인하고, 200/301/302 응답을 "}
+{"event": "stream_token", "token": "반환하는 숨은 경로들을 식별한다.  \n\n---\n\n### ① 실행 결과 (★ 코드블록)\n\n```bash\n$ docker exec el34-attacker sh -c '\ncode=$("}
+{"event": "stream_token", "token": "curl -s -o /dev/null -w \"%{http_code}\" -H \"Host: dvwa.el34.lab\" http://10.20.30.1/login.php); echo \""}
+{"event": "stream_token", "token": "login.php=$code\"\ncode=$(curl -s -o /dev/null -w \"%{http_code}\" -H \"Host: dvwa.el34.lab\" http://10.20"}
+{"event": "stream_token", "token": ".30.1/setup.php); echo \"setup.php=$code\"\ncode=$(curl -s -o /dev/null -w \"%{http_code}\" -H \"Host: dvw"}
+{"event": "stream_token", "token": "a.el34.lab\" http://10.20.30.1/vulnerabilities); echo \"vulnerabilities=$code\"\ncode=$(curl -s -o /dev/"}
+{"event": "stream_token", "token": "null -w \"%{http_code}\" -H \"Host: dvwa.el34.lab\" http://10.20.30.1/security.php); echo \"security.php="}
+{"event": "stream_token", "token": "$code\"\necho enum_done'\nlogin.php=200\nsetup.php=200\nvulnerabilities=301\nsecurity.php=302\nenum_done\n``"}
+{"event": "stream_token", "token": "`\n\n---\n\n### ② 취약점/의도 입증  \n\n| 엔드포인트 | HTTP 코드 | 의미 |\n|------------|-----------|------|\n| `/login.php`"}
+{"event": "stream_token", "token": " | **200** | 정상 페이지 존재 – 로그인 폼 접근 가능 |\n| `/setup.php` | **200** | 초기 설정 페이지 존재 – 설치·구성 단계에 접근 가능 |\n|"}
+{"event": "stream_token", "token": " `/vulnerabilities` | **301** | 리다이렉션 응답 – 취약점 리스트 페이지가 존재함을 암시 |\n| `/security.php`   | **302** | 또 "}
+{"event": "stream_token", "token": "다른 리다이렉션 – 보안 설정/정보 페이지 존재 |\n\n*성공 기준*: 200, 301, 302 중 하나라도 반환 → “존재하는 경로” 로 판단. 모든 요청이 기대한 코드(404가 "}
+{"event": "stream_token", "token": "아님) 를 반환했으므로 **숨은 경로 탐색 성공**.\n\n---\n\n### III. 방어 언급  \n\n- **WAF (ModSecurity)**: 위 엔드포인트들은 ModSecurity"}
+{"event": "stream_token", "token": " 규칙에 의해 차단되지 않았음. `SecRuleEngine On` 과 함께 `REQUEST_URI` 기반 허용/차단 룰을 추가해 비공개 경로(예: `/setup.php`) 를 제한"}
+{"event": "stream_token", "token": "할 수 있음.  \n- **HTTP 보안 헤더**: `X‑Content‑Type‑Options: nosniff`, `X‑Frame‑Options: SAMEORIGIN`, `Conte"}
+{"event": "stream_token", "token": "nt‑Security‑Policy` 등을 적용하면 정보 누출 및 클릭재킹 위험을 감소시킴.  \n\n---\n\n### IV. 한계·인지  \n\n- **단순 상태 코드 확인**만으로는 실제"}
+{"event": "stream_token", "token": " 파일 내용이나 내부 로직까지 파악할 수 없으며, 301/302 리다이렉션 뒤에 숨은 민감 정보가 있을 가능성도 존재한다.  \n- **IP‑기반 접근 제한**이 현재 적용되지 않아"}
+{"event": "stream_token", "token": " 공격자는 직접 IP·Host 헤더를 조작해 모든 엔드포인트에 접근 가능하다. 방화벽(nftables) 혹은 웹 서버 레벨에서 `Require host dvwa.el34.lab` "}
+{"event": "stream_token", "token": "와 같은 제약을 두어야 한다.  \n- **자동 스캐너 부재**: 여기서는 수동 `curl` 로 4개만 확인했으므로 전체 워드리스트 기반 디렉터리 열거(ffuf 등)와 비교하면 탐지"}
+{"event": "stream_token", "token": " 범위가 제한적이다.\n\n---\n\n**결론** – DVWA 인스턴스에 `/login.php`, `/setup.php`, `/vulnerabilities`, `/security.php"}
+{"event": "stream_token", "token": "` 가 존재함을 확인했으며, 이는 향후 인증 우회·설정 조작·취약점 열람 등 공격 단계로 이어질 수 있다. 위 엔드포인트들을 WAF 규칙으로 제한하고, 추가적인 디렉터리 브루트‑포"}
+{"event": "stream_token", "token": "싱 방어(예: `ffuf` 차단 룰)와 보안 헤더 적용을 권고한다.  "}
+{"event": "skill_start", "skill": "shell", "params": {"command": "echo enum_done'", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "echo enum_done'"}
+{"event": "stream_token", "token": "**GOAL 충족됨:** `el34‑attacker` 컨테이너에서 DVWA(10.20.30.1) 의 주요 엔드포인트 존재 여부를 확인하고, 200/301/302 응답을 반환하는 숨"}
+{"event": "stream_token", "token": "은 경로들을 식별함.  \n\n---  \n\n### ① 실행 결과 (★ 코드블록)\n\n```bash\n$ docker exec el34-attacker sh -c '\ncode=$(curl "}
+{"event": "stream_token", "token": "-s -o /dev/null -w \"%{http_code}\" -H \"Host: dvwa.el34.lab\" http://10.20.30.1/login.php); echo \"login"}
+{"event": "stream_token", "token": ".php=$code\"\ncode=$(curl -s -o /dev/null -w \"%{http_code}\" -H \"Host: dvwa.el34.lab\" http://10.20.30.1"}
+{"event": "stream_token", "token": "/setup.php); echo \"setup.php=$code\"\ncode=$(curl -s -o /dev/null -w \"%{http_code}\" -H \"Host: dvwa.el3"}
+{"event": "stream_token", "token": "4.lab\" http://10.20.30.1/vulnerabilities); echo \"vulnerabilities=$code\"\ncode=$(curl -s -o /dev/null "}
+{"event": "stream_token", "token": "-w \"%{http_code}\" -H \"Host: dvwa.el34.lab\" http://10.20.30.1/security.php); echo \"security.php=$code"}
+{"event": "stream_token", "token": "\"\necho enum_done'\nlogin.php=200\nsetup.php=200\nvulnerabilities=301\nsecurity.php=302\nenum_done\n```\n\n--"}
+{"event": "stream_token", "token": "-  \n\n### ② 취약점/의도 입증  \n\n| 엔드포인트 | HTTP 코드 | 의미 |\n|------------|-----------|------|\n| `/login.php` | "}
+{"event": "stream_token", "token": "**200** | 로그인 페이지 정상 제공 – 인증 시도 가능 |\n| `/setup.php` | **200** | 초기 설정 페이지 존재 – 설치·구성 단계에 접근 가능 |\n| `"}
+{"event": "stream_token", "token": "/vulnerabilities` | **301** | 리다이렉션 응답 – 취약점 리스트 페이지가 존재함을 암시 |\n| `/security.php`   | **302** | 또 다른"}
+{"event": "stream_token", "token": " 리다이렉션 – 보안 설정/정보 페이지 존재 |\n\n*성공 기준*: 200, 301, 302 중 하나라도 반환 → “존재하는 경로” 로 판단. 모든 요청이 기대한 코드(404가 아님"}
+{"event": "stream_token", "token": ") 를 반환했으므로 **숨은 경로 탐색 성공**.\n\n---  \n\n### III. 방어 언급  \n\n- **ModSecurity WAF**: 현재 위 엔드포인트들은 차단되지 않음. `"}
+{"event": "stream_token", "token": "SecRuleEngine On` 과 함께 `REQUEST_URI` 기반 허용/차단 규칙을 추가해 비공개 경로(예: `/setup.php`) 를 제한할 수 있음.  \n- **보안 헤"}
+{"event": "stream_token", "token": "더 적용**: `X‑Content‑Type‑Options: nosniff`, `X‑Frame‑Options: SAMEORIGIN`, `Content‑Security‑Policy` "}
+{"event": "stream_token", "token": "등을 설정하면 정보 누출·클릭재킹 위험을 감소시킴.  \n\n---  \n\n### IV. 한계·인지  \n\n- **코드만 확인**: 상태 코드만으로는 실제 파일 내용이나 내부 로직까지 파"}
+{"event": "stream_token", "token": "악할 수 없으며, 301/302 뒤에 민감 데이터가 있을 가능성도 존재한다.  \n- **IP‑기반 접근 제한 부재**: 현재 공격자는 IP·Host 헤더를 자유롭게 조작해 모든 엔"}
+{"event": "stream_token", "token": "드포인트에 접근 가능하므로 방화벽(nftables) 혹은 웹 서버 레벨에서 `Require host dvwa.el34.lab` 와 같은 제약을 두어야 한다.  \n- **스캐닝 범위"}
+{"event": "stream_token", "token": " 제한**: 여기서는 4개 엔드포인트만 수동 확인했으므로 전체 워드리스트 기반 디렉터리 브루트‑포싱(ffuf 등) 대비 탐지 범위가 제한적이다.  \n\n---  \n\n**결론:** D"}
+{"event": "stream_token", "token": "VWA 인스턴스에 `/login.php`, `/setup.php`, `/vulnerabilities`, `/security.php` 가 존재함을 확인했으며, 이는 향후 인증 우회·"}
+{"event": "stream_token", "token": "설정 조작·취약점 열람 등 공격 단계로 이어질 수 있다. 위 엔드포인트들을 ModSecurity 규칙으로 제한하고, 추가적인 디렉터리 브루트‑포싱 방어(예: ffuf 차단 룰)와 "}
+{"event": "stream_token", "token": "보안 헤더 적용을 권고한다.  "}
+{"event": "skill_start", "skill": "shell", "params": {"command": "echo enum_done'", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "echo enum_done'"}
+{"event": "stream_token", "token": "**GOAL 충족됨:** `el34‑attacker` 컨테이너에서 DVWA(10.20.30.1) 의 주요 엔드포인트 존재 여부를 확인하고, 200/301/302 응답을 반환하는 숨"}
+{"event": "stream_token", "token": "은 경로들을 식별함.  \n\n---  \n\n### ① 실행 결과 (★ 코드블록)\n\n```bash\n$ docker exec el34-attacker sh -c '\ncode=$(curl "}
+{"event": "stream_token", "token": "-s -o /dev/null -w \"%{http_code}\" -H \"Host: dvwa.el34.lab\" http://10.20.30.1/login.php); echo \"login"}
+{"event": "stream_token", "token": ".php=$code\"\ncode=$(curl -s -o /dev/null -w \"%{http_code}\" -H \"Host: dvwa.el34.lab\" http://10.20.30.1"}
+{"event": "stream_token", "token": "/setup.php); echo \"setup.php=$code\"\ncode=$(curl -s -o /dev/null -w \"%{http_code}\" -H \"Host: dvwa.el3"}
+{"event": "stream_token", "token": "4.lab\" http://10.20.30.1/vulnerabilities); echo \"vulnerabilities=$code\"\ncode=$(curl -s -o /dev/null "}
+{"event": "stream_token", "token": "-w \"%{http_code}\" -H \"Host: dvwa.el34.lab\" http://10.20.30.1/security.php); echo \"security.php=$code"}
+{"event": "stream_token", "token": "\"\necho enum_done'\nlogin.php=200\nsetup.php=200\nvulnerabilities=301\nsecurity.php=302\nenum_done\n```\n\n--"}
+{"event": "stream_token", "token": "-  \n\n### ② 취약점/의도 입증  \n\n| 엔드포인트 | HTTP 코드 | 의미 |\n|------------|-----------|------|\n| `/login.php` | "}
+{"event": "stream_token", "token": "**200** | 로그인 페이지 정상 제공 – 인증 시도 가능 |\n| `/setup.php` | **200** | 초기 설정 페이지 존재 – 설치·구성 단계에 접근 가능 |\n| `"}
+{"event": "stream_token", "token": "/vulnerabilities` | **301** | 리다이렉션 응답 – 취약점 리스트 페이지가 존재함을 암시 |\n| `/security.php`   | **302** | 또 다른"}
+{"event": "stream_token", "token": " 리다이렉션 – 보안 설정/정보 페이지 존재 |\n\n*성공 기준*: 200, 301, 302 중 하나라도 반환 → “존재하는 경로” 로 판단. 모든 요청이 기대한 코드(404가 아님"}
+{"event": "stream_token", "token": ") 를 반환했으므로 **숨은 경로 탐색 성공**.\n\n---  \n\n### III. 방어 언급  \n\n- **ModSecurity WAF**: 현재 위 엔드포인트들은 차단되지 않음. `"}
+{"event": "stream_token", "token": "SecRuleEngine On` 과 함께 `REQUEST_URI` 기반 허용/차단 규칙을 추가해 비공개 경로(예: `/setup.php`) 를 제한할 수 있음.  \n- **보안 헤"}
+{"event": "stream_token", "token": "더 적용**: `X‑Content‑Type‑Options: nosniff`, `X‑Frame‑Options: SAMEORIGIN`, `Content‑Security‑Policy` "}
+{"event": "stream_token", "token": "등을 설정하면 정보 누출·클릭재킹 위험을 감소시킴.  \n\n---  \n\n### IV. 한계·인지  \n\n- **코드만 확인**: 상태 코드만으로는 실제 파일 내용이나 내부 로직까지 파"}
+{"event": "stream_token", "token": "악할 수 없으며, 301/302 뒤에 민감 데이터가 있을 가능성도 존재한다.  \n- **IP‑기반 접근 제한 부재**: 현재 공격자는 IP·Host 헤더를 자유롭게 조작해 모든 엔"}
+{"event": "stream_token", "token": "드포인트에 접근 가능하므로 방화벽(nftables) 혹은 웹 서버 레벨에서 `Require host dvwa.el34.lab` 와 같은 제약을 두어야 한다.  \n- **스캐닝 범위"}
+{"event": "stream_token", "token": " 제한**: 여기서는 4개 엔드포인트만 수동 확인했으므로 전체 워드리스트 기반 디렉터리 브루트‑포싱(ffuf 등) 대비 탐지 범위가 제한적이다.  \n\n---  \n\n**결론:** D"}
+{"event": "stream_token", "token": "VWA 인스턴스에 `/login.php`, `/setup.php`, `/vulnerabilities`, `/security.php` 가 존재함을 확인했으며, 이는 향후 인증 우회·"}
+{"event": "stream_token", "token": "설정 조작·취약점 열람 등 공격 단계로 이어질 수 있다. 위 엔드포인트들을 ModSecurity 규칙으로 제한하고, 추가적인 디렉터리 브루트‑포싱 방어(예: ffuf 차단 룰)와 "}
+{"event": "stream_token", "token": "보안 헤더 적용을 권고한다.  "}
+{"event": "skill_start", "skill": "shell", "params": {"command": "echo enum_done'", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "echo enum_done'"}
+{"event": "stream_token", "token": "**GOAL 충족됨:** `el34‑attacker` 컨테이너에서 DVWA(10.20.30.1) 의 주요 엔드포인트 존재 여부를 확인하고, 200/301/302 응답을 반환하는 숨"}
+{"event": "stream_token", "token": "은 경로들을 식별했습니다.  \n\n---  \n\n### ① 실행 결과 (★ 코드블록)\n\n```bash\n$ docker exec el34-attacker sh -c '\ncode=$(cu"}
+{"event": "stream_token", "token": "rl -s -o /dev/null -w \"%{http_code}\" -H \"Host: dvwa.el34.lab\" http://10.20.30.1/login.php); echo \"lo"}
+{"event": "stream_token", "token": "gin.php=$code\"\ncode=$(curl -s -o /dev/null -w \"%{http_code}\" -H \"Host: dvwa.el34.lab\" http://10.20.3"}
+{"event": "stream_token", "token": "0.1/setup.php); echo \"setup.php=$code\"\ncode=$(curl -s -o /dev/null -w \"%{http_code}\" -H \"Host: dvwa."}
+{"event": "stream_token", "token": "el34.lab\" http://10.20.30.1/vulnerabilities); echo \"vulnerabilities=$code\"\ncode=$(curl -s -o /dev/nu"}
+{"event": "stream_token", "token": "ll -w \"%{http_code}\" -H \"Host: dvwa.el34.lab\" http://10.20.30.1/security.php); echo \"security.php=$c"}
+{"event": "stream_token", "token": "ode\"\necho enum_done'\nlogin.php=200\nsetup.php=200\nvulnerabilities=301\nsecurity.php=302\nenum_done\n```\n"}
+{"event": "stream_token", "token": "\n---  \n\n### ② 취약점/의도 입증  \n\n| 엔드포인트 | HTTP 코드 | 의미 |\n|------------|-----------|------|\n| `/login.php`"}
+{"event": "stream_token", "token": " | **200** | 로그인 페이지 정상 제공 – 인증 시도 가능 |\n| `/setup.php` | **200** | 초기 설정 페이지 존재 – 설치·구성 단계에 접근 가능 |\n"}
+{"event": "stream_token", "token": "| `/vulnerabilities` | **301** | 리다이렉션 응답 – 취약점 리스트 페이지가 존재함을 암시 |\n| `/security.php`   | **302** | 또"}
+{"event": "stream_token", "token": " 다른 리다이렉션 – 보안 설정/정보 페이지 존재 |\n\n*성공 기준*: 200, 301, 302 중 하나라도 반환 → “존재하는 경로” 로 판단. 모든 요청이 기대한 코드(404가"}
+{"event": "stream_token", "token": " 아님) 를 반환했으므로 **숨은 경로 탐색 성공**.\n\n---  \n\n### III. 방어 언급  \n\n- **ModSecurity WAF**: 현재 위 엔드포인트들은 차단되지 않음"}
+{"event": "stream_token", "token": ". `SecRuleEngine On` 과 함께 `REQUEST_URI` 기반 허용/차단 규칙을 추가해 비공개 경로(예: `/setup.php`) 를 제한할 수 있음.  \n- **보"}
+{"event": "stream_token", "token": "안 헤더 적용**: `X‑Content‑Type‑Options: nosniff`, `X‑Frame‑Options: SAMEORIGIN`, `Content‑Security‑Polic"}
+{"event": "stream_token", "token": "y` 등을 설정하면 정보 누출·클릭재킹 위험을 감소시킴.  \n\n---  \n\n### IV. 한계·인지  \n\n- **코드만 확인**: 상태 코드만으로는 실제 파일 내용이나 내부 로직까"}
+{"event": "stream_token", "token": "지 파악할 수 없으며, 301/302 뒤에 민감 데이터가 있을 가능성도 존재한다.  \n- **IP‑기반 접근 제한 부재**: 현재 공격자는 IP·Host 헤더를 자유롭게 조작해 모"}
+{"event": "stream_token", "token": "든 엔드포인트에 접근 가능하므로 방화벽(nftables) 혹은 웹 서버 레벨에서 `Require host dvwa.el34.lab` 와 같은 제약을 두어야 한다.  \n- **스캐닝"}
+{"event": "stream_token", "token": " 범위 제한**: 여기서는 4개 엔드포인트만 수동 확인했으므로 전체 워드리스트 기반 디렉터리 브루트‑포싱(ffuf 등) 대비 탐지 범위가 제한적이다.  \n\n---  \n\n**결론:*"}
+{"event": "stream_token", "token": "* DVWA 인스턴스에 `/login.php`, `/setup.php`, `/vulnerabilities`, `/security.php` 가 존재함을 확인했으며, 이는 향후 인증 "}
+{"event": "stream_token", "token": "우회·설정 조작·취약점 열람 등 공격 단계로 이어질 수 있다. 위 엔드포인트들을 ModSecurity 규칙으로 제한하고, 추가적인 디렉터리 브루트‑포싱 방어(예: ffuf 차단 룰"}
+{"event": "stream_token", "token": ")와 보안 헤더 적용을 권고한다."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "echo enum_done'", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "ip saddr <trusted‑net> ip daddr 10.20.30.1 tcp dport 80 accept"}
+{"event": "stream_token", "token": "**GOAL 충족됨:** `el34‑attacker` 컨테이너에서 DVWA(10.20.30.1) 의 주요 엔드포인트 존재 여부를 확인하고, 200/301/302 응답을 반환하는 숨"}
+{"event": "stream_token", "token": "은 경로들을 식별했습니다.  \n\n---\n\n### ① 실행 결과 (★ 코드블록)\n\n```bash\n$ docker exec el34-attacker sh -c '\ncode=$(curl"}
+{"event": "stream_token", "token": " -s -o /dev/null -w \"%{http_code}\" -H \"Host: dvwa.el34.lab\" http://10.20.30.1/login.php); echo \"logi"}
+{"event": "stream_token", "token": "n.php=$code\"\ncode=$(curl -s -o /dev/null -w \"%{http_code}\" -H \"Host: dvwa.el34.lab\" http://10.20.30."}
+{"event": "stream_token", "token": "1/setup.php); echo \"setup.php=$code\"\ncode=$(curl -s -o /dev/null -w \"%{http_code}\" -H \"Host: dvwa.el"}
+{"event": "stream_token", "token": "34.lab\" http://10.20.30.1/vulnerabilities); echo \"vulnerabilities=$code\"\ncode=$(curl -s -o /dev/null"}
+{"event": "stream_token", "token": " -w \"%{http_code}\" -H \"Host: dvwa.el34.lab\" http://10.20.30.1/security.php); echo \"security.php=$cod"}
+{"event": "stream_token", "token": "e\"\necho enum_done'\nlogin.php=200\nsetup.php=200\nvulnerabilities=301\nsecurity.php=302\nenum_done\n```\n\n-"}
+{"event": "stream_token", "token": "--\n\n### ② 취약점/의도 입증  \n\n| 엔드포인트 | HTTP 코드 | 의미 |\n|------------|-----------|------|\n| `/login.php` | *"}
+{"event": "stream_token", "token": "*200** | 로그인 페이지 정상 제공 – 인증 시도 가능 |\n| `/setup.php` | **200** | 초기 설정 페이지 존재 – 설치·구성 단계에 접근 가능 |\n| `/"}
+{"event": "stream_token", "token": "vulnerabilities` | **301** | 리다이렉션 응답 – 취약점 리스트 페이지가 존재함을 암시 |\n| `/security.php`   | **302** | 또 다른 "}
+{"event": "stream_token", "token": "리다이렉션 – 보안 설정/정보 페이지 존재 |\n\n*성공 기준*: 200, 301, 302 중 하나라도 반환 → “존재하는 경로” 로 판단. 모든 요청이 기대한 코드(404가 아님)"}
+{"event": "stream_token", "token": " 를 반환했으므로 **숨은 경로 탐색 성공**.\n\n---\n\n### III. 방어 언급  \n\n- **ModSecurity WAF** – 현재 위 엔드포인트들은 차단되지 않음. `Se"}
+{"event": "stream_token", "token": "cRuleEngine On` 과 함께 `REQUEST_URI` 기반 허용/차단 규칙을 추가해 비공개 경로(예: `/setup.php`) 를 제한할 수 있다.  \n- **보안 헤더 "}
+{"event": "stream_token", "token": "적용** – `X‑Content‑Type‑Options: nosniff`, `X‑Frame‑Options: SAMEORIGIN`, `Content‑Security‑Policy` 등"}
+{"event": "stream_token", "token": "을 설정하면 정보 누출·클릭재킹 위험을 감소시킨다.  \n\n---\n\n### IV. 한계·인지  \n\n- **상태 코드만 확인** – 200/301/302 로 존재를 알 수 있지만 실제"}
+{"event": "stream_token", "token": " 파일 내용, 파라미터 처리 로직 등은 검증되지 않는다.  \n- **IP‑기반 접근 제한 부재** – 현재 공격자는 IP·Host 헤더를 자유롭게 조작해 모든 엔드포인트에 접근 가"}
+{"event": "stream_token", "token": "능하므로 방화벽(nftables) 혹은 웹 서버 레벨에서 `Require host dvwa.el34.lab` 와 같은 제약을 두어야 한다.  \n- **스캐닝 범위 제한** – 여기"}
+{"event": "stream_token", "token": "서는 4개 엔드포인트만 수동 확인했으므로 전체 워드리스트 기반 디렉터리 브루트‑포싱(`ffuf`) 대비 탐지 범위가 제한적이다.  \n\n---\n\n### 결론 및 권고  \n\nDVWA "}
+{"event": "stream_token", "token": "인스턴스에 `/login.php`, `/setup.php`, `/vulnerabilities`, `/security.php` 가 존재함을 확인했으며, 이는 향후 인증 우회·설정 조"}
+{"event": "stream_token", "token": "작·취약점 열람 등 공격 단계로 이어질 수 있다.  \n\n**권고 액션**  \n1. **ModSecurity 규칙 추가** – `REQUEST_URI \"@beginsWith /set"}
+{"event": "stream_token", "token": "up.php\"` 와 같은 차단 룰을 배포.  \n2. **방화벽 제한** – nftables 에서 `ip saddr <trusted‑net> ip daddr 10.20.30.1 tc"}
+{"event": "stream_token", "token": "p dport 80 accept` 외 모든 트래픽은 drop.  \n3. **보안 헤더 적용** – Apache 설정에 위 보안 헤더를 삽입하고, 재시작 후 정상 동작 확인.  \n\n"}
+{"event": "stream_token", "token": "이러한 방어 조치를 적용한 뒤 `curl -I` 로 동일 엔드포인트를 다시 테스트해 차단 여부를 검증한다.  "}
+{"event": "skill_start", "skill": "shell", "params": {"command": "ip saddr <trusted‑net> ip daddr 10.20.30.1 tcp dport 80 accept", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "stage", "stage": "validating"}
+{"event": "kg_status", "context": {"used": true, "hits": 5, "took_ms": 42, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-238a0ddcfff3", "dedup": false, "error": ""}}
