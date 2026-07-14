@@ -1,0 +1,21 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.276 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "curl -s http://211.170.162.139:10934/api/generate -d '{\"model\":\"gemma3:4b\",\"prompt\":\"Reply with the word ready.\",\"stream\":false,\"options\":{\"num_predict\":10}}' | python3 -c \"import sys,json; r=json.load(sys.stdin).get('response',''); print(r); print('GEN_OK' if r.strip() else 'GEN_EMPTY')\"", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "skill_start", "skill": "shell", "params": {"command": "curl -Is http://211.170.162.139:10934/api/generate | head -n 1", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "skill_start", "skill": "shell", "params": {"command": "curl -m 15 -s -o /dev/null -w \"%{http_code}\" http://211.170.162.139:10934/api/generate; echo \"DONE\"", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "000DONE\n", "attempt": 1}
+{"event": "skill_start", "skill": "http_request", "params": {"method": "POST", "url": "http://211.170.162.139:10934/api/generate", "headers": {"Content-Type": "application/json"}, "body": "{\"model\":\"gemma3:4b\",\"prompt\":\"Reply with the word ready.\",\"stream\":false,\"options\":{\"num_predict\":10}}", "target": "10.20.30.201", "host": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "http_request", "success": false, "output": "", "attempt": 1}
+{"event": "skill_start", "skill": "shell", "params": {"command": "curl -s http://211.170.139.???", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "skill_start", "skill": "http_request", "params": {"body": "{\"model\":\"gemma3:4b\",\"prompt\":\"Reply with the word ready.\",\"stream\":false,\"options\":{\"num_predict\":10}}", "headers": {"Content-Type": "application/json"}, "method": "POST", "target": "127.0.0.1", "url": "http://211.170.162.139:10934/api/generate", "host": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "http_request", "success": false, "output": "", "attempt": 1}
+{"event": "stage", "stage": "validating"}
+{"event": "stream_token", "token": "위 실행들은 모두 응답을 받지 못했습니다.  \n- `curl -s http://211.170.139.???` → stdout 비어 있음, 오류 발생(잘못된 주소).  \n- HTTP"}
+{"event": "stream_token", "token": " POST 요청(`http://211.170.162.139:10934/api/generate`) → 실패, stderr에 타임아웃 기록만 존재.  \n\n따라서 현재 요청한 “GPU "}
+{"event": "stream_token", "token": "헬스체크”는 성공적으로 수행되지 않았으며, `GEN_OK`를 확인할 수 없습니다.  \n추가적인 네트워크 접근 가능 여부 점검 및 올바른 엔드포인트 재시도가 필요합니다."}
+{"event": "kg_status", "context": {"used": true, "hits": 5, "took_ms": 65, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": false, "anchor_id": "", "dedup": true, "error": ""}}
