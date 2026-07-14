@@ -1,0 +1,21 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.128 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.200 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.200 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.200 unreachable"}
+{"event": "skill_start", "skill": "file_manage", "params": {"action": "write", "path": "/tmp/exp_STU42.txt", "content": "situation=bruteforce from 203.0.113.5 action=block+notify result=contained tags=bruteforce,ssh\nsituation=phishing url in email action=sandbox+block result=contained tags=phishing\n", "target": "127.0.0.1"}, "attempt": 1}
+{"event": "skill_result", "skill": "file_manage", "success": true, "output": "", "attempt": 1}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.200 unreachable"}
+{"event": "precheck_fail", "skill": "file_manage", "message": "el34-bastion unreachable"}
+{"event": "stage", "stage": "validating"}
+{"event": "stream_token", "token": "**도구 실행 실패 보고**\n\n1️⃣ `shell` 명령을 `target='bastion'` 로 호출했지만 **precheck‑fail: 10.20.30.200 unreachabl"}
+{"event": "stream_token", "token": "e** 가 반환되었습니다.  \n2️⃣ 동일 명령을 `target='el34-bastion'` 로 재시도해도 **precheck‑fail: el34-bastion unreachabl"}
+{"event": "stream_token", "token": "e** 라는 오류가 발생했습니다.\n\n**가능한 원인**  \n- 대상 컨테이너 이름 혹은 IP 주소가 잘못 지정되었습니다 (예: 실제 bastion 컨테이너는 `el34-bastio"}
+{"event": "stream_token", "token": "n` 이지만, 내부 네트워크에서 직접 접근할 수 없는 상태일 수 있음).  \n- 현재 세션에 해당 컨테이너에 대한 **Docker Exec 권한**이 없거나, Docker 데몬이 "}
+{"event": "stream_token", "token": "외부(127.0.0.1)에서 차단된 경우입니다.\n\n**다음 시도 권장** (수동으로 실행해 보세요)  \n\n```bash\n# ① 정확한 컨테이너 이름 확인\ndocker ps | gr"}
+{"event": "stream_token", "token": "ep bastion\n\n# ② 현재 호스트에서 직접 exec 테스트 (bastion 컨테이너가 실제로 존재한다면)\ndocker exec -it el34-bastion /bin/bas"}
+{"event": "stream_token", "token": "h -c 'cat /tmp/exp_STU42.txt && \\\n   grep \"tags=.*bruteforce\" /tmp/exp_STU42.txt && echo EXPERIENCE_"}
+{"event": "stream_token", "token": "STORED || echo INCOMPLETE'\n```\n\n위 명령을 실행해 컨테이너가 정상 동작하는지, 파일이 존재하는지를 확인한 뒤 다시 시도하면 됩니다."}
+{"event": "kg_status", "context": {"used": true, "hits": 3, "took_ms": 31, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-63a8483a8bc9", "dedup": false, "error": ""}}
