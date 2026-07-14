@@ -1,0 +1,21 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.172 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "skill_start", "skill": "docker_manage", "params": {"action": "exec", "command": "stat -c \"%n %a\" /etc/shadow /etc/sudoers; S=$(stat -c \"%a\" /etc/shadow); case \"$S\" in 600|640) echo \"compliant=shadow_$S\";; *) echo \"gap=shadow_$S\";; esac", "container": "el34-web", "target": "127.0.0.1"}, "attempt": 1}
+{"event": "skill_result", "skill": "docker_manage", "success": true, "output": "/etc/shadow 640\n/etc/sudoers 440\ncompliant=shadow_640\n", "attempt": 1}
+{"event": "stream_token", "token": "**실행 결과 (★ 코드블록 필수)**\n```\n$ docker exec el34-web stat -c \"%n %a\" /etc/shadow /etc/sudoers; S=$(stat "}
+{"event": "stream_token", "token": "-c \"%a\" /etc/shadow); case \"$S\" in 600|640) echo \"compliant=shadow_$S\";; *) echo \"gap=shadow_$S\";; e"}
+{"event": "stream_token", "token": "sac\n/etc/shadow 640\n/etc/sudoers 440\ncompliant=shadow_640\n```\n\n**취약점/의도 입증**\n- `stat` 명령으로 `/etc/sha"}
+{"event": "stream_token", "token": "dow`와 `/etc/sudoers` 파일 권한을 8진수 형태로 확인했습니다.  \n- 결과:  \n  - **/etc/shadow** → `640` (owner read/write,"}
+{"event": "stream_token", "token": " group read) – CIS W04 기준인 **600 또는 640** 중 하나에 해당하므로 *compliant* 로 판단됩니다.  \n  - **/etc/sudoers** → "}
+{"event": "stream_token", "token": "`440` (owner read, group read) – CIS W04 권고값 **440**과 일치합니다.  \n- 따라서 현재 컨테이너(`el34‑web`)는 민감 파일 권한에 "}
+{"event": "stream_token", "token": "대해 **CIS W04 규정 준수** 상태이며, “shadow가 과도하게 열려 있어 해시가 유출될 위험”은 존재하지 않습니다.\n\n**방어 언급**\n- 권한 설정 외에도 다음 방어 "}
+{"event": "stream_token", "token": "조치를 적용하면 추가 보호를 강화할 수 있습니다:  \n  - **파일 접근 제어(ACL)** 를 사용해 필요 최소한의 사용자·그룹만 읽기 권한을 부여.  \n  - **SELinux"}
+{"event": "stream_token", "token": "/AppArmor** 프로파일을 활성화하여 `/etc/shadow`와 `/etc/sudoers`에 대한 비정상적인 접근 시도 차단.  \n  - 정기적인 **CIS‑benchmark"}
+{"event": "stream_token", "token": "s 자동 검증** 스크립트를 cron에 등록해 권한 변동 여부를 지속 모니터링.\n\n**한계·인지**\n- 이번 검사에서는 파일 권한만 확인했으며, 실제 파일 내용(예: 비밀번호 해시"}
+{"event": "stream_token", "token": ") 자체가 노출되지 않았는지는 검증하지 않았습니다.  \n- 컨테이너 내부에서 루트 권한을 가진 프로세스가 존재한다면, 권한이 `640`이라도 **root** 사용자라면 언제든지 읽"}
+{"event": "stream_token", "token": "을 수 있으므로, **컨테이너 런타임 보안(특권 제한, CapDrop 등)** 도 함께 검토해야 합니다.  \n- 파일 권한은 정적 설정이며, 악성 스크립트가 실행 중에 일시적으로 "}
+{"event": "stream_token", "token": "권한을 변경할 가능성이 있습니다. 따라서 **실시간 모니터링**과 **무결성 검사(inotify/Tripwire)** 를 병행하는 것이 바람직합니다."}
+{"event": "stage", "stage": "validating"}
+{"event": "kg_status", "context": {"used": true, "hits": 5, "took_ms": 33, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-9022748bf33b", "dedup": false, "error": ""}}
