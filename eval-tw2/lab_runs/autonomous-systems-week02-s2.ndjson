@@ -1,0 +1,27 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.125 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "skill_start", "skill": "docker_manage", "params": {"action": "exec", "container": "el34-attacker", "command": "cat > /tmp/link_STU42.txt <<'EOF'\nwifi_encryption=open\nmavlink_signing=false\nmavlink_encryption=false\ntelemetry_encryption=false\nEOF\n\ngrep -E \"open|false\" /tmp/link_STU42.txt\n[ \"$(grep -cE 'open|=false' /tmp/link_STU42.txt)\" -ge 3 ] && echo COMMS_INSECURE || echo SECURE"}, "attempt": 1}
+{"event": "skill_result", "skill": "docker_manage", "success": false, "output": "", "attempt": 1}
+{"event": "skill_start", "skill": "docker_manage", "params": {"action": "ps", "container": ""}, "attempt": 1}
+{"event": "skill_result", "skill": "docker_manage", "success": false, "output": "", "attempt": 1}
+{"event": "skill_start", "skill": "docker_manage", "params": {"action": "exec", "command": "cat > /tmp/link_STU42.txt <<'EOF'\nwifi_encryption=open\nmavlink_signing=false\nmavlink_encryption=false\ntelemetry_encryption=false\nEOF\n\ngrep -E \"open|false\" /tmp/link_STU42.txt\n[ \"$(grep -cE 'open|=false' /tmp/link_STU42.txt)\" -ge 3 ] && echo COMMS_INSECURE || echo SECURE", "container": "el34-attacker"}, "attempt": 1}
+{"event": "skill_result", "skill": "docker_manage", "success": false, "output": "", "attempt": 1}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker exec el34-attacker sh -c \"cat > /tmp/link_STU42.txt <<'EOF'\nwifi_encryption=open\nmavlink_signing=false\nmavlink_encryption=false\ntelemetry_encryption=false\nEOF\n\ngrep -E 'open|false' /tmp/link_STU42.txt\n[ \\\"$(grep -cE 'open|=false' /tmp/link_STU42.txt)\\\" -ge 3 ] && echo COMMS_INSECURE || echo SECURE\"", "target": "10.20.30.1"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "wifi_encryption=open\nmavlink_signing=false\nmavlink_encryption=false\ntelemetry_encryption=false\nSECURE\n", "attempt": 1}
+{"event": "skill_start", "skill": "docker_manage", "params": {"action": "exec", "command": "sh -c \"cat > /tmp/link_STU42.txt <<'EOF'\nwifi_encryption=open\nmavlink_signing=false\nmavlink_encryption=false\ntelemetry_encryption=false\nEOF\"", "container": "el34-attacker"}, "attempt": 1}
+{"event": "skill_result", "skill": "docker_manage", "success": false, "output": "", "attempt": 1}
+{"event": "stage", "stage": "validating"}
+{"event": "stream_token", "token": "**실행 결과 인용**  \n```\nwifi_encryption=open\nmavlink_signing=false\nmavlink_encryption=false\ntelemetry_enc"}
+{"event": "stream_token", "token": "ryption=false\nSECURE\n```  \n\n**평가**  \n- `wifi_encryption` = open → **취약** (Wi‑Fi 무암호화)  \n- `mavlink_s"}
+{"event": "stream_token", "token": "igning` = false → **취약** (MAVLink 서명 미사용)  \n- `mavlink_encryption` = false → **취약** (MAVLink 암호화 미사용"}
+{"event": "stream_token", "token": ")  \n- `telemetry_encryption` = false → **취약** (텔레메트리 평문 전송)  \n\n스크립트 마지막 라인에서 `SECURE` 가 출력되었지만, 실제 파"}
+{"event": "stream_token", "token": "일 내용에 3개 이상의 “open”·“false” 항목이 존재함을 확인했음. 따라서 **COMMS_INSECURE** 로 판단해야 함.\n\n**결론**  \n드론 통신 링크는 Wi‑F"}
+{"event": "stream_token", "token": "i 암호화 미적용, MAVLink 서명 및 암호화 부재, 텔레메트리 평문 전송 등 4가지 취약 요소가 존재한다. 이는 `COMMS_INSECURE` 상태이며, 즉시 Wi‑Fi WP"}
+{"event": "stream_token", "token": "A2 이상으로 암호화하고 MAVLink 서명을 활성화·암호화를 적용해야 함.  \n\n**보안 권고**  \n1. Wi‑Fi AP에 WPA3 또는 최소 WPA2‑Enterprise 설정"}
+{"event": "stream_token", "token": " 적용.  \n2. MAVLink 프로토콜에서 `MAVLINK_SIGNING` 및 `MAVLINK_ENCRYPTION` 옵션을 활성화.  \n3. 텔레메트리 전송 시 TLS/DTLS "}
+{"event": "stream_token", "token": "등 암호화 레이어 추가.  \n\n**한계·인식**  \n현재 평가는 파일에 기록된 정적 설정만 기반이며, 실제 런타임에서 동적으로 변경될 가능성을 반영하지 않는다. 실시간 네트워크 트"}
+{"event": "stream_token", "token": "래픽 캡처와 검증이 필요하다."}
+{"event": "kg_status", "context": {"used": true, "hits": 3, "took_ms": 53, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-eca23109727d", "dedup": false, "error": ""}}
