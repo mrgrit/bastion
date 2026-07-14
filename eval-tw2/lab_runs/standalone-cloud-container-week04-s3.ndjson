@@ -1,0 +1,122 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.15 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker inspect el34-web --format 'CapAdd={{.HostConfig.CapAdd}} CapDrop={{.HostConfig.CapDrop}}'; D=$(docker inspect el34-web --format '{{.HostConfig.CapDrop}}'); echo \"$D\" | grep -qiE 'ALL|CAP_' && echo \"compliant=caps_dropped\" || echo \"gap=no_capdrop\"", "target": "10.20.30.80"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "CapAdd=[CAP_NET_ADMIN] CapDrop=[]\ngap=no_capdrop\n", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "docker run --security-opt seccomp=default.json"}
+{"event": "stream_token", "token": "**GOAL = Capability 점검 (CIS 5.3)**  \n✅ `gap=no_capdrop` 가 출력되었으며, 이는 **CapDrop 이 비어 있어 기본 capability"}
+{"event": "stream_token", "token": " 전부가 유지됨 → CIS 5.3 위반**임을 의미합니다.\n\n---\n\n### ① 실행 결과\n```bash\n$ docker inspect el34-web --format 'CapAd"}
+{"event": "stream_token", "token": "d={{.HostConfig.CapAdd}} CapDrop={{.HostConfig.CapDrop}}'; \\\nD=$(docker inspect el34-web --format '{"}
+{"event": "stream_token", "token": "{.HostConfig.CapDrop}}'); \\\necho \"$D\" | grep -qiE 'ALL|CAP_' && echo \"compliant=caps_dropped\" || ech"}
+{"event": "stream_token", "token": "o \"gap=no_capdrop\"\nCapAdd=[CAP_NET_ADMIN] CapDrop=[]\ngap=no_capdrop\n```\n\n---\n\n### ② 취약점/의도 입증\n| 항목 |"}
+{"event": "stream_token", "token": " 내용 |\n|------|------|\n| **CapAdd** | `[CAP_NET_ADMIN]` – 추가된 권한 하나만 존재 (네트워크 관리) |\n| **CapDrop** | `"}
+{"event": "stream_token", "token": "[]` – 제거된 capability 가 전혀 없음 |\n| **검증 결과** | `gap=no_capdrop` → 기본 Linux capability 전체가 컨테이너에 남아 있음 "}
+{"event": "stream_token", "token": "|\n| **CIS 5.3 위반 근거** | “모두 drop 후 필요한 것만 add” 권고를 따르지 않음 (CapDrop 비어있음) |\n\n---\n\n### ③ 정량 수치\n- **총 C"}
+{"event": "stream_token", "token": "apAdd 개수:** `1`  \n- **총 CapDrop 개수:** `0`  \n- **Compliance 상태:** ❌ 비준수 (`gap=no_capdrop`)  \n\n---\n\n##"}
+{"event": "stream_token", "token": "# ④ 표준 매핑\n| 표준 | 항목 |\n|------|------|\n| **CIS Docker Benchmark** | 5.3 – “Drop all capabilities and "}
+{"event": "stream_token", "token": "add only those required” |\n| **MITRE ATT&CK (Container)** | T1609 *Container Administration Command*"}
+{"event": "stream_token", "token": " (과다 권한으로 인한 탈취 위험) |\n| **Docker Security Best‑Practice** | Use `--cap-drop=ALL` or explicit whiteli"}
+{"event": "stream_token", "token": "st |\n\n---\n\n### ⑤ 결론·권고\n1. **Capability 최소화 적용** – 컨테이너 실행 시 반드시 모든 기본 capability 를 제거하고 필요한 것만 추가합니다"}
+{"event": "stream_token", "token": ". 예시:  \n   ```bash\n   docker run --rm \\\n     --cap-drop=ALL \\\n     --cap-add=NET_ADMIN \\   # 실제 필요 시"}
+{"event": "stream_token", "token": "에만\n     el34-web\n   ```\n2. **Docker‑Compose / Kubernetes 보안 정책** – `securityContext.capabilities.dro"}
+{"event": "stream_token", "token": "p: [\"ALL\"]` 와 같이 선언적으로 적용해 재배포합니다.\n3. **추가 방어 레이어** –  \n   - **Seccomp 프로파일**을 사용해 시스템 콜 제한 (`docker"}
+{"event": "stream_token", "token": " run --security-opt seccomp=default.json`).  \n   - **AppArmor/SELinux** 프로파일 적용으로 파일·네트워크 접근 제어 강화. "}
+{"event": "stream_token", "token": " \n\n---\n\n### ⑥ 한계·인식\n- 현재 검증은 **컨테이너 정의(이미지 실행 옵션)만** 확인했으며, 런타임에 `--privileged` 로 재시작되거나 다른 관리자가 수동으"}
+{"event": "stream_token", "token": "로 capability 를 추가할 경우는 탐지되지 않을 수 있습니다.  \n- 실제 서비스 운영 중에는 CI/CD 파이프라인에서 **보안 정책 검증 단계**를 삽입해 지속적으로 위 "}
+{"event": "stream_token", "token": "규칙을 강제해야 합니다.  \n\n--- \n\n**GOAL 충족됨:** `el34-web` 컨테이너의 capability 설정을 확인했으며, CIS 5.3 비준수(`gap=no_capd"}
+{"event": "stream_token", "token": "rop`)임을 입증하고 구체적인 시정 조치를 제시했습니다."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker run --security-opt seccomp=default.json", "target": "10.20.30.80"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "docker run --security-opt seccomp=default.json"}
+{"event": "stream_token", "token": "**GOAL = Capability 점검 (CIS 5.3)**  \n✅ `gap=no_capdrop` 가 출력되었으며, 이는 **CapDrop 이 비어 있어 기본 capability"}
+{"event": "stream_token", "token": " 전부가 유지됨 → CIS 5.3 위반**임을 의미합니다.\n\n---\n\n### ① 실행 결과\n```bash\n$ docker inspect el34-web --format 'CapAd"}
+{"event": "stream_token", "token": "d={{.HostConfig.CapAdd}} CapDrop={{.HostConfig.CapDrop}}'; \\\nD=$(docker inspect el34-web --format '{"}
+{"event": "stream_token", "token": "{.HostConfig.CapDrop}}'); \\\necho \"$D\" | grep -qiE 'ALL|CAP_' && echo \"compliant=caps_dropped\" || ech"}
+{"event": "stream_token", "token": "o \"gap=no_capdrop\"\nCapAdd=[CAP_NET_ADMIN] CapDrop=[]\ngap=no_capdrop\n```\n\n---\n\n### ② 취약점/의도 입증\n| 항목 |"}
+{"event": "stream_token", "token": " 내용 |\n|------|------|\n| **CapAdd** | `[CAP_NET_ADMIN]` – 추가된 권한 하나만 존재 (네트워크 관리) |\n| **CapDrop** | `"}
+{"event": "stream_token", "token": "[]` – 제거된 capability 가 전혀 없음 |\n| **검증 결과** | `gap=no_capdrop` → 기본 Linux capability 전체가 컨테이너에 남아 있음 "}
+{"event": "stream_token", "token": "|\n| **CIS 5.3 위반 근거** | “모두 drop 후 필요한 것만 add” 권고를 따르지 않음 (CapDrop 비어있음) |\n\n---\n\n### ③ 정량 수치\n- **총 C"}
+{"event": "stream_token", "token": "apAdd 개수:** `1`  \n- **총 CapDrop 개수:** `0`  \n- **Compliance 상태:** ❌ 비준수 (`gap=no_capdrop`)  \n\n---\n\n##"}
+{"event": "stream_token", "token": "# ④ 표준 매핑\n| 표준 | 항목 |\n|------|------|\n| **CIS Docker Benchmark** | 5.3 – “Drop all capabilities and "}
+{"event": "stream_token", "token": "add only those required” |\n| **MITRE ATT&CK (Container)** | T1609 *Container Administration Command*"}
+{"event": "stream_token", "token": " (과다 권한으로 인한 탈취 위험) |\n| **Docker Security Best‑Practice** | Use `--cap-drop=ALL` or explicit whiteli"}
+{"event": "stream_token", "token": "st |\n\n---\n\n### ⑤ 결론·권고\n1. **Capability 최소화 적용** – 컨테이너 실행 시 반드시 모든 기본 capability 를 제거하고 필요한 것만 추가합니다"}
+{"event": "stream_token", "token": ". 예시:  \n   ```bash\n   docker run --rm \\\n     --cap-drop=ALL \\\n     --cap-add=NET_ADMIN \\   # 실제 필요 시"}
+{"event": "stream_token", "token": "에만\n     el34-web\n   ```\n2. **Docker‑Compose / Kubernetes 보안 정책** – `securityContext.capabilities.dro"}
+{"event": "stream_token", "token": "p: [\"ALL\"]` 와 같이 선언적으로 적용해 재배포합니다.\n3. **추가 방어 레이어** –  \n   - **Seccomp 프로파일**을 사용해 시스템 콜 제한 (`docker"}
+{"event": "stream_token", "token": " run --security-opt seccomp=default.json`).  \n   - **AppArmor/SELinux** 프로파일 적용으로 파일·네트워크 접근 제어 강화.\n"}
+{"event": "stream_token", "token": "\n---\n\n### ⑥ 한계·인식\n- 현재 검증은 **컨테이너 정의(이미지 실행 옵션)만** 확인했으며, 런타임에 `--privileged` 로 재시작되거나 다른 관리자가 수동으로 "}
+{"event": "stream_token", "token": "capability 를 추가할 경우는 탐지되지 않을 수 있습니다.  \n- 실제 서비스 운영 중에는 CI/CD 파이프라인에서 **보안 정책 검증 단계**를 삽입해 지속적으로 위 규칙"}
+{"event": "stream_token", "token": "을 강제해야 합니다.\n\n---\n\n**GOAL 충족됨:** `el34-web` 컨테이너의 capability 설정을 확인했으며, CIS 5.3 비준수(`gap=no_capdrop`)"}
+{"event": "stream_token", "token": "임을 입증하고 구체적인 시정 조치를 제시했습니다."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker run --security-opt seccomp=default.json", "target": "10.20.30.80"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "docker run --rm \\"}
+{"event": "stream_token", "token": "**GOAL = Capability 점검 (CIS 5.3)** – 완료 ✅  \n\n---  \n\n### ① 실행 결과  \n```bash\n$ docker inspect el34-web "}
+{"event": "stream_token", "token": "--format 'CapAdd={{.HostConfig.CapAdd}} CapDrop={{.HostConfig.CapDrop}}'; \\\nD=$(docker inspect el34-"}
+{"event": "stream_token", "token": "web --format '{{.HostConfig.CapDrop}}'); \\\necho \"$D\" | grep -qiE 'ALL|CAP_' && echo \"compliant=caps_"}
+{"event": "stream_token", "token": "dropped\" || echo \"gap=no_capdrop\"\nCapAdd=[CAP_NET_ADMIN] CapDrop=[]\ngap=no_capdrop\n```  \n\n### ② 취약점/"}
+{"event": "stream_token", "token": "의도 입증  \n- **CapAdd**: `[CAP_NET_ADMIN]` – 하나만 추가된 권한.  \n- **CapDrop**: `[]` – 제거된 capability 가 전혀 없음"}
+{"event": "stream_token", "token": " → 기본 Linux capability 전체가 컨테이너에 남아 있음.  \n- **검증 결과**: `gap=no_capdrop` → CIS 5.3 “모두 drop 후 필요한 것만 "}
+{"event": "stream_token", "token": "add” 권고 위반.  \n\n### ③ 정량 수치  \n- CapAdd 개수: **1**  \n- CapDrop 개수: **0**  \n- Compliance 상태: ❌ 비준수 (`gap"}
+{"event": "stream_token", "token": "=no_capdrop`)  \n\n### ④ 표준 매핑  \n| 표준 | 항목 |\n|------|------|\n| CIS Docker Benchmark | 5.3 – “Drop all "}
+{"event": "stream_token", "token": "capabilities and add only those required” |\n| MITRE ATT&CK (Container) | T1609 *Container Administra"}
+{"event": "stream_token", "token": "tion Command* (과다 권한으로 인한 탈취 위험) |\n| Docker Security Best‑Practice | Use `--cap-drop=ALL` or explici"}
+{"event": "stream_token", "token": "t whitelist |\n\n### ⑤ 결론·권고  \n1. **Capability 최소화 적용** – 컨테이너 실행 시 반드시 모든 기본 capability 를 제거하고 필요한 것만"}
+{"event": "stream_token", "token": " 추가한다. 예시:  \n   ```bash\n   docker run --rm \\\n     --cap-drop=ALL \\\n     --cap-add=NET_ADMIN \\   # 실제"}
+{"event": "stream_token", "token": " 필요 시에만\n     el34-web\n   ```\n2. **CI/CD / 오케스트레이션 정책** – Docker‑Compose 혹은 Kubernetes 매니페스트에 `securi"}
+{"event": "stream_token", "token": "tyContext.capabilities.drop: [\"ALL\"]` 를 선언적으로 적용하고 재배포한다.  \n3. **추가 방어 레이어**  \n   - **Seccomp 프로파일**"}
+{"event": "stream_token", "token": " 사용 (`--security-opt seccomp=default.json`) 로 시스템 콜 제한.  \n   - **AppArmor / SELinux** 프로파일 적용으로 파일·네"}
+{"event": "stream_token", "token": "트워크 접근 제어 강화.  \n\n### ⑥ 한계·인식  \n- 현재 검증은 컨테이너 정의(이미지 실행 옵션)만 확인했으며, 런타임에 `--privileged` 로 재시작되거나 관리자가"}
+{"event": "stream_token", "token": " 수동으로 capability 를 추가할 경우는 탐지되지 않는다.  \n- 운영 환경에서는 CI/CD 파이프라인에 보안 정책 검증 단계를 삽입해 지속적으로 위 규칙을 강제해야 한다."}
+{"event": "stream_token", "token": "  \n\n---  \n\n**GOAL 충족됨:** `el34-web` 컨테이너의 capability 설정을 확인했으며, CIS 5.3 비준수(`gap=no_capdrop`)임을 입증하고"}
+{"event": "stream_token", "token": " 구체적인 시정 조치를 제시했습니다."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker run --rm \\", "target": "10.20.30.80"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "docker run --rm \\"}
+{"event": "stream_token", "token": "**GOAL = Capability 점검 (CIS 5.3)** – 완료 ✅  \n\n---  \n\n### ① 실행 결과  \n```bash\n$ docker inspect el34-web "}
+{"event": "stream_token", "token": "--format 'CapAdd={{.HostConfig.CapAdd}} CapDrop={{.HostConfig.CapDrop}}'; \\\nD=$(docker inspect el34-"}
+{"event": "stream_token", "token": "web --format '{{.HostConfig.CapDrop}}'); \\\necho \"$D\" | grep -qiE 'ALL|CAP_' && echo \"compliant=caps_"}
+{"event": "stream_token", "token": "dropped\" || echo \"gap=no_capdrop\"\nCapAdd=[CAP_NET_ADMIN] CapDrop=[]\ngap=no_capdrop\n```  \n\n### ② 취약점/"}
+{"event": "stream_token", "token": "의도 입증  \n- **CapAdd**: `[CAP_NET_ADMIN]` – 하나만 추가된 권한.  \n- **CapDrop**: `[]` – 제거된 capability 가 전혀 없음"}
+{"event": "stream_token", "token": " → 기본 Linux capability 전체가 컨테이너에 남아 있음.  \n- **검증 결과**: `gap=no_capdrop` → CIS 5.3 “모두 drop 후 필요한 것만 "}
+{"event": "stream_token", "token": "add” 권고 위반.  \n\n### ③ 정량 수치  \n- CapAdd 개수: **1**  \n- CapDrop 개수: **0**  \n- Compliance 상태: ❌ 비준수 (`gap"}
+{"event": "stream_token", "token": "=no_capdrop`)  \n\n### ④ 표준 매핑  \n| 표준 | 항목 |\n|------|------|\n| CIS Docker Benchmark | 5.3 – “Drop all "}
+{"event": "stream_token", "token": "capabilities and add only those required” |\n| MITRE ATT&CK (Container) | T1609 *Container Administra"}
+{"event": "stream_token", "token": "tion Command* (과다 권한으로 인한 탈취 위험) |\n| Docker Security Best‑Practice | Use `--cap-drop=ALL` or explici"}
+{"event": "stream_token", "token": "t whitelist |\n\n### ⑤ 결론·권고  \n1. **Capability 최소화 적용** – 컨테이너 실행 시 반드시 모든 기본 capability 를 제거하고 필요한 것만"}
+{"event": "stream_token", "token": " 추가한다. 예시:  \n   ```bash\n   docker run --rm \\\n     --cap-drop=ALL \\\n     --cap-add=NET_ADMIN \\   # 실제"}
+{"event": "stream_token", "token": " 필요 시에만\n     el34-web\n   ```\n2. **CI/CD / 오케스트레이션 정책** – Docker‑Compose 혹은 Kubernetes 매니페스트에 `securi"}
+{"event": "stream_token", "token": "tyContext.capabilities.drop: [\"ALL\"]` 를 선언적으로 적용하고 재배포한다.  \n3. **추가 방어 레이어**  \n   - **Seccomp 프로파일**"}
+{"event": "stream_token", "token": " 사용 (`--security-opt seccomp=default.json`) 로 시스템 콜 제한.  \n   - **AppArmor / SELinux** 프로파일 적용으로 파일·네"}
+{"event": "stream_token", "token": "트워크 접근 제어 강화.  \n\n### ⑥ 한계·인식  \n- 현재 검증은 컨테이너 정의(이미지 실행 옵션)만 확인했으며, 런타임에 `--privileged` 로 재시작되거나 관리자가"}
+{"event": "stream_token", "token": " 수동으로 capability 를 추가할 경우는 탐지되지 않는다.  \n- 운영 환경에서는 CI/CD 파이프라인에 보안 정책 검증 단계를 삽입해 지속적으로 위 규칙을 강제해야 한다."}
+{"event": "stream_token", "token": "  \n\n---  \n\n**GOAL 충족됨:** `el34-web` 컨테이너의 capability 설정을 확인했으며, CIS 5.3 비준수(`gap=no_capdrop`)임을 입증하고"}
+{"event": "stream_token", "token": " 구체적인 시정 조치를 제시했습니다."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker run --rm \\", "target": "10.20.30.80"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "docker run --rm \\"}
+{"event": "stream_token", "token": "**GOAL = Capability 점검 (CIS 5.3)** – 완료 ✅  \n\n---  \n\n### ① 실행 결과  \n```bash\n$ docker inspect el34-web "}
+{"event": "stream_token", "token": "--format 'CapAdd={{.HostConfig.CapAdd}} CapDrop={{.HostConfig.CapDrop}}'; \\\nD=$(docker inspect el34-"}
+{"event": "stream_token", "token": "web --format '{{.HostConfig.CapDrop}}'); \\\necho \"$D\" | grep -qiE 'ALL|CAP_' && echo \"compliant=caps_"}
+{"event": "stream_token", "token": "dropped\" || echo \"gap=no_capdrop\"\nCapAdd=[CAP_NET_ADMIN] CapDrop=[]\ngap=no_capdrop\n```  \n\n### ② 취약점/"}
+{"event": "stream_token", "token": "의도 입증  \n- **CapAdd**: `[CAP_NET_ADMIN]` – 하나만 추가된 권한.  \n- **CapDrop**: `[]` – 제거된 capability 가 전혀 없음"}
+{"event": "stream_token", "token": " → 기본 Linux capability 전체가 컨테이너에 남아 있음.  \n- **검증 결과**: `gap=no_capdrop` → CIS 5.3 “모두 drop 후 필요한 것만 "}
+{"event": "stream_token", "token": "add” 권고 위반.  \n\n### ③ 정량 수치  \n- CapAdd 개수: **1**  \n- CapDrop 개수: **0**  \n- Compliance 상태: ❌ 비준수 (`gap"}
+{"event": "stream_token", "token": "=no_capdrop`)  \n\n### ④ 표준 매핑  \n| 표준 | 항목 |\n|------|------|\n| CIS Docker Benchmark | 5.3 – “Drop all "}
+{"event": "stream_token", "token": "capabilities and add only those required” |\n| MITRE ATT&CK (Container) | T1609 *Container Administra"}
+{"event": "stream_token", "token": "tion Command* (과다 권한으로 인한 탈취 위험) |\n| Docker Security Best‑Practice | Use `--cap-drop=ALL` or explici"}
+{"event": "stream_token", "token": "t whitelist |\n\n### ⑤ 결론·권고  \n1. **Capability 최소화 적용** – 컨테이너 실행 시 반드시 모든 기본 capability 를 제거하고 필요한 것만"}
+{"event": "stream_token", "token": " 추가한다. 예시:  \n   ```bash\n   docker run --rm \\\n     --cap-drop=ALL \\\n     --cap-add=NET_ADMIN \\   # 실제"}
+{"event": "stream_token", "token": " 필요 시에만\n     el34-web\n   ```\n2. **CI/CD / 오케스트레이션 정책** – Docker‑Compose 혹은 Kubernetes 매니페스트에 `securi"}
+{"event": "stream_token", "token": "tyContext.capabilities.drop: [\"ALL\"]` 를 선언적으로 적용하고 재배포한다.  \n3. **추가 방어 레이어**  \n   - **Seccomp 프로파일**"}
+{"event": "stream_token", "token": " 사용 (`--security-opt seccomp=default.json`) 로 시스템 콜 제한.  \n   - **AppArmor / SELinux** 프로파일 적용으로 파일·네"}
+{"event": "stream_token", "token": "트워크 접근 제어 강화.  \n\n### ⑥ 한계·인식  \n- 현재 검증은 컨테이너 정의(이미지 실행 옵션)만 확인했으며, 런타임에 `--privileged` 로 재시작되거나 관리자가"}
+{"event": "stream_token", "token": " 수동으로 capability 를 추가할 경우는 탐지되지 않는다.  \n- 운영 환경에서는 CI/CD 파이프라인에 보안 정책 검증 단계를 삽입해 지속적으로 위 규칙을 강제해야 한다."}
+{"event": "stream_token", "token": "  \n\n---  \n\n**GOAL 충족됨:** `el34-web` 컨테이너의 capability 설정을 확인했으며, CIS 5.3 비준수(`gap=no_capdrop`)임을 입증하고"}
+{"event": "stream_token", "token": " 구체적인 시정 조치를 제시했습니다."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker run --rm \\", "target": "10.20.30.80"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "stage", "stage": "validating"}
+{"event": "kg_status", "context": {"used": true, "hits": 1, "took_ms": 59, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-4ed7a224401e", "dedup": false, "error": ""}}
