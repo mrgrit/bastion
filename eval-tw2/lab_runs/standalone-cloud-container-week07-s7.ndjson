@@ -1,0 +1,30 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.176 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.80 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.80 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.80 unreachable"}
+{"event": "skill_start", "skill": "probe_host", "params": {"target": "127.0.0.1"}, "attempt": 1}
+{"event": "skill_result", "skill": "probe_host", "success": true, "output": "=== UPTIME ===\n 11:55:35 up 14 days,  5:28,  0 users,  load average: 29.41, 30.81, 31.20\n=== CPU ===\n%Cpu(s): 64.1 us, 34.4 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  1.6 si,  0.0 st\n=== DISK ===\nFilesystem      Size  Used Avail Use% Mounted on\noverlay         468G  161G  284G  37% /\n=== MEMORY ===\n               total        used        free      shared  buff/cache   available\nMem:            15Gi        10Gi       373Mi       778Mi       4.8Gi       4.0Gi\nSwap:          2.0Gi       2.0Gi       0.0Ki\n=== FAILED SERVICES ===\n", "attempt": 1}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.80 unreachable"}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "docker network create --internal"}
+{"event": "stream_token", "token": "**실행 결과 (★ 코드블록)**  \n```text\n=== UPTIME ===\n 11:55:35 up 14 days,  5:28,  0 users,  load average: 29"}
+{"event": "stream_token", "token": ".41, 30.81, 31.20\n=== CPU ===\n%Cpu(s): 64.1 us, 34.4 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  1.6 si"}
+{"event": "stream_token", "token": ",  0.0 st\n=== DISK ===\nFilesystem      Size  Used Avail Use% Mounted on\noverlay         468G  161G  "}
+{"event": "stream_token", "token": "284G  37% /\n=== MEMORY ===\n               total        used        free      shared  buff/cache   av"}
+{"event": "stream_token", "token": "ailable\nMem:            15Gi        10Gi       373Mi       778Mi       4.8Gi       4.0Gi\nSwap:      "}
+{"event": "stream_token", "token": "    2.0Gi       2.0Gi       0.0Ki\n=== FAILED SERVICES ===\n```\n\n**네트워크 방어 정리**\n\n| # | 방어 원칙 | 핵심 내용 |"}
+{"event": "stream_token", "token": " 기대 효과 |\n|---|-----------|------------|-----------|\n|1️⃣| **네트워크 분리 (Segmentation)** | - 역할별 네트워크 ti"}
+{"event": "stream_token", "token": "er 구성: <br>  * `ext` (외부) → `pipe` → `dmz` (Web/IPS/SIEM) → `int` (내부 애플리케이션).<br> - 각 컨테이너는 최소 하나의 "}
+{"event": "stream_token", "token": "트러스트 영역에만 속하도록 설계.<br> - 서로 다른 tier 간 라우팅은 방화벽(nftables)에서 명시적으로 허용된 흐름만 통과. | 공격자가 한 컨테이너를 장악해도 인접 "}
+{"event": "stream_token", "token": "tier 로 이동 제한 → **수평 확산 차단** |\n|2️⃣| **최소 노출 (Minimal Exposure)** | - 외부에 공개해야 하는 서비스(예: 웹)만 포트 `80/4"}
+{"event": "stream_token", "token": "43`을 `publish`.<br> - 내부 DB·시크릿 저장소는 호스트 포트 매핑 없이 전용 `int` 네트워크에만 존재.<br> - 불필요한 `host`‑network 모드 사"}
+{"event": "stream_token", "token": "용 금지. | 공격 표면 축소 → **취약점 스캔·포트 탐색 난이도 상승** |\n|3️⃣| **Host 네트워크 금지 & 컨테이너 간 통신 정책** | - `--net=host` "}
+{"event": "stream_token", "token": "옵션 절대 사용하지 않음.<br> - 기본 `bridge` 모드에서 `docker network create --internal` 로 내부 전용 네트워크 생성 후, 필요한 서비스만"}
+{"event": "stream_token", "token": " `--attachable` 허용.<br> - East‑West 트래픽은 방화벽 정책(`nftables`)으로 **허용된 흐름만** 통과하도록 제한. | 호스트와 컨테이너 간 직접"}
+{"event": "stream_token", "token": " 접근 차단 → **컨테이너 탈출·호스트 침해 위험 감소** |\n|4️⃣| **DB·시크릿 저장소 비공개** | - DB, 비밀키,"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker network create --internal", "target": "10.20.30.80"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "stage", "stage": "validating"}
+{"event": "kg_status", "context": {"used": true, "hits": 3, "took_ms": 74, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-495e0e4dd249", "dedup": false, "error": ""}}
