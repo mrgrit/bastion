@@ -1,0 +1,92 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.146 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "docker inspect el34-web"}
+{"event": "stream_token", "token": "{\n  \"GOAL\": \"Check el34-web Docker image EXPOSE ports for presence of SSH (22/tcp).\",\n  \"SUCCESS\": \""}
+{"event": "stream_token", "token": "Output contains '22/tcp' indicating SSH is exposed.\",\n  \"TODO\": [\n    \"Run docker inspect on el34-we"}
+{"event": "stream_token", "token": "b to retrieve .Config.ExposedPorts.\",\n    \"Display the raw output for verification.\"\n  ],\n  \"tool_ca"}
+{"event": "stream_token", "token": "lls\": [\n    {\n      \"name\": \"shell\",\n      \"arguments\": {\n        \"command\": \"docker inspect el34-we"}
+{"event": "stream_token", "token": "b --format 'ports={{.Config.ExposedPorts}}'\",\n        \"target\": \"bastion\"\n      }\n    }\n  ]\n}"}
+{"event": "stage", "stage": "executing"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker inspect el34-web", "target": "10.20.30.80"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "[\n    {\n        \"Id\": \"3209ee9c62a5ba0c6dee0e1c200f4516d9e7b6930b3ffb01fa6caf1ecda2f4d7\",\n        \"Created\": \"2026-07-01T11:34:10.914664744Z\",\n        \"Path\": \"/entrypoint.sh\",\n        \"Args\": [],\n        \"State\": {\n            \"Status\": \"running\",\n            \"Running\": true,\n            \"Paused\": false,\n            \"Restarting\": false,\n            \"OOMKilled\": false,\n            \"Dead\": false,\n            \"Pid\": 2262226,\n            \"ExitCode\": 0,\n            \"Error\": \"\",\n            \"StartedAt\": \"2026-07-04T05:03:57.848539447Z\",\n            \"FinishedAt\": \"2026-07-04T05:03:57.553039179Z\"\n        },\n        \"Image\": \"sha256:b1338691bd877116b4cf398fd74681cdaa0449c58bb85ea9b623403200167bac\",\n        \"ResolvConfPath\": \"/var/lib/docker/containers/3209ee9c62a5ba0c6dee0e1c200f4516d9e7b6930b3ffb01fa6caf1ecda2f4d7/resolv.conf\",\n        \"HostnamePath\": \"/var/lib/docker/containers/3209ee9c62a5ba0c6dee0e1c200f4516d9e7b6930b3ffb01fa6caf1ecda2f4d7/hostname\",\n        \"HostsPath\": \"/var/lib/docker/containers/3209ee9c62a5ba0c6dee0e1c200f4516d9e7b6930b3ffb01fa6caf1ecda2f4d7/hosts\",\n        \"LogPath\": \"/var/lib/docker/containers/3209ee9c62a5ba0c6dee0e1c200f4516d9e7b6930b3ffb01fa6caf1ecda2f4d7/3209ee9c62a5ba0c6dee0e1c200f4516d9e7b6930b3ffb01fa6caf1ecda2f4d7-json.log\",\n        \"Name\": \"/el34-web\",\n        \"RestartCount\": 0,\n        \"Driver\": \"overlayfs\",\n        \"Platform\": \"linux\",\n        \"MountLabel\": \"\",\n        \"ProcessLabel\": \"\",\n        \"AppArmorProfile\": \"docker-default\",\n        \"ExecIDs\": [\n            \"008c47d85454033d16b35d2767a64aa15fab4273ab66e719e4506484ee4a15ab\",\n            \"42baeb03921f954864389b25e7894452ddfa92a625e2a13c3bc8446e927aca65\",\n            \"6a4bd48a538fe137a2cc7f10c49f4552c8d6ab7e55907b21c9021ab2c339d0a4\",\n            \"92b7d00c035f730798e2980610dada918de05bbc0b2d94530e943f672a2d7656\",\n            \"25991a2a9ecb609a69e7abe7e650ef78103256053660c61fdd19868c4cef1d1b\",\n            \"391e84b17c326c28961e4a2880cb49ae8d63abc397797270a57fb8275b96ed3e\",\n            \"9ce5f6a66302bd00adb9c3ac557b4431345887e2856accf85651ec2d7875374d\",\n            \"e3c3f543e4e2d413b1e75fe2028fe014554861124923d29c6409a43cccf222f7\",\n            \"e1d8be827afbdd7877e33daea1a1bdd3afd1e948fc7e5842bb41375aa75d1683\",\n            \"898c76f027afc26b71a0f275ffcc6dad56c6d2bb8fc582e2df28bd4c286fae1c\",\n            \"72bb61c1ff9de0bb5762191317a99f8b283deb50a82b01d0180b7a661f396c98\",\n            \"d371d5c919f0d5a785af93926e25717aacef2537bf7004cccb7b3e89a44ea1fe\",\n            \"79463456906b8ef7fe98", "attempt": 1}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker inspect el34-web --format '{{json .Config.ExposedPorts}}'", "target": "10.20.30.80"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "{\"22/tcp\":{},\"443/tcp\":{},\"80/tcp\":{},\"8080/tcp\":{}}\n", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "docker run -p"}
+{"event": "stream_token", "token": "**GOAL 충족됨:** el34‑web Docker 이미지에 `EXPOSE 22/tcp` 가 선언되어 있어, SSH 서비스가 이미지 레이어에 포함될 가능성이 있음을 확인했습니다."}
+{"event": "stream_token", "token": "  \n\n---\n\n### 1️⃣ 실행 결과 (★ 코드블록)\n\n```bash\n$ docker inspect el34-web --format '{{json .Config.ExposedP"}
+{"event": "stream_token", "token": "orts}}'\n{\"22/tcp\":{},\"443/tcp\":{},\"80/tcp\":{},\"8080/tcp\":{}}\n```\n\n*출력에 `22/tcp` 가 포함되어 있음 → SSH 포트가 "}
+{"event": "stream_token", "token": "이미지 메타데이터에 선언됨.*\n\n---\n\n### 2️⃣ 취약점 / 의도 입증  \n\n| 검증 단계 | 관찰 내용 | 성공 기준 |\n|-----------|----------|----"}
+{"event": "stream_token", "token": "--------|\n| **EXPOSE 메타데이터 조회** | `{\"22/tcp\":{},\"443/tcp\":{},\"80/tcp\":{},\"8080/tcp\":{}}` | `22/tcp` "}
+{"event": "stream_token", "token": "존재 여부 확인 |\n| **해석** | 웹 이미지에 SSH 포트가 선언돼 있으면, 컨테이너 내부에 SSH 데몬(또는 관련 바이너리)이 포함될 가능성이 높음. 이는 불필요한 공격 표"}
+{"event": "stream_token", "token": "면을 제공한다. | `22/tcp` 가 출력되면 ✅ |\n\n---\n\n### 3️⃣ 방어 언급  \n\n- **이미지 경량화**: Dockerfile 에서 `EXPOSE 22/tcp` 를"}
+{"event": "stream_token", "token": " 제거하고, 필요 시 런타임에만 포트 매핑(`docker run -p`) 하도록 수정.  \n- **SSH 서비스 비활성화**: 이미지 빌드 단계에서 `systemctl disabl"}
+{"event": "stream_token", "token": "e sshd` 혹은 `apt-get purge openssh-server` 로 SSH 데몬을 완전 제거.  \n- **보안 베스트 프랙티스**: 최소 권한 원칙에 따라 웹 전용 컨테"}
+{"event": "stream_token", "token": "이너는 오직 80/443(또는 8080) 포트만 노출하고, 관리 접근은 별도 bastion 호스트를 통해 SSH 접속하도록 설계.\n\n---\n\n### 4️⃣ 한계·인지  \n\n- **"}
+{"event": "stream_token", "token": "EXPOSE 선언 ≠ 실제 포트 개방**: `docker run -p` 로 매핑하지 않으면 외부에서 해당 포트에 접근할 수 없지만, 이미지 내부에 SSH 바이너리가 존재하면 컨테이"}
+{"event": "stream_token", "token": "너 탈취 시 공격자가 직접 실행 가능함.  \n- **이미지 레이어 검증 필요**: EXPOSE 외에도 `/etc/ssh/sshd_config` 파일이나 `ssh` 바이너리 존재 여"}
+{"event": "stream_token", "token": "부를 확인해 실제 SSH 서비스가 포함돼 있는지를 추가로 검증해야 함(예: `docker exec el34-web which sshd`).  \n- **운영 정책 의존**: 일부 조"}
+{"event": "stream_token", "token": "직은 관리용 SSH 데몬을 이미지에 미리 포함시켜 내부 자동화 스크립트에 활용할 수 있으므로, 단순 EXPOSE 제거만으로는 충분치 않을 수 있음.  \n\n--- \n\n**결론:** "}
+{"event": "stream_token", "token": "`el34-web` 이미지에 불필요한 SSH 포트가 선언돼 있어 보안 표면이 확대되었습니다. 위 방어 권고를 적용해 이미지 경량화와 관리 접근을 별도 bastion 호스트로 전환하"}
+{"event": "stream_token", "token": "면 위험을 크게 감소시킬 수 있습니다."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker run -p", "target": "10.20.30.80"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "docker run -p"}
+{"event": "stream_token", "token": "**GOAL 충족됨:** el34‑web Docker 이미지에 `EXPOSE 22/tcp` 가 선언되어 있어, SSH 서비스가 이미지 레이어에 포함될 가능성이 있음을 확인했습니다."}
+{"event": "stream_token", "token": "  \n\n---\n\n### 1️⃣ 실행 결과 (★ 코드블록)\n\n```bash\n$ docker inspect el34-web --format '{{json .Config.ExposedP"}
+{"event": "stream_token", "token": "orts}}'\n{\"22/tcp\":{},\"443/tcp\":{},\"80/tcp\":{},\"8080/tcp\":{}}\n```\n\n*출력에 `22/tcp` 가 포함되어 있음 → SSH 포트가 "}
+{"event": "stream_token", "token": "이미지 메타데이터에 선언됨.*\n\n---\n\n### 2️⃣ 취약점 / 의도 입증  \n\n| 검증 단계 | 관찰 내용 | 성공 기준 |\n|-----------|----------|----"}
+{"event": "stream_token", "token": "--------|\n| **EXPOSE 메타데이터 조회** | `{\"22/tcp\":{},\"443/tcp\":{},\"80/tcp\":{},\"8080/tcp\":{}}` | `22/tcp` "}
+{"event": "stream_token", "token": "존재 여부 확인 |\n| **해석** | 웹 이미지에 SSH 포트가 선언돼 있으면, 컨테이너 내부에 SSH 데몬(또는 관련 바이너리)이 포함될 가능성이 높음. 이는 불필요한 공격 표"}
+{"event": "stream_token", "token": "면을 제공한다. | `22/tcp` 가 출력되면 ✅ |\n\n---\n\n### 3️⃣ 방어 언급  \n\n- **이미지 경량화**: Dockerfile 에서 `EXPOSE 22/tcp` 를"}
+{"event": "stream_token", "token": " 제거하고, 필요 시 런타임에만 포트 매핑(`docker run -p`) 하도록 수정.  \n- **SSH 서비스 비활성화**: 이미지 빌드 단계에서 `systemctl disabl"}
+{"event": "stream_token", "token": "e sshd` 혹은 `apt-get purge openssh-server` 로 SSH 데몬을 완전 제거.  \n- **보안 베스트 프랙티스**: 최소 권한 원칙에 따라 웹 전용 컨테"}
+{"event": "stream_token", "token": "이너는 오직 80/443(또는 8080) 포트만 노출하고, 관리 접근은 별도 bastion 호스트를 통해 SSH 접속하도록 설계.\n\n---\n\n### 4️⃣ 한계·인지  \n\n- **"}
+{"event": "stream_token", "token": "EXPOSE 선언 ≠ 실제 포트 개방**: `docker run -p` 로 매핑하지 않으면 외부에서 해당 포트에 접근할 수 없지만, 이미지 내부에 SSH 바이너리가 존재하면 컨테이"}
+{"event": "stream_token", "token": "너 탈취 시 공격자가 직접 실행 가능함.  \n- **이미지 레이어 검증 필요**: EXPOSE 외에도 `/etc/ssh/sshd_config` 파일이나 `ssh` 바이너리 존재 여"}
+{"event": "stream_token", "token": "부를 확인해 실제 SSH 서비스가 포함돼 있는지를 추가로 검증해야 함(예: `docker exec el34-web which sshd`).  \n- **운영 정책 의존**: 일부 조"}
+{"event": "stream_token", "token": "직은 관리용 SSH 데몬을 이미지에 미리 포함시켜 내부 자동화 스크립트에 활용할 수 있으므로, 단순 EXPOSE 제거만으로는 충분치 않을 수 있음.  \n\n--- \n\n**결론:** "}
+{"event": "stream_token", "token": "`el34-web` 이미지에 불필요한 SSH 포트가 선언돼 있어 보안 표면이 확대되었습니다. 위 방어 권고를 적용해 이미지 경량화와 관리 접근을 별도 bastion 호스트로 전환하"}
+{"event": "stream_token", "token": "면 위험을 크게 감소시킬 수 있습니다."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker run -p", "target": "10.20.30.80"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "docker run -p"}
+{"event": "stream_token", "token": "**GOAL 충족됨:** el34‑web Docker 이미지에 `EXPOSE 22/tcp` 가 선언되어 있어, SSH 서비스가 이미지 레이어에 포함될 가능성이 있음을 확인했습니다."}
+{"event": "stream_token", "token": "  \n\n---  \n\n### 1️⃣ 실행 결과 (★ 코드블록)\n\n```bash\n$ docker inspect el34-web --format '{{json .Config.Expose"}
+{"event": "stream_token", "token": "dPorts}}'\n{\"22/tcp\":{},\"443/tcp\":{},\"80/tcp\":{},\"8080/tcp\":{}}\n```\n\n*출력에 `22/tcp` 가 포함되어 있음 → SSH 포트"}
+{"event": "stream_token", "token": "가 이미지 메타데이터에 선언됨.*\n\n---  \n\n### 2️⃣ 취약점 / 의도 입증  \n\n| 검증 단계 | 관찰 내용 | 성공 기준 |\n|-----------|----------|"}
+{"event": "stream_token", "token": "------------|\n| **EXPOSE 메타데이터 조회** | `{\"22/tcp\":{},\"443/tcp\":{},\"80/tcp\":{},\"8080/tcp\":{}}` | `22/t"}
+{"event": "stream_token", "token": "cp` 존재 여부 확인 |\n| **해석** | 웹 이미지에 SSH 포트가 선언돼 있으면, 컨테이너 내부에 SSH 데몬(또는 관련 바이너리)이 포함될 가능성이 높음. 이는 불필요한 "}
+{"event": "stream_token", "token": "공격 표면을 제공한다. | `22/tcp` 가 출력되면 ✅ |\n\n---  \n\n### 3️⃣ 방어 언급  \n\n- **이미지 경량화**: Dockerfile 에서 `EXPOSE 22/"}
+{"event": "stream_token", "token": "tcp` 를 제거하고, 필요 시 런타임에만 포트 매핑(`docker run -p`) 하도록 수정.  \n- **SSH 서비스 비활성화**: 이미지 빌드 단계에서 `systemctl "}
+{"event": "stream_token", "token": "disable sshd` 혹은 `apt-get purge openssh-server` 로 SSH 데몬을 완전 제거.  \n- **보안 베스트 프랙티스**: 최소 권한 원칙에 따라 웹"}
+{"event": "stream_token", "token": " 전용 컨테이너는 오직 80/443(또는 8080) 포트만 노출하고, 관리 접근은 별도 bastion 호스트를 통해 SSH 접속하도록 설계.  \n\n---  \n\n### 4️⃣ 한계·"}
+{"event": "stream_token", "token": "인지  \n\n- **EXPOSE 선언 ≠ 실제 포트 개방**: `docker run -p` 로 매핑하지 않으면 외부에서 해당 포트에 접근할 수 없지만, 이미지 내부에 SSH 바이너리"}
+{"event": "stream_token", "token": "가 존재하면 컨테이너 탈취 시 공격자가 직접 실행 가능함.  \n- **이미지 레이어 검증 필요**: EXPOSE 외에도 `/etc/ssh/sshd_config` 파일이나 `sshd"}
+{"event": "stream_token", "token": "` 바이너리 존재 여부를 확인해 실제 SSH 서비스가 포함돼 있는지를 추가로 검증해야 함(예: `docker exec el34-web which sshd`).  \n- **운영 정책"}
+{"event": "stream_token", "token": " 의존**: 일부 조직은 관리용 SSH 데몬을 이미지에 미리 포함시켜 내부 자동화 스크립트에 활용할 수 있으므로, 단순 EXPOSE 제거만으로는 충분치 않을 수 있음.  \n\n---"}
+{"event": "stream_token", "token": "  \n\n**결론:** `el34-web` 이미지에 불필요한 SSH 포트가 선언돼 있어 보안 표면이 확대되었습니다. 위 방어 권고를 적용해 이미지 경량화와 관리 접근을 별도 bast"}
+{"event": "stream_token", "token": "ion 호스트로 전환하면 위험을 크게 감소시킬 수 있습니다."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker run -p", "target": "10.20.30.80"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "docker run -p"}
+{"event": "stream_token", "token": "**GOAL 충족됨:** el34‑web Docker 이미지에 `EXPOSE 22/tcp` 가 선언되어 있어, SSH 서비스가 이미지 레이어에 포함될 가능성이 있음을 확인했습니다."}
+{"event": "stream_token", "token": "  \n\n---  \n\n### 1️⃣ 실행 결과 (★ 코드블록)\n\n```bash\n$ docker inspect el34-web --format '{{json .Config.Expose"}
+{"event": "stream_token", "token": "dPorts}}'\n{\"22/tcp\":{},\"443/tcp\":{},\"80/tcp\":{},\"8080/tcp\":{}}\n```\n\n*출력에 `22/tcp` 가 포함되어 있음 → SSH 포트"}
+{"event": "stream_token", "token": "가 이미지 메타데이터에 선언됨.*\n\n---  \n\n### 2️⃣ 취약점 / 의도 입증  \n\n| 검증 단계 | 관찰 내용 | 성공 기준 |\n|-----------|----------|"}
+{"event": "stream_token", "token": "------------|\n| **EXPOSE 메타데이터 조회** | `{\"22/tcp\":{},\"443/tcp\":{},\"80/tcp\":{},\"8080/tcp\":{}}` | `22/t"}
+{"event": "stream_token", "token": "cp` 존재 여부 확인 |\n| **해석** | 웹 이미지에 SSH 포트가 선언돼 있으면, 컨테이너 내부에 SSH 데몬(또는 관련 바이너리)이 포함될 가능성이 높음. 이는 불필요한 "}
+{"event": "stream_token", "token": "공격 표면을 제공한다. | `22/tcp` 가 출력되면 ✅ |\n\n---  \n\n### 3️⃣ 방어 언급  \n\n- **이미지 경량화**: Dockerfile 에서 `EXPOSE 22/"}
+{"event": "stream_token", "token": "tcp` 를 제거하고, 필요 시 런타임에만 포트 매핑(`docker run -p`) 하도록 수정.  \n- **SSH 서비스 비활성화**: 이미지 빌드 단계에서 `systemctl "}
+{"event": "stream_token", "token": "disable sshd` 혹은 `apt-get purge openssh-server` 로 SSH 데몬을 완전 제거.  \n- **보안 베스트 프랙티스**: 최소 권한 원칙에 따라 웹"}
+{"event": "stream_token", "token": " 전용 컨테이너는 오직 80/443(또는 8080) 포트만 노출하고, 관리 접근은 별도 bastion 호스트를 통해 SSH 접속하도록 설계.  \n\n---  \n\n### 4️⃣ 한계·"}
+{"event": "stream_token", "token": "인지  \n\n- **EXPOSE 선언 ≠ 실제 포트 개방**: `docker run -p` 로 매핑하지 않으면 외부에서 해당 포트에 접근할 수 없지만, 이미지 내부에 SSH 바이너리"}
+{"event": "stream_token", "token": "가 존재하면 컨테이너 탈취 시 공격자가 직접 실행 가능함.  \n- **이미지 레이어 검증 필요**: EXPOSE 외에도 `/etc/ssh/sshd_config` 파일이나 `sshd"}
+{"event": "stream_token", "token": "` 바이너리 존재 여부를 확인해 실제 SSH 서비스가 포함돼 있는지를 추가로 검증해야 함(예: `docker exec el34-web which sshd`).  \n- **운영 정책"}
+{"event": "stream_token", "token": " 의존**: 일부 조직은 관리용 SSH 데몬을 이미지에 미리 포함시켜 내부 자동화 스크립트에 활용할 수 있으므로, 단순 EXPOSE 제거만으로는 충분치 않을 수 있음.  \n\n---"}
+{"event": "stream_token", "token": "  \n\n**결론:** `el34-web` 이미지에 불필요한 SSH 포트가 선언돼 있어 보안 표면이 확대되었습니다. 위 방어 권고를 적용해 이미지 경량화와 관리 접근을 별도 bast"}
+{"event": "stream_token", "token": "ion 호스트로 전환하면 위험을 크게 감소시킬 수 있습니다."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker run -p", "target": "10.20.30.80"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "stage", "stage": "validating"}
+{"event": "kg_status", "context": {"used": true, "hits": 3, "took_ms": 75, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-9d4869159d6a", "dedup": false, "error": ""}}
