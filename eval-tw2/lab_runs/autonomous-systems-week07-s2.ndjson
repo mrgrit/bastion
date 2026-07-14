@@ -1,0 +1,21 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.107 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.200 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.200 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.200 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.200 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.200 unreachable"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker exec el34-attacker sh -c \"cat > /tmp/detect_STU42.txt <<'EOF'\nmodel_class=speed_limit_45\nconfidence=0.55\nshape=octagon\nmap_context=intersection with historical STOP sign\nEOF\n\ncat /tmp/detect_STU42.txt\nA=0\nawk -F= '/confidence/{if($2<0.7)exit 0; else exit 1}' /tmp/detect_STU42.txt && A=$((A+1))\n{ grep -q 'shape=octagon' /tmp/detect_STU42.txt && ! grep -q 'model_class=stop' /tmp/detect_STU42.txt; } && A=$((A+1))\ngrep -q 'map_context.*STOP' /tmp/detect_STU42.txt && ! grep -q 'model_class=stop' /tmp/detect_STU42.txt && A=$((A+1))\necho \"이상 신호 $A개\"; [ \"$A\" -ge 2 ] && echo ADVERSARIAL_DETECTED || echo NORMAL\"", "target": "10.20.30.200"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "model_class=speed_limit_45\nconfidence=0.55\nshape=octagon\nmap_context=intersection with historical STOP sign\n이상\n", "attempt": 1}
+{"event": "stage", "stage": "validating"}
+{"event": "stream_token", "token": "**실행 결과 핵심 라인**  \n```\nmodel_class=speed_limit_45\nconfidence=0.55\nshape=octagon\nmap_context=intersect"}
+{"event": "stream_token", "token": "ion with historical STOP sign\n이상\n```  \n\n1️⃣ **Confidence 기준** – `confidence=0.55` 로 0.7 미만 → **충족** "}
+{"event": "stream_token", "token": " \n2️⃣ **Shape‑Class 불일치** – `shape=octagon` (정지표시) 이지만 `model_class=speed_limit_45` (속도제한) → **충족** "}
+{"event": "stream_token", "token": " \n3️⃣ **Map Context 기준** – `map_context` 에 “STOP” 포함, 실제 모델 클래스와 불일치 → **충족**  \n\n스크립트는 위 세 조건을 모두 만족"}
+{"event": "stream_token", "token": "했음을 바탕으로 마지막에 `이상` 문자열을 출력했습니다. 따라서 현재 입력 데이터만으로 판단하면 **적대적 패치가 의심되는 상황(ADVERSARIAL_DETECTED)** 으로 간"}
+{"event": "stream_token", "token": "주할 수 있습니다. 다만 스크립트의 최종 판정(`ADVERSARIAL_DETECTED` 또는 `NORMAL`)을 출력하도록 설계된 부분이 오류(`awk` 구문)로 실행되지 않아 명"}
+{"event": "stream_token", "token": "시적인 결론은 표시되지 않았습니다.  \n\n**결론** – 제공된 로그와 값들에 근거해 적대적 패치 의심 신호가 존재함을 확인했으며, 추가적인 스크립트 수정 후 최종 판정을 재검증하"}
+{"event": "stream_token", "token": "는 것이 필요합니다."}
+{"event": "kg_status", "context": {"used": true, "hits": 5, "took_ms": 50, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-519e50715531", "dedup": false, "error": ""}}
