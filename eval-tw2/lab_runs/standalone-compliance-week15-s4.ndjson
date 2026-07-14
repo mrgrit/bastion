@@ -1,0 +1,113 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.363 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "echo | openssl s_client -connect 10.20.30.1:443 -servername neobank.el34.lab 2>/dev/null | grep -iE 'Protocol|Cipher' | head -2", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "New, TLSv1.3, Cipher is TLS_AES_256_GCM_SHA384\n    Protocol  : TLSv1.3\n", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "openssl s_client"}
+{"event": "stream_token", "token": "**GOAL** = 외부 진입점(방화벽 `10.20.30.1:443`)에 대해 TLS 핸드셰이크를 수행하고 협상된 프로토콜 버전을 확인해 PCI‑DSS 4 요구사항(TLS 1.2 "}
+{"event": "stream_token", "token": "이상) 준수 여부 판단한다.  \n**SUCCESS** = 출력에 `TLSv1.2` 혹은 `TLSv1.3`이 표시되면 합격.\n\n---\n\n### ① 실행 결과 (★ 코드블록)\n\n```"}
+{"event": "stream_token", "token": "bash\n$ echo | openssl s_client -connect 10.20.30.1:443 -servername neobank.el34.lab 2>/dev/null \\\n  "}
+{"event": "stream_token", "token": "  | grep -iE 'Protocol|Cipher' | head -2\nNew, TLSv1.3, Cipher is TLS_AES_256_GCM_SHA384\n    Protocol"}
+{"event": "stream_token", "token": "  : TLSv1.3\n```\n\n*`openssl s_client`* 명령은 `el34‑attacker` 컨테이너에서 직접 실행했으며, 표준エ러​를 `/dev/null` 로 숨겨 프"}
+{"event": "stream_token", "token": "로토콜·암호 정보만을 추출했다.\n\n---\n\n### ② 취약점/의도 입증\n\n| 단계 | 입력 (payload) | 기대 응답 | 실제 응답 |\n|------|-------------"}
+{"event": "stream_token", "token": "---|-----------|------------|\n| TLS 핸드셈 → 협상 | `openssl s_client …` (TLS ClientHello) | 서버가 **TLS 1."}
+{"event": "stream_token", "token": "2** 이상을 반환 | **TLS 1.3** 프로토콜 및 `TLS_AES_256_GCM_SHA384` 암호가 협상됨 |\n\n- **성공 기준 충족**: `Protocol  : TLS"}
+{"event": "stream_token", "token": "v1.3` → PCI‑DSS 4(“TLS 1.2 이상 사용”)를 만족한다.  \n- 인증서 자체 서명 여부는 여기서 확인되지 않으며, 별도 CA 신뢰 검증이 필요함.\n\n---\n\n##"}
+{"event": "stream_token", "token": "# ③ 방어 언급\n\n| 권고 | 설명 |\n|------|------|\n| **강제 TLS 1.2+** | 방화벽(또는 프록시) 설정에서 `MinProtocol = TLSv1.2` "}
+{"event": "stream_token", "token": "를 명시하고, 구버전(`TLS 1.0/1.1`)을 비활성화한다. |\n| **신뢰된 CA 인증서** | 현재 자체 서명 인증서를 사용 중이라면, 공인 CA(예: Let’s Encry"}
+{"event": "stream_token", "token": "pt) 발급 인증서로 교체해 클라이언트 신뢰성을 확보한다. |\n| **HSTS + OCSP Stapling** | HTTPS 응답에 `Strict-Transport-Security"}
+{"event": "stream_token", "token": "` 헤더를 추가하고, OCSP 스테이플링으로 인증서 검증 지연을 최소화한다. |\n\n---\n\n### ④ 한계·인지\n\n- **검증 범위 제한**: 이번 테스트는 TLS 프로토콜 버전과"}
+{"event": "stream_token", "token": " 암호만 확인했으며, 서버 인증서 체인·유효성(신뢰된 CA 여부)은 검사하지 않았다.  \n- **MITM 가능성**: `openssl s_client`는 기본적으로 서버 인증서를 "}
+{"event": "stream_token", "token": "검증하지 않으므로, 중간자 공격이 존재할 경우 잘못된 버전 정보를 받을 위험이 있다. 실제 운영 환경에서는 `-verify_return_error` 옵션을 추가해 인증서 검증까지 "}
+{"event": "stream_token", "token": "수행해야 한다.  \n- **단일 포트·IP**: 방화벽의 다른 HTTPS 엔드포인트(예: 다른 vhost)도 동일하게 검사해야 전반적인 준수 여부를 확정할 수 있다.\n\n---\n\n*"}
+{"event": "stream_token", "token": "*결론** – TLS 핸드셰이크 결과 `TLSv1.3`이 협상되어 **PCI‑DSS 4 요구사항을 충족**한다. 다만 인증서 신뢰성 검증 및 전체 서비스에 대한 동일 검사(다중 v"}
+{"event": "stream_token", "token": "host) 등을 추가로 수행해 완전한 전송 암호화 준수를 보장해야 한다."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "openssl s_client", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "openssl s_client"}
+{"event": "stream_token", "token": "**GOAL** = `el34‑attacker` 컨테이너에서 방화벽(`10.20.30.1:443`)에 TLS 핸드셰이크를 수행하고 협상된 프로토콜 버전을 확인해 **PCI‑DSS "}
+{"event": "stream_token", "token": "4**(TLS 1.2 이상 사용) 준수 여부 판단한다.  \n**SUCCESS** = 출력에 `TLSv1.2` 혹은 `TLSv1.3`이 표시되면 합격.\n\n---\n\n### ① 실행 결"}
+{"event": "stream_token", "token": "과 (★ 코드블록)\n\n```bash\n$ echo | openssl s_client -connect 10.20.30.1:443 -servername neobank.el34.lab 2"}
+{"event": "stream_token", "token": ">/dev/null \\\n    | grep -iE 'Protocol|Cipher' | head -2\nNew, TLSv1.3, Cipher is TLS_AES_256_GCM_SHA3"}
+{"event": "stream_token", "token": "84\n    Protocol  : TLSv1.3\n```\n\n* `openssl s_client` 를 `el34‑attacker` 컨테이너 안에서 직접 실행했습니다.  \n* 표준エ러​"}
+{"event": "stream_token", "token": "를 `/dev/null` 로 숨겨 프로토콜·암호 정보만을 추출했습니다.\n\n---\n\n### ② 취약점/의도 입증\n\n| 단계 | 입력 (payload) | 기대 응답 | 실제 응답 |"}
+{"event": "stream_token", "token": "\n|------|----------------|-----------|------------|\n| TLS 핸드셈 → 협상 | `openssl s_client …` (TLS Clien"}
+{"event": "stream_token", "token": "tHello) | 서버가 **TLS 1.2** 이상을 반환 | **TLS 1.3** 프로토콜 및 `TLS_AES_256_GCM_SHA384` 암호가 협상됨 |\n\n* **성공 기준 "}
+{"event": "stream_token", "token": "충족**: `Protocol  : TLSv1.3` → PCI‑DSS 4(“TLS 1.2 이상 사용”)를 만족한다.  \n* 인증서 자체 서명 여부는 여기서는 확인되지 않으며, 별도 "}
+{"event": "stream_token", "token": "CA 신뢰 검증이 필요함.\n\n---\n\n### ③ 방어 언급\n\n| 권고 | 설명 |\n|------|------|\n| **강제 TLS 1.2+** | 방화벽(또는 프록시) 설정에서 `"}
+{"event": "stream_token", "token": "MinProtocol = TLSv1.2` 를 명시하고, 구버전(`TLS 1.0/1.1`)을 비활성화한다. |\n| **신뢰된 CA 인증서** | 현재 자체 서명 인증서를 사용 중이라"}
+{"event": "stream_token", "token": "면, 공인 CA(예: Let’s Encrypt) 발급 인증서로 교체해 클라이언트 신뢰성을 확보한다. |\n| **HSTS + OCSP Stapling** | HTTPS 응답에 `St"}
+{"event": "stream_token", "token": "rict-Transport-Security` 헤더를 추가하고, OCSP 스테이플링으로 인증서 검증 지연을 최소화한다. |\n\n---\n\n### ④ 한계·인지\n\n* **검증 범위 제한*"}
+{"event": "stream_token", "token": "* – 이번 테스트는 TLS 프로토콜 버전과 암호만 확인했으며, 서버 인증서 체인·유효성(신뢰된 CA 여부)은 검사하지 않았다. 실제 운영 환경에서는 `-verify_return_"}
+{"event": "stream_token", "token": "error` 옵션을 추가해 인증서 검증까지 수행해야 한다.  \n* **MITM 가능성** – `openssl s_client`는 기본적으로 서버 인증서를 검증하지 않으므로, 중간자"}
+{"event": "stream_token", "token": " 공격이 존재할 경우 잘못된 버전 정보를 받을 위험이 있다.  \n* **다중 vhost** – 방화벽 뒤에 여러 가상 호스트가 있을 경우 각각에 대해 동일 검사를 수행해 전반적인 "}
+{"event": "stream_token", "token": "준수 여부를 확정해야 한다.\n\n---\n\n## 결론\nTLS 핸드셰이크 결과 `TLSv1.3`이 협상되어 **PCI‑DSS 4 요구사항(TLS 1.2 이상)**을 충족한다. 다만 인증"}
+{"event": "stream_token", "token": "서 신뢰성 검증 및 전체 서비스(다중 vhost) 검사 등을 추가로 수행해 전송 암호화의 완전한 준수를 보장해야 한다."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "openssl s_client", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "openssl s_client"}
+{"event": "stream_token", "token": "**GOAL** = `el34‑attacker` 컨테이너에서 방화벽(`10.20.30.1:443`)에 TLS 핸드셰이크를 수행하고 협상된 프로토콜 버전을 확인해 **PCI‑DSS "}
+{"event": "stream_token", "token": "4**(TLS 1.2 이상 사용) 준수 여부 판단한다.  \n**SUCCESS** = 출력에 `TLSv1.2` 혹은 `TLSv1.3`이 표시되면 합격.\n\n---\n\n### ① 실행 결"}
+{"event": "stream_token", "token": "과 (★ 코드블록)\n\n```bash\n$ echo | openssl s_client -connect 10.20.30.1:443 -servername neobank.el34.lab 2"}
+{"event": "stream_token", "token": ">/dev/null \\\n    | grep -iE 'Protocol|Cipher' | head -2\nNew, TLSv1.3, Cipher is TLS_AES_256_GCM_SHA3"}
+{"event": "stream_token", "token": "84\n    Protocol  : TLSv1.3\n```\n\n* `openssl s_client` 를 `el34‑attacker` 컨테이너 안에서 직접 실행했으며, 표준エ러​를 `/d"}
+{"event": "stream_token", "token": "ev/null` 로 숨겨 프로토콜·암호 정보만을 추출했습니다.\n\n---\n\n### ② 취약점/의도 입증\n\n| 단계 | 입력 (payload) | 기대 응답 | 실제 응답 |\n|---"}
+{"event": "stream_token", "token": "---|----------------|-----------|------------|\n| TLS 핸드셈 → 협상 | `openssl s_client …` (TLS ClientHell"}
+{"event": "stream_token", "token": "o) | 서버가 **TLS 1.2** 이상을 반환 | **TLS 1.3** 프로토콜 및 `TLS_AES_256_GCM_SHA384` 암호가 협상됨 |\n\n- **성공 기준 충족**:"}
+{"event": "stream_token", "token": " `Protocol  : TLSv1.3` → PCI‑DSS 4(“TLS 1.2 이상 사용”)를 만족한다.  \n- 인증서 자체 서명 여부는 여기서는 확인되지 않으며, 별도 CA 신뢰"}
+{"event": "stream_token", "token": " 검증이 필요함.\n\n---\n\n### ③ 방어 언급\n\n| 권고 | 설명 |\n|------|------|\n| **강제 TLS 1.2+** | 방화벽(또는 프록시) 설정에서 `MinPr"}
+{"event": "stream_token", "token": "otocol = TLSv1.2` 를 명시하고, 구버전(`TLS 1.0/1.1`)을 비활성화한다. |\n| **신뢰된 CA 인증서** | 현재 자체 서명 인증서를 사용 중이라면, 공인"}
+{"event": "stream_token", "token": " CA(예: Let’s Encrypt) 발급 인증서로 교체해 클라이언트 신뢰성을 확보한다. |\n| **HSTS + OCSP Stapling** | HTTPS 응답에 `Strict-"}
+{"event": "stream_token", "token": "Transport-Security` 헤더를 추가하고, OCSP 스테이플링으로 인증서 검증 지연을 최소화한다. |\n\n---\n\n### ④ 한계·인지\n\n- **검증 범위 제한**: 이번"}
+{"event": "stream_token", "token": " 테스트는 TLS 프로토콜 버전과 암호만 확인했으며, 서버 인증서 체인·유효성(신뢰된 CA 여부)은 검사하지 않았다. 실제 운영 환경에서는 `-verify_return_error`"}
+{"event": "stream_token", "token": " 옵션을 추가해 인증서 검증까지 수행해야 한다.  \n- **MITM 가능성**: `openssl s_client`는 기본적으로 서버 인증서를 검증하지 않으므로, 중간자 공격이 존재"}
+{"event": "stream_token", "token": "할 경우 잘못된 버전 정보를 받을 위험이 있다.  \n- **다중 vhost**: 방화벽 뒤에 여러 가상 호스트가 있을 경우 각각에 대해 동일 검사를 수행해 전반적인 준수 여부를 확"}
+{"event": "stream_token", "token": "정해야 한다.\n\n---\n\n## 결론\nTLS 핸드셰이크 결과 `TLSv1.3`이 협상되어 **PCI‑DSS 4 요구사항(TLS 1.2 이상)**을 충족한다. 다만 인증서 신뢰성 검증"}
+{"event": "stream_token", "token": " 및 전체 서비스(다중 vhost) 검사 등을 추가로 수행해 전송 암호화의 완전한 준수를 보장해야 한다."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "openssl s_client", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "openssl s_client"}
+{"event": "stream_token", "token": "**GOAL** = `el34‑attacker` 컨테이너에서 방화벽(`10.20.30.1:443`)에 TLS 핸드셰이크를 수행하고 협상된 프로토콜 버전을 확인해 **PCI‑DSS "}
+{"event": "stream_token", "token": "4**(TLS 1.2 이상 사용) 준수 여부 판단한다.  \n**SUCCESS** = 출력에 `TLSv1.2` 혹은 `TLSv1.3`이 표시되면 합격.\n\n---\n\n### ① 실행 결"}
+{"event": "stream_token", "token": "과 (★ 코드블록)\n\n```bash\n$ echo | openssl s_client -connect 10.20.30.1:443 -servername neobank.el34.lab 2"}
+{"event": "stream_token", "token": ">/dev/null \\\n    | grep -iE 'Protocol|Cipher' | head -2\nNew, TLSv1.3, Cipher is TLS_AES_256_GCM_SHA3"}
+{"event": "stream_token", "token": "84\n    Protocol  : TLSv1.3\n```\n\n* `openssl s_client` 를 `el34‑attacker` 컨테이너 안에서 직접 실행했습니다.  \n* 표준エ러​"}
+{"event": "stream_token", "token": "를 `/dev/null` 로 숨겨 프로토콜·암호 정보만을 추출했습니다.\n\n---\n\n### ② 취약점/의도 입증\n\n| 단계 | 입력 (payload) | 기대 응답 | 실제 응답 |"}
+{"event": "stream_token", "token": "\n|------|----------------|-----------|------------|\n| TLS 핸드셈 → 협상 | `openssl s_client …` (TLS Clien"}
+{"event": "stream_token", "token": "tHello) | 서버가 **TLS 1.2** 이상을 반환 | **TLS 1.3** 프로토콜 및 `TLS_AES_256_GCM_SHA384` 암호가 협상됨 |\n\n* **성공 기준 "}
+{"event": "stream_token", "token": "충족** – `Protocol  : TLSv1.3` → PCI‑DSS 4(“TLS 1.2 이상 사용”)를 만족한다.  \n* 인증서 자체 서명 여부는 여기서는 확인되지 않으며, 별도"}
+{"event": "stream_token", "token": " CA 신뢰 검증이 필요함.\n\n---\n\n### III. 방어 언급\n\n| 권고 | 설명 |\n|------|------|\n| **강제 TLS 1.2+** | 방화벽(또는 프록시) 설정"}
+{"event": "stream_token", "token": "에서 `MinProtocol = TLSv1.2` 를 명시하고, 구버전(`TLS 1.0/1.1`)을 비활성화한다. |\n| **신뢰된 CA 인증서** | 현재 자체 서명 인증서를 사용"}
+{"event": "stream_token", "token": " 중이라면 공인 CA(예: Let’s Encrypt) 발급 인증서로 교체해 클라이언트 신뢰성을 확보한다. |\n| **HSTS + OCSP Stapling** | HTTPS 응답에 "}
+{"event": "stream_token", "token": "`Strict-Transport-Security` 헤더를 추가하고, OCSP 스테이플링으로 인증서 검증 지연을 최소화한다. |\n\n---\n\n### IV. 한계·인지\n\n* **검증 범"}
+{"event": "stream_token", "token": "위 제한** – 이번 테스트는 TLS 프로토콜 버전과 암호만 확인했으며, 서버 인증서 체인·유효성(신뢰된 CA 여부)은 검사하지 않았다. 실제 운영 환경에서는 `-verify_re"}
+{"event": "stream_token", "token": "turn_error` 옵션을 추가해 인증서 검증까지 수행해야 한다.  \n* **MITM 가능성** – `openssl s_client`는 기본적으로 서버 인증서를 검증하지 않으므로"}
+{"event": "stream_token", "token": ", 중간자 공격이 존재할 경우 잘못된 버전 정보를 받을 위험이 있다.  \n* **다중 vhost** – 방화벽 뒤에 여러 가상 호스트가 있을 경우 각각에 대해 동일 검사를 수행해 "}
+{"event": "stream_token", "token": "전반적인 준수 여부를 확정해야 한다.\n\n---\n\n## 결론\nTLS 핸드셰이크 결과 `TLSv1.3`이 협상되어 **PCI‑DSS 4 요구사항(TLS 1.2 이상)**을 충족한다. "}
+{"event": "stream_token", "token": "다만 인증서 신뢰성 검증 및 전체 서비스(다중 vhost) 검사 등을 추가로 수행해 전송 암호화의 완전한 준수를 보장해야 한다."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "openssl s_client", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "openssl s_client"}
+{"event": "stream_token", "token": "**GOAL** = `el34‑attacker` 컨테이너에서 방화벽(`10.20.30.1:443`)에 TLS 핸드셰이크를 수행하고 협상된 프로토콜 버전을 확인해 **PCI‑DSS "}
+{"event": "stream_token", "token": "4**(TLS 1.2 이상 사용) 준수 여부 판단한다.  \n**SUCCESS** = 출력에 `TLSv1.2` 혹은 `TLSv1.3`이 표시되면 합격.\n\n---\n\n### ① 실행 결"}
+{"event": "stream_token", "token": "과 (★ 코드블록)\n\n```bash\n$ echo | openssl s_client -connect 10.20.30.1:443 -servername neobank.el34.lab 2"}
+{"event": "stream_token", "token": ">/dev/null \\\n    | grep -iE 'Protocol|Cipher' | head -2\nNew, TLSv1.3, Cipher is TLS_AES_256_GCM_SHA3"}
+{"event": "stream_token", "token": "84\n    Protocol  : TLSv1.3\n```\n\n* `openssl s_client` 를 `el34‑attacker` 컨테이너 안에서 직접 실행했으며, 표준エ러​를 `/d"}
+{"event": "stream_token", "token": "ev/null` 로 숨겨 프로토콜·암호 정보만을 추출했습니다.\n\n---\n\n### ② 취약점/의도 입증\n\n| 단계 | 입력 (payload) | 기대 응답 | 실제 응답 |\n|---"}
+{"event": "stream_token", "token": "---|----------------|-----------|------------|\n| TLS 핸드셈 → 협상 | `openssl s_client …` (TLS ClientHell"}
+{"event": "stream_token", "token": "o) | 서버가 **TLS 1.2** 이상을 반환 | **TLS 1.3** 프로토콜 및 `TLS_AES_256_GCM_SHA384` 암호가 협상됨 |\n\n* **성공 기준 충족** "}
+{"event": "stream_token", "token": "– `Protocol  : TLSv1.3` → PCI‑DSS 4(“TLS 1.2 이상 사용”)를 만족한다.  \n* 인증서 자체 서명 여부는 여기서는 확인되지 않으며, 별도 CA 신"}
+{"event": "stream_token", "token": "뢰 검증이 필요함.\n\n---\n\n### III. 방어 언급\n\n| 권고 | 설명 |\n|------|------|\n| **강제 TLS 1.2+** | 방화벽(또는 프록시) 설정에서 `M"}
+{"event": "stream_token", "token": "inProtocol = TLSv1.2` 를 명시하고, 구버전(`TLS 1.0/1.1`)을 비활성화한다. |\n| **신뢰된 CA 인증서** | 현재 자체 서명 인증서를 사용 중이라면"}
+{"event": "stream_token", "token": " 공인 CA(예: Let’s Encrypt) 발급 인증서로 교체해 클라이언트 신뢰성을 확보한다. |\n| **HSTS + OCSP Stapling** | HTTPS 응답에 `Stri"}
+{"event": "stream_token", "token": "ct-Transport-Security` 헤더를 추가하고, OCSP 스테이플링으로 인증서 검증 지연을 최소화한다. |\n\n---\n\n### IV. 한계·인지\n\n* **검증 범위 제한*"}
+{"event": "stream_token", "token": "* – 이번 테스트는 TLS 프로토콜 버전과 암호만 확인했으며, 서버 인증서 체인·유효성(신뢰된 CA 여부)은 검사하지 않았다. 실제 운영 환경에서는 `-verify_return_"}
+{"event": "stream_token", "token": "error` 옵션을 추가해 인증서 검증까지 수행해야 한다.  \n* **MITM 가능성** – `openssl s_client`는 기본적으로 서버 인증서를 검증하지 않으므로, 중간자"}
+{"event": "stream_token", "token": " 공격이 존재할 경우 잘못된 버전 정보를 받을 위험이 있다.  \n* **다중 vhost** – 방화벽 뒤에 여러 가상 호스트가 있을 경우 각각에 대해 동일 검사를 수행해 전반적인 "}
+{"event": "stream_token", "token": "준수 여부를 확정해야 한다.\n\n---\n\n## 결론\nTLS 핸드셰이크 결과 `TLSv1.3`이 협상되어 **PCI‑DSS 4 요구사항(TLS 1.2 이상)**을 충족한다. 다만 인증"}
+{"event": "stream_token", "token": "서 신뢰성 검증 및 전체 서비스(다중 vhost) 검사 등을 추가로 수행해 전송 암호화의 완전한 준수를 보장해야 한다."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "openssl s_client", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "stage", "stage": "validating"}
+{"event": "kg_status", "context": {"used": true, "hits": 5, "took_ms": 100, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-f50a656980e2", "dedup": false, "error": ""}}
