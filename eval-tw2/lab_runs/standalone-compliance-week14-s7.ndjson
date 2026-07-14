@@ -1,0 +1,21 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.194 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "skill_start", "skill": "file_manage", "params": {"action": "write", "content": "1) 정기 내부감사(연간 계획)\n2) 증적 자동 수집(해시+시각, 스크립트화)\n3) 부적합 추적(CAPA 대장) + 기한 관리\n4) 인증심사 대비(사전 갭 분석)\n5) 증적 보관(기간/무결성)\n→ 핵심: 증적의 상시 확보 + 부적합의 추적·폐쇄", "path": "/tmp/audit.txt", "target": "127.0.0.1"}, "attempt": 1}
+{"event": "skill_result", "skill": "file_manage", "success": true, "output": "", "attempt": 1}
+{"event": "stage", "stage": "validating"}
+{"event": "stream_token", "token": "**도구 실행 실패 보고**\n\n- **실패한 스킬/명령**  \n  - `shell` : 모든 `target`(bastion, el34‑bastion, attacker, manage"}
+{"event": "stream_token", "token": "r) 에 대해 사전 체크가 “10.20.30.1 unreachable”.  \n  - `file_manage` : `/tmp/audit.txt` 파일 쓰기 시도는 성공했지만 **st"}
+{"event": "stream_token", "token": "dout이 비어 있음** (실제 내용이 반환되지 않음).\n\n- **가능한 원인**  \n  1. **네트워크 접근 차단** – bastion 컨테이너가 외부(10.20.30.0/24"}
+{"event": "stream_token", "token": ")와 연결되지 않아 `precheck‑fail` 메시지가 발생함.  \n  2. **컨테이너 실행 환경 제한** – 현재 세션은 `bastion` 내부에서만 동작하고, 다른 컨테이너"}
+{"event": "stream_token", "token": "(`el34‑bastion`, `attacker`, `manager`)에 직접 명령을 전달할 수 없는 상태.\n\n- **다음 시도 권장**  \n  1. **네트워크 연결 확인** –"}
+{"event": "stream_token", "token": " bastion에서 `ping -c 3 10.20.30.1` 혹은 `ip a` 로 인터페이스와 라우팅 정보를 점검하고, 필요시 방화벽/라우터 설정을 조정한다.  \n  2. **Do"}
+{"event": "stream_token", "token": "cker exec 직접 사용** – 목표 컨테이너에 명령을 실행하려면 `docker exec el34‑bastion <command>` 형태로 접근한다(예: `docker exec"}
+{"event": "stream_token", "token": " el34‑bastion echo \"test\"`).  \n\n위 사항을 해결한 뒤 다시 시도하면 내부감사 체크리스트 출력 및 파일 기록이 정상적으로 이루어질 수 있습니다."}
+{"event": "kg_status", "context": {"used": true, "hits": 4, "took_ms": 184, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-6c6861d96f0e", "dedup": false, "error": ""}}
