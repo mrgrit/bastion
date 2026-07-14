@@ -1,0 +1,23 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.518 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "skill_start", "skill": "http_request", "params": {"method": "POST", "url": "http://211.170.162.139:10934/api/generate", "headers": {"Content-Type": "application/json"}, "body": "{\"model\":\"gemma3:4b\",\"prompt\":\"Reply with the word ready.\",\"stream\":false,\"options\":{\"num_predict\":10}}", "target": "10.20.30.201", "host": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "http_request", "success": false, "output": "", "attempt": 1}
+{"event": "skill_start", "skill": "http_request", "params": {"body": "{\"model\":\"gemma3:4b\",\"prompt\":\"Reply with the word ready.\",\"stream\":false,\"options\":{\"num_predict\":10}}", "headers": {"Content-Type": "application/json"}, "method": "POST", "target": "10.20.30.200", "url": "http://211.170.162.139:10934/api/generate", "host": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "http_request", "success": false, "output": "", "attempt": 1}
+{"event": "skill_start", "skill": "shell", "params": {"command": "ping -c 3 211.170.162.139", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "PING 211.170.162.139 (211.170.162.139) 56(84) bytes of data.\n64 bytes from 211.170.162.139: icmp_seq=1 ttl=63 time=0.723 ms\n64 bytes from 211.170.162.139: icmp_seq=2 ttl=63 time=0.739 ms\n64 bytes from 211.170.162.139: icmp_seq=3 ttl=63 time=0.876 ms\n\n--- 211.170.162.139 ping statistics ---\n3 packets transmitted, 3 received, 0% packet loss, time 2088ms\nrtt min/avg/max/mdev = 0.723/0.779/0.876/0.068 ms\n", "attempt": 1}
+{"event": "skill_start", "skill": "http_request", "params": {"body": "{\"model\":\"gemma3:4b\",\"prompt\":\"Reply with the word ready.\",\"stream\":false,\"options\":{\"num_predict\":10}}", "headers": {"Content-Type": "application/json"}, "method": "POST", "target": "10.20.30.201", "url": "https://211.170.162.139:10934/api/generate", "host": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "http_request", "success": false, "output": "", "attempt": 1}
+{"event": "skill_start", "skill": "shell", "params": {"command": "curl -s http://127.0.0.1:11434/api/tags | head -n 20", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "", "attempt": 1}
+{"event": "skill_start", "skill": "shell", "params": {"command": "curl -s -X POST http://127.0.0.1:11434/api/generate -H 'Content-Type: application/json' -d '{\"model\":\"gemma3:4b\",\"prompt\":\"Reply with the word ready.\",\"stream\":false,\"options\":{\"num_predict\":10}}' | python3 -c \"import sys,json; r=json.load(sys.stdin).get('response',''); print(r); print('GEN_OK' if r.strip() else 'GEN_EMPTY')\"", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "stage", "stage": "validating"}
+{"event": "stream_token", "token": "위 실행 결과는 두 번의 `curl` 호출 모두 실제 응답을 반환하지 않았습니다.\n\n- 첫 번째 `curl -s http://127.0.0.1:11434/api/tags | hea"}
+{"event": "stream_token", "token": "d -n 20` 은 stdout이 비어 있어, 로컬 Ollama 서버에 태그 목록이 없거나 접근이 차단되었습니다 → **결과 없음**.\n- 두 번째 `curl -s -X POST "}
+{"event": "stream_token", "token": "http://127.0.0.1:11434/api/generate …` 도 JSON 파싱 오류가 발생해 응답 본문을 읽지 못했습니다 → **결과 없음**.\n\n따라서 현재 요청한 “g"}
+{"event": "stream_token", "token": "emma3 모델이 ‘ready’ 라는 단어를 반환하는지 확인”은 수행되지 않았으며, 모델 응답을 얻기 위해 Ollama 서비스가 정상 가동 중인지 먼저 점검하고, 필요 시 포트·방"}
+{"event": "stream_token", "token": "화벽 설정을 검토해야 합니다. (예: `curl http://127.0.0.1:11434/health` 로 헬스체크)"}
+{"event": "kg_status", "context": {"used": true, "hits": 1, "took_ms": 69, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": false, "anchor_id": "", "dedup": true, "error": ""}}
