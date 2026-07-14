@@ -1,0 +1,36 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.185 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.200 unreachable"}
+{"event": "skill_start", "skill": "ollama_query", "params": {"model": "gemma3:4b", "prompt": "Write a short note for W07 on self-driving attacks. Findings: an adversarial patch misclassifying a stop sign was detected by shape/map/confidence mismatch (ADVERSARIAL_DETECTED), lidar phantom and removed objects were detected via cross-sensor inconsistency (SENSOR_SPOOFED), and OTA signature and hash checks rejected a tampered update (OTA_VERIFIED). Explain that self-driving depends on AI and sensors so attacks cause physical accidents, and defense uses sensor redundancy, model robustness, and OTA integrity. Start with exactly \"Assessment\" on its own line.", "max_tokens": 400, "temperature": 0.2}, "attempt": 1}
+{"event": "skill_result", "skill": "ollama_query", "success": true, "output": "Assessment\n\nW07 Findings regarding self-driving attacks are deeply concerning. We’ve identified critical vulnerabilities that directly threaten vehicle safety. Specifically, an adversarial patch successfully misclassified a stop sign through shape/map/confidence mismatch (ADVERSARIAL_DETECTED), highlighting the susceptibility of AI to manipulated inputs. Furthermore, lidar phantom and removed objects were detected via cross-sensor inconsistency (SENSOR_SPOOFED), demonstrating the potential for sensor deception. Finally, an OTA signature and hash check successfully rejected a tampered update (OTA_VERIFIED), confirming vulnerabilities in over-the-air updates – a crucial mechanism for security.\n\nIt’s vital to understand that self-driving technology fundamentally relies on AI and sensor data; therefore, successful attacks can translate directly into physical accidents. Our defense strategies – including sensor redundancy, robust model training, and rigorous OTA integrity checks – are paramount in mitigating these risks. Continued research and development focused on strengthening these defenses is absolutely critical for the safe deployment of autonomous vehicles.", "attempt": 1}
+{"event": "stream_token", "token": "**실행 결과 (★ 코드블록)**  \n```bash\n$ ollama_query --model gemma3:4b \\\n  --max_tokens 400 \\\n  --temperature"}
+{"event": "stream_token", "token": " 0.2 \\\n  --prompt \"Write a short note for W07 on self-driving attacks. Findings: an adversarial patc"}
+{"event": "stream_token", "token": "h misclassifying a stop sign was detected by shape/map/confidence mismatch (ADVERSARIAL_DETECTED), l"}
+{"event": "stream_token", "token": "idar phantom and removed objects were detected via cross-sensor inconsistency (SENSOR_SPOOFED), and "}
+{"event": "stream_token", "token": "OTA signature and hash checks rejected a tampered update (OTA_VERIFIED). Explain that self-driving d"}
+{"event": "stream_token", "token": "epends on AI and sensors so attacks cause physical accidents, and defense uses sensor redundancy, mo"}
+{"event": "stream_token", "token": "del robustness, and OTA integrity. Start with exactly \\\"Assessment\\\" on its own line.\"\n\nAssessment\n\n"}
+{"event": "stream_token", "token": "W07 Findings regarding self‑driving attacks are deeply concerning. We’ve identified critical vulnera"}
+{"event": "stream_token", "token": "bilities that directly threaten vehicle safety. Specifically, an adversarial patch successfully misc"}
+{"event": "stream_token", "token": "lassified a stop sign through shape/map/confidence mismatch (ADVERSARIAL_DETECTED), highlighting the"}
+{"event": "stream_token", "token": " susceptibility of AI to manipulated inputs. Furthermore, lidar phantom and removed objects were det"}
+{"event": "stream_token", "token": "ected via cross‑sensor inconsistency (SENSOR_SPOOFED), demonstrating the potential for sensor decept"}
+{"event": "stream_token", "token": "ion. Finally, an OTA signature and hash check successfully rejected a tampered update (OTA_VERIFIED)"}
+{"event": "stream_token", "token": ", confirming vulnerabilities in over‑the‑air updates – a crucial mechanism for security.\n\nIt’s vital"}
+{"event": "stream_token", "token": " to understand that self‑driving technology fundamentally relies on AI and sensor data; therefore, s"}
+{"event": "stream_token", "token": "uccessful attacks can translate directly into physical accidents. Our defense strategies – including"}
+{"event": "stream_token", "token": " sensor redundancy, robust model training, and rigorous OTA integrity checks – are paramount in miti"}
+{"event": "stream_token", "token": "gating these risks. Continued research and development focused on strengthening these defenses is ab"}
+{"event": "stream_token", "token": "solutely critical for the safe deployment of autonomous vehicles.\n```\n\n**취약점/의도 입증**  \n- **입력(프롬프트)*"}
+{"event": "stream_token", "token": "*: 상세 공격 시나리오와 발견된 취약점(ADVERSARIAL_DETECTED, SENSOR_SPOOFED, OTA_VERIFIED)을 포함한 설명 요청.  \n- **응답(출력)*"}
+{"event": "stream_token", "token": "*: “Assessment” 라인으로 시작해 각 취약점이 어떻게 물리적 사고로 이어질 수 있는지 명시하고, 각각에 대한 방어 대책을 제시함. 성공 기준(`Assessment` 존재"}
+{"event": "stream_token", "token": " 및 모든 세 가지 발견·방어가 언급됨) 모두 충족.\n\n**방어 언급**  \n- **센서 중복성 (Sensor Redundancy)** – 라이다·카메라·레이더 등 다중 센서를 교"}
+{"event": "stream_token", "token": "차 검증하여 위조된 입력을 탐지.  \n- **모델 강건성 (Robust Model Training)** – 적대적 패치에 대비한 adversarial training 및 정규화 기"}
+{"event": "stream_token", "token": "법 적용.  \n- **OTA 무결성 검사 (OTA Integrity Checks)** – 디지털 서명·해시 검증으로 변조된 펌웨어/소프트웨어 배포 차단.\n\n**한계·인지**  \n-"}
+{"event": "stream_token", "token": " 생성형 LLM이 제공하는 텍스트는 **사실 확인 없이** 출력될 수 있어, 실제 시스템에 적용하기 전 별도 검증이 필요합니다. 또한, 제시된 방어 조치는 **전략적 가이드라인**"}
+{"event": "stream_token", "token": "이며, 구체적인 구현(예: 서명 키 관리, 센서 퓨전 알고리즘) 없이 그대로 적용하면 오히려 운영상의 부작용을 초래할 수 있습니다. 따라서 파일럿 테스트와 지속적인 모니터링이 필수"}
+{"event": "stream_token", "token": "입니다."}
+{"event": "stage", "stage": "validating"}
+{"event": "kg_status", "context": {"used": true, "hits": 5, "took_ms": 41, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": false, "anchor_id": "", "dedup": true, "error": ""}}
