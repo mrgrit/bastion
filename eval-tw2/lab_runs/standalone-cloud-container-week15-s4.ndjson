@@ -1,0 +1,18 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.396 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.80 unreachable"}
+{"event": "skill_start", "skill": "docker_manage", "params": {"action": "inspect", "container": "el34-web", "target": "127.0.0.1"}, "attempt": 1}
+{"event": "skill_result", "skill": "docker_manage", "success": true, "output": "running 0 el34-web\n", "attempt": 1}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker inspect el34-web --format '{{.HostConfig.CapDrop}}'", "target": "10.20.30.80"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "[]\n", "attempt": 1}
+{"event": "skill_start", "skill": "docker_manage", "params": {"action": "exec", "container": "el34-web", "command": "id -u", "target": "127.0.0.1"}, "attempt": 1}
+{"event": "skill_result", "skill": "docker_manage", "success": true, "output": "0\n", "attempt": 1}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.80 unreachable"}
+{"event": "stage", "stage": "validating"}
+{"event": "stream_token", "token": "CapDrop 값이 비어 있어 `gap=no_capdrop` 로 판단됩니다.  \n컨테이너 내부 UID 가 0으로 실행되고 있으므로 `gap=runs_as_root` 가 확인되었습니"}
+{"event": "stream_token", "token": "다.  \n\n**채점 기준**  \n- CapDrop 존재 여부: 미충족 → gap=no_capdrop  \n- 루트 사용자 실행 여부: 충족 → gap=runs_as_root  \n\n*"}
+{"event": "stream_token", "token": "*결론**: el34-web 컨테이너는 CAP_DROP 설정이 없고 root 권한으로 동작하고 있어 CIS 5.3·4.1 기준을 위반합니다. 보안 강화를 위해 CapDrop 정책 "}
+{"event": "stream_token", "token": "적용 및 비루트 사용자 실행으로 전환해야 합니다."}
+{"event": "kg_status", "context": {"used": true, "hits": 5, "took_ms": 72, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-a7d132ce3356", "dedup": false, "error": ""}}
