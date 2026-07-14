@@ -1,0 +1,94 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.184 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.80 unreachable"}
+{"event": "skill_start", "skill": "docker_manage", "params": {"action": "inspect", "container": "el34-web", "target": "127.0.0.1"}, "attempt": 1}
+{"event": "skill_result", "skill": "docker_manage", "success": true, "output": "running 0 el34-web\n", "attempt": 1}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker inspect el34-web", "target": "10.20.30.80"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "[\n    {\n        \"Id\": \"3209ee9c62a5ba0c6dee0e1c200f4516d9e7b6930b3ffb01fa6caf1ecda2f4d7\",\n        \"Created\": \"2026-07-01T11:34:10.914664744Z\",\n        \"Path\": \"/entrypoint.sh\",\n        \"Args\": [],\n        \"State\": {\n            \"Status\": \"running\",\n            \"Running\": true,\n            \"Paused\": false,\n            \"Restarting\": false,\n            \"OOMKilled\": false,\n            \"Dead\": false,\n            \"Pid\": 2262226,\n            \"ExitCode\": 0,\n            \"Error\": \"\",\n            \"StartedAt\": \"2026-07-04T05:03:57.848539447Z\",\n            \"FinishedAt\": \"2026-07-04T05:03:57.553039179Z\"\n        },\n        \"Image\": \"sha256:b1338691bd877116b4cf398fd74681cdaa0449c58bb85ea9b623403200167bac\",\n        \"ResolvConfPath\": \"/var/lib/docker/containers/3209ee9c62a5ba0c6dee0e1c200f4516d9e7b6930b3ffb01fa6caf1ecda2f4d7/resolv.conf\",\n        \"HostnamePath\": \"/var/lib/docker/containers/3209ee9c62a5ba0c6dee0e1c200f4516d9e7b6930b3ffb01fa6caf1ecda2f4d7/hostname\",\n        \"HostsPath\": \"/var/lib/docker/containers/3209ee9c62a5ba0c6dee0e1c200f4516d9e7b6930b3ffb01fa6caf1ecda2f4d7/hosts\",\n        \"LogPath\": \"/var/lib/docker/containers/3209ee9c62a5ba0c6dee0e1c200f4516d9e7b6930b3ffb01fa6caf1ecda2f4d7/3209ee9c62a5ba0c6dee0e1c200f4516d9e7b6930b3ffb01fa6caf1ecda2f4d7-json.log\",\n        \"Name\": \"/el34-web\",\n        \"RestartCount\": 0,\n        \"Driver\": \"overlayfs\",\n        \"Platform\": \"linux\",\n        \"MountLabel\": \"\",\n        \"ProcessLabel\": \"\",\n        \"AppArmorProfile\": \"docker-default\",\n        \"ExecIDs\": [\n            \"d371d5c919f0d5a785af93926e25717aacef2537bf7004cccb7b3e89a44ea1fe\",\n            \"170bcef411daa8d061454bba8e8c69e320a2f76399cf1c351d8c263f929b09b5\",\n            \"35276cf83f5a3b789eea4d5120c842f3b0d5dd7b9a9653b9f0c87d027f51d307\",\n            \"008c47d85454033d16b35d2767a64aa15fab4273ab66e719e4506484ee4a15ab\",\n            \"42baeb03921f954864389b25e7894452ddfa92a625e2a13c3bc8446e927aca65\",\n            \"a8ced737b1e4af765f00188b7fa964214b3c6dc67d87ca1da3d94e64488e29f4\",\n            \"6a4bd48a538fe137a2cc7f10c49f4552c8d6ab7e55907b21c9021ab2c339d0a4\",\n            \"92b7d00c035f730798e2980610dada918de05bbc0b2d94530e943f672a2d7656\",\n            \"6f7863d23b664e020451e87688e87a4a379f9f42878e24b0a45edde8894bc277\",\n            \"b57d9af1b8c34a9562956ea363b8ccb2617202598f7f7bd959076845da5cb8c6\",\n            \"cd92d5f1e667a3f2687d8a0da2ff5d1c3d19cbf40cd51bef985c6e1f16bc8b23\"\n        ],\n        \"HostConfig\": {\n            \"Binds\": [\n                \"/home/ccc/el34/keys:/keys:ro\",\n        ", "attempt": 1}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker inspect el34-web --format '{{json .HostConfig}}'", "target": "10.20.30.80"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "{\"Binds\":[\"/home/ccc/el34/keys:/keys:ro\",\"el34_web-apache-logs:/var/log/apache2:rw\"],\"ContainerIDFile\":\"\",\"LogConfig\":{\"Type\":\"json-file\",\"Config\":{}},\"NetworkMode\":\"el34-dmz\",\"PortBindings\":{\"8080/tcp\":[{\"HostIp\":\"192.168.136.145\",\"HostPort\":\"8083\"}]},\"RestartPolicy\":{\"Name\":\"unless-stopped\",\"MaximumRetryCount\":0},\"AutoRemove\":false,\"VolumeDriver\":\"\",\"VolumesFrom\":null,\"ConsoleSize\":[0,0],\"CapAdd\":[\"CAP_NET_ADMIN\"],\"CapDrop\":null,\"CgroupnsMode\":\"private\",\"Dns\":null,\"DnsOptions\":null,\"DnsSearch\":null,\"ExtraHosts\":[],\"GroupAdd\":null,\"IpcMode\":\"private\",\"Cgroup\":\"\",\"Links\":null,\"OomScoreAdj\":0,\"PidMode\":\"\",\"Privileged\":false,\"PublishAllPorts\":false,\"ReadonlyRootfs\":false,\"SecurityOpt\":null,\"UTSMode\":\"\",\"UsernsMode\":\"\",\"ShmSize\":67108864,\"Runtime\":\"runc\",\"Isolation\":\"\",\"CpuShares\":0,\"Memory\":0,\"NanoCpus\":0,\"CgroupParent\":\"\",\"BlkioWeight\":0,\"BlkioWeightDevice\":null,\"BlkioDeviceReadBps\":null,\"BlkioDeviceWriteBps\":null,\"BlkioDeviceReadIOps\":null,\"BlkioDeviceWriteIOps\":null,\"CpuPeriod\":0,\"CpuQuota\":0,\"CpuRealtimePeriod\":0,\"CpuRealtimeRuntime\":0,\"CpusetCpus\":\"\",\"CpusetMems\":\"\",\"Devices\":null,\"DeviceCgroupRules\":null,\"DeviceRequests\":null,\"MemoryReservation\":0,\"MemorySwap\":0,\"MemorySwappiness\":null,\"OomKillDisable\":null,\"PidsLimit\":null,\"Ulimits\":null,\"CpuCount\":0,\"CpuPercent\":0,\"IOMaximumIOps\":0,\"IOMaximumBandwidth\":0,\"MaskedPaths\":[\"/proc/acpi\",\"/proc/asound\",\"/proc/interrupts\",\"/proc/kcore\",\"/proc/keys\",\"/proc/latency_stats\",\"/proc/sched_debug\",\"/proc/scsi\",\"/proc/timer_list\",\"/proc/timer_stats\",\"/sys/devices/virtual/powercap\",\"/sys/firmware\",\"/sys/devices/system/cpu/cpu0/thermal_throttle\",\"/sys/devices/system/cpu/cpu1/thermal_throttle\",\"/sys/devices/system/cpu/cpu2/thermal_throttle\",\"/sys/devices/system/cpu/cpu3/thermal_throttle\"],\"ReadonlyPaths\":[\"/proc/bus\",\"/proc/fs\",\"/proc/irq\",\"/proc/sys\",\"/proc/sysrq-trigger\"]}\n", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "docker run ... --memory 512m --cpus 0.5 …"}
+{"event": "stream_token", "token": "**GOAL** — 컨테이너 `el34‑web` 의 cgroups 자원 제한(메모리·CPU) 확인 및 현재 상태가 “무제한”인지 판단  \n\n---\n\n### 1️⃣ 실행 결과 (★ "}
+{"event": "stream_token", "token": "코드블록)\n\n```bash\n$ docker inspect el34-web --format '{{json .HostConfig}}'\n{\"Binds\":[\"/home/ccc/el34/k"}
+{"event": "stream_token", "token": "eys:/keys:ro\",\"el34_web-apache-logs:/var/log/apache2:rw\"],\"ContainerIDFile\":\"\",\"LogConfig\":{\"Type\":\""}
+{"event": "stream_token", "token": "json-file\",\"Config\":{}},\"NetworkMode\":\"el34-dmz\",\"PortBindings\":{\"8080/tcp\":[{\"HostIp\":\"192.168.136."}
+{"event": "stream_token", "token": "145\",\"HostPort\":\"8083\"}]},\"RestartPolicy\":{\"Name\":\"unless-stopped\",\"MaximumRetryCount\":0},\"AutoRemov"}
+{"event": "stream_token", "token": "e\":false,\"VolumeDriver\":\"\",\"VolumesFrom\":null,\"ConsoleSize\":[0,0],\"CapAdd\":[\"CAP_NET_ADMIN\"],\"CapDro"}
+{"event": "stream_token", "token": "p\":null,\"CgroupnsMode\":\"private\",\"Dns\":null,\"DnsOptions\":null,\"DnsSearch\":null,\"ExtraHosts\":[],\"Grou"}
+{"event": "stream_token", "token": "pAdd\":null,\"IpcMode\":\"private\",\"Cgroup\":\"\",\"Links\":null,\"OomScoreAdj\":0,\"PidMode\":\"\",\"Privileged\":fa"}
+{"event": "stream_token", "token": "lse,\"PublishAllPorts\":false,\"ReadonlyRootfs\":false,\"SecurityOpt\":null,\"UTSMode\":\"\",\"UsernsMode\":\"\",\""}
+{"event": "stream_token", "token": "ShmSize\":67108864,\"Runtime\":\"runc\",\"Isolation\":\"\",\"CpuShares\":0,\"Memory\":0,\"NanoCpus\":0,\"CgroupParen"}
+{"event": "stream_token", "token": "t\":\"\",\"BlkioWeight\":0,\"BlkioWeightDevice\":null,\"BlkioDeviceReadBps\":null,\"BlkioDeviceWriteBps\":null,"}
+{"event": "stream_token", "token": "\"BlkioDeviceReadIOps\":null,\"BlkioDeviceWriteIOps\":null,\"CpuPeriod\":0,\"CpuQuota\":0,\"CpuRealtimePeriod"}
+{"event": "stream_token", "token": "\":0,\"CpuRealtimeRuntime\":0,\"CpusetCpus\":\"\",\"CpusetMems\":\"\",\"Devices\":null,\"DeviceCgroupRules\":null,\""}
+{"event": "stream_token", "token": "DeviceRequests\":null,\"MemoryReservation\":0,\"MemorySwap\":0,\"MemorySwappiness\":null,\"OomKillDisable\":n"}
+{"event": "stream_token", "token": "ull,\"PidsLimit\":null,\"Ulimits\":null,\"CpuCount\":0,\"CpuPercent\":0,\"IOMaximumIOps\":0,\"IOMaximumBandwidt"}
+{"event": "stream_token", "token": "h\":0,\"MaskedPaths\":[\"/proc/acpi\",\"/proc/asound\",\"/proc/interrupts\",\"/proc/kcore\",\"/proc/keys\",\"/proc"}
+{"event": "stream_token", "token": "/latency_stats\",\"/proc/sched_debug\",\"/proc/scsi\",\"/proc/timer_list\",\"/proc/timer_stats\",\"/sys/device"}
+{"event": "stream_token", "token": "s/virtual/powercap\",\"/sys/firmware\",\"/sys/devices/system/cpu/cpu0/thermal_throttle\",\"/sys/devices/sy"}
+{"event": "stream_token", "token": "stem/cpu/cpu1/thermal_throttle\",\"/sys/devices/system/cpu/cpu2/thermal_throttle\",\"/sys/devices/system"}
+{"event": "stream_token", "token": "/cpu/cpu3/thermal_throttle\"],\"ReadonlyPaths\":[\"/proc/bus\",\"/proc/fs\",\"/proc/irq\",\"/proc/sys\",\"/proc/"}
+{"event": "stream_token", "token": "sysrq-trigger\"]}\n```\n\n*핵심 필드*  \n- `Memory: 0` → 바이트 단위 메모리 제한이 **없음**  \n- `NanoCpus: 0` → CPU 비율 제한이"}
+{"event": "stream_token", "token": " **없음**\n\n---\n\n### 2️⃣ 취약점/의도 입증  \n\n| 검사 항목 | 기대값 (제한 적용) | 실제값 | 결과 |\n|----------|------------------"}
+{"event": "stream_token", "token": "-|--------|------|\n| 메모리 한도 (`Memory`) | > 0 바이트 (예: `536870912` = 512 MiB) | **0** | **gap=no_mem_l"}
+{"event": "stream_token", "token": "imit** – 무제한 → 컨테이너가 호스트 메모리를 독점해 DoS 가능 |\n| CPU 비율 (`NanoCpus`)   | > 0 (예: `1000000000` = 1 CPU) |"}
+{"event": "stream_token", "token": " **0** | **gap=no_cpu_limit** – 무제한 → CPU 포화 공격 위험 |\n\n> **Success criteria**  \n> - `Memory=0` → “gap"}
+{"event": "stream_token", "token": "=no_mem_limit” 출력 (충족)  \n> - `NanoCpus=0` → “gap=no_cpu_limit” 출력 (충족)\n\n따라서 현재 `el34‑web` 은 cgroups "}
+{"event": "stream_token", "token": "기반 자원 제한이 전혀 적용되지 않아, 악의적인 워크로드가 호스트 전체 메모리·CPU를 고갈시킬 수 있는 **자원 고갈 DoS** 위험을 내포합니다.\n\n---\n\n### 3️⃣ 방어"}
+{"event": "stream_token", "token": " 언급  \n\n1. **Docker 실행 시 명시적 제한 지정**  \n   ```bash\n   docker update --memory 512m --cpus 0.5 el34-web\n"}
+{"event": "stream_token", "token": "   ```\n   또는 컨테이너 재배포 시 `docker run ... --memory 512m --cpus 0.5 …`.\n\n2. **Docker‑daemon 기본값 설정** (전"}
+{"event": "stream_token", "token": "체 컨테이너에 적용)  \n   `/etc/docker/daemon.json` 에:\n   ```json\n   {\n     \"default-runtime\": \"runc\",\n     \""}
+{"event": "stream_token", "token": "default-cgroupns-mode\": \"private\",\n     \"default-memory\": \"512m\",\n     \"default-cpus\": 0.5\n   }\n   `"}
+{"event": "stream_token", "token": "``\n   이후 `systemctl restart docker`.\n\n3. **cgroups v2 강제 적용** – 커널 부팅 옵션에 `systemd.unified_cgroup_hi"}
+{"event": "stream_token", "token": "erarchy=1` 추가하고, `systemd`‑managed cgroup 정책을 검증.\n\n4. **모니터링** – `docker stats el34-web` 로 실시간 메모리·C"}
+{"event": "stream_token", "token": "PU 사용량 감시 및 알림 설정 (예: Prometheus + Alertmanager).\n\n---\n\n### 4️⃣ 한계·인지  \n\n- 현재 확인은 **Docker HostConfi"}
+{"event": "stream_token", "token": "g** 에서 선언된 제한값만을 조회했으며, 실제 런타임에 적용된 커널‑레벨 cgroup 정책(예: 시스템‑wide `cgroup.subtree_control` 설정)까지는 검증하지"}
+{"event": "stream_token", "token": " 않았습니다.  \n- 일부 환경에서는 Docker 데몬이"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker run ... --memory 512m --cpus 0.5 …", "target": "10.20.30.80"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "docker update --memory 512m --cpus 0.5 el34-web"}
+{"event": "stream_token", "token": "**GOAL** — `el34‑web` 컨테이너의 cgroups 메모리·CPU 제한을 확인하고 현재 “무제한” 상태인지 판단  \n\n---\n\n### 1️⃣ 실행 결과 (★ 코드블록)"}
+{"event": "stream_token", "token": "\n\n```bash\n$ docker inspect el34-web --format '{{json .HostConfig}}'\n{\"Binds\":[\"/home/ccc/el34/keys:/"}
+{"event": "stream_token", "token": "keys:ro\",\"el34_web-apache-logs:/var/log/apache2:rw\"],\"ContainerIDFile\":\"\",\"LogConfig\":{\"Type\":\"json-"}
+{"event": "stream_token", "token": "file\",\"Config\":{}},\"NetworkMode\":\"el34-dmz\",\"PortBindings\":{\"8080/tcp\":[{\"HostIp\":\"192.168.136.145\","}
+{"event": "stream_token", "token": "\"HostPort\":\"8083\"}]},\"RestartPolicy\":{\"Name\":\"unless-stopped\",\"MaximumRetryCount\":0},\"AutoRemove\":fa"}
+{"event": "stream_token", "token": "lse,\"VolumeDriver\":\"\",\"VolumesFrom\":null,\"ConsoleSize\":[0,0],\"CapAdd\":[\"CAP_NET_ADMIN\"],\"CapDrop\":nu"}
+{"event": "stream_token", "token": "ll,\"CgroupnsMode\":\"private\",\"Dns\":null,\"DnsOptions\":null,\"DnsSearch\":null,\"ExtraHosts\":[],\"GroupAdd\""}
+{"event": "stream_token", "token": ":null,\"IpcMode\":\"private\",\"Cgroup\":\"\",\"Links\":null,\"OomScoreAdj\":0,\"PidMode\":\"\",\"Privileged\":false,\""}
+{"event": "stream_token", "token": "PublishAllPorts\":false,\"ReadonlyRootfs\":false,\"SecurityOpt\":null,\"UTSMode\":\"\",\"UsernsMode\":\"\",\"ShmSi"}
+{"event": "stream_token", "token": "ze\":67108864,\"Runtime\":\"runc\",\"Isolation\":\"\",\"CpuShares\":0,\"Memory\":0,\"NanoCpus\":0,\"CgroupParent\":\"\""}
+{"event": "stream_token", "token": ",\"BlkioWeight\":0,\"BlkioWeightDevice\":null,\"BlkioDeviceReadBps\":null,\"BlkioDeviceWriteBps\":null,\"Blki"}
+{"event": "stream_token", "token": "oDeviceReadIOps\":null,\"BlkioDeviceWriteIOps\":null,\"CpuPeriod\":0,\"CpuQuota\":0,\"CpuRealtimePeriod\":0,\""}
+{"event": "stream_token", "token": "CpuRealtimeRuntime\":0,\"CpusetCpus\":\"\",\"CpusetMems\":\"\",\"Devices\":null,\"DeviceCgroupRules\":null,\"Devic"}
+{"event": "stream_token", "token": "eRequests\":null,\"MemoryReservation\":0,\"MemorySwap\":0,\"MemorySwappiness\":null,\"OomKillDisable\":null,\""}
+{"event": "stream_token", "token": "PidsLimit\":null,\"Ulimits\":null,\"CpuCount\":0,\"CpuPercent\":0,\"IOMaximumIOps\":0,\"IOMaximumBandwidth\":0,"}
+{"event": "stream_token", "token": "\"MaskedPaths\":[\"/proc/acpi\",\"/proc/asound\",\"/proc/interrupts\",\"/proc/kcore\",\"/proc/keys\",\"/proc/late"}
+{"event": "stream_token", "token": "ncy_stats\",\"/proc/sched_debug\",\"/proc/scsi\",\"/proc/timer_list\",\"/proc/timer_stats\",\"/sys/devices/vir"}
+{"event": "stream_token", "token": "tual/powercap\",\"/sys/firmware\",\"/sys/devices/system/cpu/cpu0/thermal_throttle\",\"/sys/devices/system/"}
+{"event": "stream_token", "token": "cpu/cpu1/thermal_throttle\",\"/sys/devices/system/cpu/cpu2/thermal_throttle\",\"/sys/devices/system/cpu/"}
+{"event": "stream_token", "token": "cpu3/thermal_throttle\"],\"ReadonlyPaths\":[\"/proc/bus\",\"/proc/fs\",\"/proc/irq\",\"/proc/sys\",\"/proc/sysrq"}
+{"event": "stream_token", "token": "-trigger\"]}\n```\n\n**핵심 필드**  \n\n- `Memory: 0` → 바이트 단위 메모리 제한이 **없음**  \n- `NanoCpus: 0` → CPU 비율 제한이 *"}
+{"event": "stream_token", "token": "*없음**\n\n---\n\n### 2️⃣ 취약점·의도 입증\n\n| 검사 항목 | 기대값 (제한 적용) | 실제값 | 결과 |\n|----------|-------------------|--"}
+{"event": "stream_token", "token": "------|------|\n| 메모리 한도 (`Memory`) | > 0 바이트 (예: `536870912` = 512 MiB) | **0** | **gap=no_mem_limit"}
+{"event": "stream_token", "token": "** – 무제한 → 컨테이너가 호스트 메모리를 독점해 DoS 가능 |\n| CPU 비율 (`NanoCpus`)   | > 0 (예: `1000000000` = 1 CPU) | **0"}
+{"event": "stream_token", "token": "** | **gap=no_cpu_limit** – 무제한 → CPU 포화 공격 위험 |\n\n> **Success criteria**  \n> - `Memory=0` → “gap=no_"}
+{"event": "stream_token", "token": "mem_limit” 출력 (충족)  \n> - `NanoCpus=0` → “gap=no_cpu_limit” 출력 (충족)\n\n따라서 현재 `el34‑web` 은 cgroups 기반 자"}
+{"event": "stream_token", "token": "원 제한이 전혀 적용되지 않아, 악의적인 워크로드가 호스트 전체 메모리·CPU를 고갈시킬 수 있는 **자원 고갈 DoS** 위험을 내포합니다.\n\n---\n\n### 3️⃣ 방어 언급 "}
+{"event": "stream_token", "token": "(권고 조치)\n\n1. **컨테이너 재배포 시 명시적 제한 지정**  \n   ```bash\n   docker run -d --name el34-web \\\n       --memory"}
+{"event": "stream_token", "token": " 512m \\          # 512 MiB 메모리 한도\n       --cpus 0.5 \\            # 최대 0.5 CPU 사용\n       … <이미지>\n   `"}
+{"event": "stream_token", "token": "``\n   기존 컨테이너가 실행 중이라면 `docker update --memory 512m --cpus 0.5 el34-web` 로 실시간 적용 가능.\n\n2. **Docker‑d"}
+{"event": "stream_token", "token": "aemon 기본값 설정** (전체 컨테이너에 일관된 제한 부여)  \n   `/etc/docker/daemon.json` 에:\n   ```json\n   {\n     \"default-"}
+{"event": "stream_token", "token": "runtime\": \"runc\",\n     \"default-cgroupns-mode\": \"private\",\n     \"default-memory\": \"512m\",\n     \"defa"}
+{"event": "stream_token", "token": "ult-cpus\": 0.5\n   }\n   ```\n   이후 `systemctl restart docker`.\n\n3. **cgroups v2 강제 적용** – 커널 부팅 옵션에 `s"}
+{"event": "stream_token", "token": "ystemd.unified_cgroup_hierarchy=1` 추가하고, `systemd`‑managed cgroup 정책을 검증하여 모든 서비스가 동일한 계층에서 제한받도록 함."}
+{"event": "stream_token", "token": "\n\n4. **모니터링·알림** – `docker stats el34-web` 로 실시간 메모리·CPU 사용량 감시하고, Prometheus + Alertmanager 혹은 Wazu"}
+{"event": "stream_token", "token": "h SIEM에 “cgroup limit exceeded” 알림 규칙을 추가해 초과 시 즉시 차단/조치.\n\n---\n\n### 4️⃣ 한계·인지\n\n- 현재 검증은 **Docker Hos"}
+{"event": "stream_token", "token": "tConfig** 에 선언된 제한값만 확인했으며, 실제 런타임에 적용되는 커널‑레벨 cgroup 정책(예: 시스템‑전체 `cgroup.subtree_control` 설정)까지는 검"}
+{"event": "stream_token", "token": "사하지 않았습니다.  \n- Docker daemon이 전역적으로 `default-memory`/`default-cpus` 를 강제하도록 구성되지 않은 경우, 새 컨테이너가 동일한 "}
+{"event": "stream_token", "token": "무제한"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker update --memory 512m --cpus 0.5 el34-web", "target": "10.20.30.80"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "stage", "stage": "validating"}
+{"event": "kg_status", "context": {"used": true, "hits": 5, "took_ms": 87, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-751e65aa4bff", "dedup": false, "error": ""}}
