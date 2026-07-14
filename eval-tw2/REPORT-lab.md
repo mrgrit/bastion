@@ -1,6 +1,6 @@
 # Bastion tw2/el34 — LAB 전수 진행 (자동생성)
 
-> lab_loop.py · 총 스텝 2072 · 완료 1332 · 스텝PASS 533 (40%)
+> lab_loop.py · 총 스텝 2072 · 완료 1333 · 스텝PASS 534 (40%)
 > 랩 기준(≥threshold): 53/210 랩 통과
 
 | course | 스텝done | pass |
@@ -18,4 +18,4 @@
 | autonomous-security | 75 | 24 |
 | autonomous-systems | 75 | 34 |
 | cloud-container | 120 | 71 |
-| compliance | 119 | 76 |
+| compliance | 120 | 77 |
