@@ -1,0 +1,113 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.089 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "empty_content_retry", "content_len": 0, "thinking_len": 0, "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "json_markdown", "skill": "shell", "args": {"target": "attacker", "command": "set -e\nLOG=/tmp/uart_boot_STU42.log\ncat > \"$LOG\" <<'EOF'\nU-Boot 2018.03 (IoTCam)\nHit any key to stop autoboot: 0\nBooting Linux...\n[ 1.234] Kernel command line: console=ttyS0,115200 root=/dev/mtdblock3\n[ 2.101] mtd: partitions: boot(0x00000-0x40000) kernel(0x40000-0x300000) rootfs(0x300000-0xF00000)\n[ 3.400] VFS: Mounted root (squashfs) readonly\nStarting network...\nBusyBox v1.28 built-in shell (ash)\n/ #\n/ # id\nuid=0(root) gid=0(root)\nEOF\n\necho \"[로그인 프롬프트?]\"\ngrep -Eq \"login:\" \"$LOG\" && echo \"login 요구\" || echo \"login 없음(무인증 콘솔)\"\n\necho \"[루트 셸?]\"\ngrep -E \"uid=0\\(root\\)|^/ #\" \"$LOG\" || true\n\necho \"[U-Boot 접근?]\"\ngrep -E \"U-Boot|Hit any key to stop autoboot\" \"$LOG\" || true\n\nLOGIN=$(grep -Eq \"login:\" \"$LOG\" && echo 1 || echo 0)\nROOT=$(grep -Eq \"uid=0\\(root\\)\" \"$LOG\" && echo 1 || echo 0)\nif [ \"$LOGIN\" = \"0\" ] && [ \"$ROOT\" = \"1\" ]; then echo \"DEBUG_EXPOSED\"; else echo \"SECURE\"; fi"}}
+{"event": "stream_token", "token": "{\"tool\": \"shell\", \"parameters\": {\"target\": \"attacker\", \"command\": \"set -e\\nLOG=/tmp/uart_boot_STU42."}
+{"event": "stream_token", "token": "log\\ncat > \\\"$LOG\\\" <<'EOF'\\nU-Boot 2018.03 (IoTCam)\\nHit any key to stop autoboot: 0\\nBooting Linux"}
+{"event": "stream_token", "token": "...\\n[ 1.234] Kernel command line: console=ttyS0,115200 root=/dev/mtdblock3\\n[ 2.101] mtd: partition"}
+{"event": "stream_token", "token": "s: boot(0x00000-0x40000) kernel(0x40000-0x300000) rootfs(0x300000-0xF00000)\\n[ 3.400] VFS: Mounted r"}
+{"event": "stream_token", "token": "oot (squashfs) readonly\\nStarting network...\\nBusyBox v1.28 built-in shell (ash)\\n/ #\\n/ # id\\nuid=0"}
+{"event": "stream_token", "token": "(root) gid=0(root)\\nEOF\\n\\necho \\\"[로그인 프롬프트?]\\\"\\ngrep -Eq \\\"login:\\\" \\\"$LOG\\\" && echo \\\"login 요구\\\" |"}
+{"event": "stream_token", "token": "| echo \\\"login 없음(무인증 콘솔)\\\"\\n\\necho \\\"[루트 셸?]\\\"\\ngrep -E \\\"uid=0\\\\(root\\\\)|^/ #\\\" \\\"$LOG\\\" || true\\n"}
+{"event": "stream_token", "token": "\\necho \\\"[U-Boot 접근?]\\\"\\ngrep -E \\\"U-Boot|Hit any key to stop autoboot\\\" \\\"$LOG\\\" || true\\n\\nLOGIN=$"}
+{"event": "stream_token", "token": "(grep -Eq \\\"login:\\\" \\\"$LOG\\\" && echo 1 || echo 0)\\nROOT=$(grep -Eq \\\"uid=0\\\\(root\\\\)\\\" \\\"$LOG\\\" && "}
+{"event": "stream_token", "token": "echo 1 || echo 0)\\nif [ \\\"$LOGIN\\\" = \\\"0\\\" ] && [ \\\"$ROOT\\\" = \\\"1\\\" ]; then echo \\\"DEBUG_EXPOSED\\\"; "}
+{"event": "stream_token", "token": "else echo \\\"SECURE\\\"; fi\"} }"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "empty_content_retry", "content_len": 0, "thinking_len": 0, "attempt": 2}
+{"event": "synthesized_tool_calls", "source": "json_markdown", "skill": "shell", "args": {"target": "bastion", "command": "set -e\nLOG=/tmp/uart_boot_STU42.log\ncat > \"$LOG\" <<'EOF'\nU-Boot 2018.03 (IoTCam)\nHit any key to stop autoboot: 0\nBooting Linux...\n[ 1.234] Kernel command line: console=ttyS0,115200 root=/dev/mtdblock3\n[ 2.101] mtd: partitions: boot(0x00000-0x40000) kernel(0x40000-0x300000) rootfs(0x300000-0xF00000)\n[ 3.400] VFS: Mounted root (squashfs) readonly\nStarting network...\nBusyBox v1.28 built-in shell (ash)\n/ #\n/ # id\nuid=0(root) gid=0(root)\nEOF\n\necho \"[로그인 프롬프트?]\"\ngrep -Eq \"login:\" \"$LOG\" && echo \"login 요구\" || echo \"login 없음(무인증 콘솔)\"\n\necho \"[루트 셸?]\"\ngrep -E \"uid=0\\(root\\)|^/ #\" \"$LOG\" || true\n\necho \"[U-Boot 접근?]\"\ngrep -E \"U-Boot|Hit any key to stop autoboot\" \"$LOG\" || true\n\nLOGIN=$(grep -Eq \"login:\" \"$LOG\" && echo 1 || echo 0)\nROOT=$(grep -Eq \"uid=0\\(root\\)\" && echo 1 || echo 0)\nif [ \"$LOGIN\" = \"0\" ] && [ \"$ROOT\" = \"1\" ]; then echo \"DEBUG_EXPOSED\"; else echo \"SECURE\"; fi"}}
+{"event": "stream_token", "token": "{\"tool\": \"shell\", \"parameters\": {\"target\": \"bastion\", \"command\": \"set -e\\nLOG=/tmp/uart_boot_STU42.l"}
+{"event": "stream_token", "token": "og\\ncat > \\\"$LOG\\\" <<'EOF'\\nU-Boot 2018.03 (IoTCam)\\nHit any key to stop autoboot: 0\\nBooting Linux."}
+{"event": "stream_token", "token": "..\\n[ 1.234] Kernel command line: console=ttyS0,115200 root=/dev/mtdblock3\\n[ 2.101] mtd: partitions"}
+{"event": "stream_token", "token": ": boot(0x00000-0x40000) kernel(0x40000-0x300000) rootfs(0x300000-0xF00000)\\n[ 3.400] VFS: Mounted ro"}
+{"event": "stream_token", "token": "ot (squashfs) readonly\\nStarting network...\\nBusyBox v1.28 built-in shell (ash)\\n/ #\\n/ # id\\nuid=0("}
+{"event": "stream_token", "token": "root) gid=0(root)\\nEOF\\n\\necho \\\"[로그인 프롬프트?]\\\"\\ngrep -Eq \\\"login:\\\" \\\"$LOG\\\" && echo \\\"login 요구\\\" ||"}
+{"event": "stream_token", "token": " echo \\\"login 없음(무인증 콘솔)\\\"\\n\\necho \\\"[루트 셸?]\\\"\\ngrep -E \\\"uid=0\\\\(root\\\\)|^/ #\\\" \\\"$LOG\\\" || true\\n\\"}
+{"event": "stream_token", "token": "necho \\\"[U-Boot 접근?]\\\"\\ngrep -E \\\"U-Boot|Hit any key to stop autoboot\\\" \\\"$LOG\\\" || true\\n\\nLOGIN=$("}
+{"event": "stream_token", "token": "grep -Eq \\\"login:\\\" \\\"$LOG\\\" && echo 1 || echo 0)\\nROOT=$(grep -Eq \\\"uid=0\\\\(root\\\\)\\\" && echo 1 || "}
+{"event": "stream_token", "token": "echo 0)\\nif [ \\\"$LOGIN\\\" = \\\"0\\\" ] && [ \\\"$ROOT\\\" = \\\"1\\\" ]; then echo \\\"DEBUG_EXPOSED\\\"; else echo "}
+{"event": "stream_token", "token": "\\\"SECURE\\\"; fi\"} }"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "synthesized_tool_calls", "source": "json_markdown", "skill": "shell", "args": {"target": "manager", "command": "set -e\nLOG=/tmp/uart_boot_STU42.log\ncat > \"$LOG\" <<'EOF'\nU-Boot 2018.03 (IoTCam)\nHit any key to stop autoboot: 0\nBooting Linux...\n[ 1.234] Kernel command line: console=ttyS0,115200 root=/dev/mtdblock3\n[ 2.101] mtd: partitions: boot(0x00000-0x40000) kernel(0x40000-0x300000) rootfs(0x300000-0xF00000)\n[ 3.400] VFS: Mounted root (squashfs) readonly\nStarting network...\nBusyBox v1.28 built-in shell (ash)\n/ #\n/ # id\nuid=0(root) gid=0(root)\nEOF\n\necho \"[로그인 프롬프트?]\"\ngrep -Eq \"login:\" \"$LOG\" && echo \"login 요구\" || echo \"login 없음(무인증 콘솔)\"\n\necho \"[루트 셸?]\"\ngrep -E \"uid=0\\(root\\)|^/ #\" \"$LOG\" || true\n\necho \"[U-Boot 접근?]\"\ngrep -E \"U-Boot|Hit any key to stop autoboot\" \"$LOG\" || true\n\nLOGIN=$(grep -Eq \"login:\" \"$LOG\" && echo 1 || echo 0)\nROOT=$(grep -Eq \"uid=0\\(root\\)\" && echo 1 || echo 0)\nif [ \"$LOGIN\" = \"0\" ] && [ \"$ROOT\" = \"1\" ]; then echo \"DEBUG_EXPOSED\"; else echo \"SECURE\"; fi"}}
+{"event": "stream_token", "token": "{\"tool\": \"shell\", \"parameters\": {\"target\": \"manager\", \"command\": \"set -e\\nLOG=/tmp/uart_boot_STU42.l"}
+{"event": "stream_token", "token": "og\\ncat > \\\"$LOG\\\" <<'EOF'\\nU-Boot 2018.03 (IoTCam)\\nHit any key to stop autoboot: 0\\nBooting Linux."}
+{"event": "stream_token", "token": "..\\n[ 1.234] Kernel command line: console=ttyS0,115200 root=/dev/mtdblock3\\n[ 2.101] mtd: partitions"}
+{"event": "stream_token", "token": ": boot(0x00000-0x40000) kernel(0x40000-0x300000) rootfs(0x300000-0xF00000)\\n[ 3.400] VFS: Mounted ro"}
+{"event": "stream_token", "token": "ot (squashfs) readonly\\nStarting network...\\nBusyBox v1.28 built-in shell (ash)\\n/ #\\n/ # id\\nuid=0("}
+{"event": "stream_token", "token": "root) gid=0(root)\\nEOF\\n\\necho \\\"[로그인 프롬프트?]\\\"\\ngrep -Eq \\\"login:\\\" \\\"$LOG\\\" && echo \\\"login 요구\\\" ||"}
+{"event": "stream_token", "token": " echo \\\"login 없음(무인증 콘솔)\\\"\\n\\necho \\\"[루트 셸?]\\\"\\ngrep -E \\\"uid=0\\\\(root\\\\)|^/ #\\\" \\\"$LOG\\\" || true\\n\\"}
+{"event": "stream_token", "token": "necho \\\"[U-Boot 접근?]\\\"\\ngrep -E \\\"U-Boot|Hit any key to stop autoboot\\\" \\\"$LOG\\\" || true\\n\\nLOGIN=$("}
+{"event": "stream_token", "token": "grep -Eq \\\"login:\\\" \\\"$LOG\\\" && echo 1 || echo 0)\\nROOT=$(grep -Eq \\\"uid=0\\\\(root\\\\)\\\" && echo 1 || "}
+{"event": "stream_token", "token": "echo 0)\\nif [ \\\"$LOGIN\\\" = \\\"0\\\" ] && [ \\\"$ROOT\\\" = \\\"1\\\" ]; then echo \\\"DEBUG_EXPOSED\\\"; else echo "}
+{"event": "stream_token", "token": "\\\"SECURE\\\"; fi\"} }"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "prompt_fallback_attempt", "command": "cat > \"$LOG\" <<'EOF'", "source": "prose"}
+{"event": "synthesized_tool_calls", "source": "prose", "skill": "shell", "command": "cat > \"$LOG\" <<'EOF'"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "cat > \"$LOG\" <<'EOF'", "target": "10.20.30.1"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "stage", "stage": "validating"}
+{"event": "stream_token", "token": "1. 도구 실행 결과: `shell` 스킬이 **실패**했으며, 명령 `cat > \"$LOG\" <<'EOF' … EOF` 의 표준 출력이 전혀 반환되지 않았습니다.  \n2. 추정 "}
+{"event": "stream_token", "token": "원인: (a) 대상 호스트(`attacker`, `bastion`, `manager`) 중 하나가 네트워크 연결 불가능하거나 IP‑주소 매핑 오류로 접근이 차단됨; (b) 해당 컨"}
+{"event": "stream_token", "token": "테이너 내부에서 파일 쓰기 권한이 없거나 `/tmp` 디렉터리가 마운트되지 않아 `cat` 명령이 즉시 종료되었습니다.  \n3. 다음 시도 권장:  \n   - 먼저 `probe_h"}
+{"event": "stream_token", "token": "ost` 혹은 `docker_manage(action=\"ps\")` 로 각 컨테이너 상태와 IP 연결성을 확인하고, 정상적인 `exec` 환경을 확보한다.  \n   - 파일 쓰기가 "}
+{"event": "stream_token", "token": "가능한 경로를 명시(`touch /tmp/test && echo ok > /tmp/test`)하여 권한을 검증한 뒤, 동일 로그 생성 명령을 재실행한다.  \n   - 필요 시 `d"}
+{"event": "stream_token", "token": "ocker exec <container> bash -c \"...\"` 형태로 직접 컨테이너 내부에서 명령을 실행하도록 전환한다."}
+{"event": "step_retry", "attempt": 2, "feedback": "모든 skill 시도가 실패"}
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.097 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker exec el34-attacker bash -c '\ncat > /tmp/uart_boot_STU42.log <<\"EOF\"\nU-Boot 2018.03 (IoTCam)\nHit any key to stop autoboot: 0\nBooting Linux...\n[ 1.234] Kernel command line: console=ttyS0,115200 root=/dev/mtdblock3\n[ 2.101] mtd: partitions: boot(0x00000-0x40000) kernel(0x40000-0x300000) rootfs(0x300000-0xF00000)\n[ 3.400] VFS: Mounted root (squashfs) readonly\nStarting network...\nBusyBox v1.28 built-in shell (ash)\n/ #\n/ # id\nuid=0(root) gid=0(root)\nEOF\n\n# Perform checks and output results\nprintf \"[로그인 프롬프트?] \"; if grep -q \"login:\" /tmp/uart_boot_STU42.log; then echo \"login 요구\"; else echo \"login 없음(무인증 콘솔)\"; fi\nprintf \"[루트 셸?] \"; grep -E \"uid=0\\(root\\)|^/ #\" /tmp/uart_boot_STU42.log || true\nprintf \"[U-Boot 접근?] \"; grep -E \"U-Boot|Hit any key to stop autoboot\" /tmp/uart_boot_STU42.log || true\n\nLOGIN=$(grep -q \"login:\" /tmp/uart_boot_STU42.log && echo 1 || echo 0)\nROOT=$(grep -q \"uid=0(root)\" /tmp/uart_boot_STU42.log && echo 1 || echo 0)\nif [ \"$LOGIN\" = \"0\" ] && [ \"$ROOT\" = \"1\" ]; then echo DEBUG_EXPOSED; else echo SECURE; fi\n'", "target": "10.20.30.1"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "[로그인 프롬프트?] login 없음(무인증 콘솔)\n[루트 셸?] / #\n/ # id\nuid=0(root) gid=0(root)\n[U-Boot 접근?] U-Boot 2018.03 (IoTCam)\nHit any key to stop autoboot: 0\nDEBUG_EXPOSED\n", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "docker exec el34-attacker"}
+{"event": "stream_token", "token": "**GOAL:** UART 부트 로그를 생성하고 `grep` 으로 로그인 프롬프트 없이 루트 셸(`uid=0`)과 U‑Boot 접근이 나타나는지 확인하여 디버그 콘솔 노출 여부를 "}
+{"event": "stream_token", "token": "판단한다.  \n**SUCCESS:** `DEBUG_EXPOSED` 가 출력되어 **디버그 인터페이스가 노출됨**을 확인했다.\n\n---\n\n### 1️⃣ 실행 결과 (★ 코드블록)\n\n"}
+{"event": "stream_token", "token": "```\n[로그인 프롬프트?] login 없음(무인증 콘솔)\n[루트 셸?] / #\n/ # id\nuid=0(root) gid=0(root)\n[U-Boot 접근?] U-Boot 2018"}
+{"event": "stream_token", "token": ".03 (IoTCam)\nHit any key to stop autoboot: 0\nDEBUG_EXPOSED\n```\n\n*위 출력은 `docker exec el34-attacker` 내"}
+{"event": "stream_token", "token": "부에서 실행된 전체 stdout이다.*\n\n---\n\n### 2️⃣ 취약점 / 의도 입증\n\n| 검사 | 기대 결과 | 실제 결과 |\n|------|-----------|--------"}
+{"event": "stream_token", "token": "----|\n| 로그인 프롬프트 존재 여부 (`login:`) | **있어야** (보안) | `login 없음(무인증 콘솔)` → **없음** |\n| 루트 셸 표시 (`uid=0(r"}
+{"event": "stream_token", "token": "oot)` 또는 `/ #`) | **없어야** (비인가 접근 차단) | `/ #` 와 `uid=0(root)` 가 존재 → **루트 셸 자동 제공** |\n| U‑Boot 접근 로그"}
+{"event": "stream_token", "token": " (`U-Boot` / `Hit any key…`) | **있어도 무방**하지만 인증이 필요함 | `U-Boot 2018.03 (IoTCam)` 와 `Hit any key to s"}
+{"event": "stream_token", "token": "top autoboot: 0` 가 기록 → **부트 로더에 직접 접근 가능** |\n| 최종 판단 (`DEBUG_EXPOSED`) | 디버그 인터페이스 노출 시 출력 | **DEBU"}
+{"event": "stream_token", "token": "G_EXPOSED** 가 출력됨 |\n\n> **결론:** 로그인 없이 루트 셸이 제공되고, 부팅 초기 단계에서 U‑Boot 로거가 멈추어 조작 가능하므로 디버그 콘솔이 외부에 노출돼"}
+{"event": "stream_token", "token": " 있다. 이는 공격자가 시리얼/UART 케이블만 연결하면 전체 시스템을 장악할 수 있음을 의미한다 (CWE‑284: Improper Access Control, MITRE ATT&"}
+{"event": "stream_token", "token": "CK T1542.003 “Peripheral Device Discovery”).\n\n---\n\n### 3️⃣ 방어 언급\n\n1. **UART 콘솔 인증 활성화** – U‑Boot `CO"}
+{"event": "stream_token", "token": "NFIG_AUTOBOOT_PROMPT` 를 비활성화하고, 부팅 시 패스워드 요구 (`setenv bootdelay 5; setenv password <hash>`).  \n2. **"}
+{"event": "stream_token", "token": "Secure Boot / Signed Firmware** – 부트 로더와 커널 이미지에 디지털 서명을 적용해 임의 변경을 방지.  \n3. **물리적 접근 제어** – UART 포트"}
+{"event": "stream_token", "token": "를 물리적으로 차단하거나, TPM 기반 하드웨어 루트 오브 트러스트를 사용해 콘솔 접근을 제한.\n\n---\n\n### 4️⃣ 한계·인지\n\n- **실제 디바이스와 차이:** 여기서는 로"}
+{"event": "stream_token", "token": "그 파일을 인위적으로 생성했으며, 실제 UART 스트림에서 발생할 수 있는 타이밍/전송 오류는 반영되지 않는다.  \n- **물리적 접근 전제:** 위 방어 조치는 물리적인 UART"}
+{"event": "stream_token", "token": " 케이블 연결을 전제로 한다; 공격자가 완전히 물리적 접근을 차단하지 못한다면 여전히 위험하다.  \n- **부트 로더 버전 의존성:** 오래된 U‑Boot(2018)에서는 인증 옵"}
+{"event": "stream_token", "token": "션이 제한될 수 있어 펌웨어 업데이트가 필요할 수도 있다.\n\n--- \n\n**GOAL 충족됨:** UART 부트 로그 분석을 통해 로그인 없이 루트 셸과 U‑Boot 접근이 확인되었"}
+{"event": "stream_token", "token": "으며, 디버그 인터페이스 노출(`DEBUG_EXPOSED`)이 입증되었습니다. 필요한 방어 조치를 적용해 위험을 완화하십시오."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker exec el34-attacker", "target": "10.20.30.1"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "docker exec el34-attacker"}
+{"event": "stream_token", "token": "**GOAL:** UART 부트 로그를 생성하고 `grep` 으로 로그인 프롬프트 없이 루트 셸(`uid=0`)과 U‑Boot 접근이 나타나는지 확인하여 디버그 콘솔 노출 여부를 "}
+{"event": "stream_token", "token": "판단한다.  \n**SUCCESS:** `DEBUG_EXPOSED` 가 출력되어 **디버그 인터페이스가 노출됨**을 확인했다.\n\n---\n\n### 1️⃣ 실행 결과 (★ 코드블록)\n\n"}
+{"event": "stream_token", "token": "```\n[로그인 프롬프트?] login 없음(무인증 콘솔)\n[루트 셸?] / #\n/ # id\nuid=0(root) gid=0(root)\n[U-Boot 접근?] U-Boot 2018"}
+{"event": "stream_token", "token": ".03 (IoTCam)\nHit any key to stop autoboot: 0\nDEBUG_EXPOSED\n```\n\n*위 출력은 `docker exec el34-attacker` 내"}
+{"event": "stream_token", "token": "부에서 실행된 전체 stdout이다.*\n\n---\n\n### 2️⃣ 취약점 / 의도 입증\n\n| 검사 | 기대 결과 | 실제 결과 |\n|------|-----------|--------"}
+{"event": "stream_token", "token": "----|\n| 로그인 프롬프트 존재 여부 (`login:`) | **있어야** (보안) | `login 없음(무인증 콘솔)` → **없음** |\n| 루트 셸 표시 (`uid=0(r"}
+{"event": "stream_token", "token": "oot)` 또는 `/ #`) | **없어야** (비인가 접근 차단) | `/ #` 와 `uid=0(root)` 가 존재 → **루트 셸 자동 제공** |\n| U‑Boot 접근 로그"}
+{"event": "stream_token", "token": " (`U-Boot` / `Hit any key…`) | **있어도 무방**하지만 인증이 필요함 | `U-Boot 2018.03 (IoTCam)` 와 `Hit any key to s"}
+{"event": "stream_token", "token": "top autoboot: 0` 가 기록 → **부트 로더에 직접 접근 가능** |\n| 최종 판단 (`DEBUG_EXPOSED`) | 디버그 인터페이스 노출 시 출력 | **DEBU"}
+{"event": "stream_token", "token": "G_EXPOSED** 가 출력됨 |\n\n> **결론:** 로그인 없이 루트 셸이 제공되고, 부팅 초기 단계에서 U‑Boot 로거가 멈추어 조작 가능하므로 디버그 콘솔이 외부에 노출돼"}
+{"event": "stream_token", "token": " 있다. 이는 공격자가 시리얼/UART 케이블만 연결하면 전체 시스템을 장악할 수 있음을 의미한다 (CWE‑284: Improper Access Control, MITRE ATT&"}
+{"event": "stream_token", "token": "CK T1542.003 “Peripheral Device Discovery”).\n\n---\n\n### 3️⃣ 방어 언급\n\n1. **UART 콘솔 인증 활성화** – U‑Boot `CO"}
+{"event": "stream_token", "token": "NFIG_AUTOBOOT_PROMPT` 를 비활성화하고 부팅 시 패스워드 요구(`setenv bootdelay 5; setenv password <hash>`).  \n2. **Se"}
+{"event": "stream_token", "token": "cure Boot / Signed Firmware** – 부트 로더와 커널 이미지에 디지털 서명을 적용해 임의 변경을 방지.  \n3. **물리적 접근 제어** – UART 포트를 "}
+{"event": "stream_token", "token": "물리적으로 차단하거나 TPM 기반 하드웨어 루트 오브 트러스트를 사용해 콘솔 접근을 제한.\n\n---\n\n### 4️⃣ 한계·인지\n\n- **실제 디바이스와 차이:** 여기서는 로그 파"}
+{"event": "stream_token", "token": "일을 인위적으로 생성했으며, 실제 UART 스트림에서 발생할 수 있는 타이밍/전송 오류는 반영되지 않는다.  \n- **물리적 접근 전제:** 위 방어 조치는 물리적인 UART 케이"}
+{"event": "stream_token", "token": "블 연결을 전제로 한다; 공격자가 완전히 물리적 접근을 차단하지 못한다면 여전히 위험하다.  \n- **부트 로더 버전 의존성:** 오래된 U‑Boot(2018)에서는 인증 옵션이 "}
+{"event": "stream_token", "token": "제한될 수 있어 펌웨어 업데이트가 필요할 수도 있다.\n\n---\n\n**GOAL 충족됨:** UART 부트 로그 분석을 통해 로그인 없이 루트 셸과 U‑Boot 접근이 확인되었으며, "}
+{"event": "stream_token", "token": "디버그 인터페이스 노출(`DEBUG_EXPOSED`)이 입증되었습니다. 필요한 방어 조치를 적용해 위험을 완화하십시오."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker exec el34-attacker", "target": "10.20.30.1"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": false, "output": "", "attempt": 1}
+{"event": "stage", "stage": "validating"}
+{"event": "kg_status", "context": {"used": true, "hits": 5, "took_ms": 70, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-4510907113ad", "dedup": false, "error": ""}}
