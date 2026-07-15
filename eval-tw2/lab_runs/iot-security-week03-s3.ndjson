@@ -1,0 +1,89 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.089 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker ps --format \"{{.Names}}\"", "target": "10.20.30.1"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "el34-bastion\nel34-siem\nel34-aicompanion\nel34-web\nel34-ips\nel34-fw\nel34-adminconsole\nel34-mediforum\nel34-neobank\nel34-govportal\nel34-ollama\nel34-connector-import-external-reference-1\nel34-connector-import-file-yara-1\nel34-connector-analysis-1\nel34-connector-import-document-1\nel34-connector-import-file-stix-1\nel34-connector-export-file-csv-1\nel34-connector-export-file-stix-1\nel34-connector-mitre-1\nel34-connector-export-file-txt-1\nel34-connector-opencti-1\nel34-worker-3\nel34-worker-2\nel34-worker-1\nel34-xtm-composer-1\nel34-misp-core-1\nel34-opencti-1\nel34-rabbitmq-1\nel34-db-1\nel34-sysmon-host\nel34-elasticsearch-1\nel34-redis-1\nel34-misp-modules-1\nel34-minio-1\nel34-rsa-key-generator-1\nel34-mail-1\nel34-portal\nel34-attacker\nel34-wazuh-dashboard\nel34-juiceshop\nel34-wazuh-indexer\nel34-dvwa\n", "attempt": 1}
+{"event": "skill_start", "skill": "shell", "params": {"command": "docker exec el34-attacker bash -c '\nLOG=/tmp/uart_boot_STU42.log\necho \"=== MTD partitions ===\"\ngrep -E \"mtd: partitions|mtdblock\" \"$LOG\"\necho \"=== Secure boot check ===\"\nif grep -Eiq \"Verifying Hash|secure boot|signature.*(ok|verified)\" \"$LOG\"; then echo \"보안 부팅: 검증함\"; else echo \"보안 부팅: 미검증(서명 확인 없음)\"; fi\nMTD=0; SB=0\ngrep -Eq \"mtd: partitions|rootfs\" \"$LOG\" && MTD=1\ngrep -Eiq \"Verifying Hash|secure boot\" \"$LOG\" && SB=1\nif [ \"$MTD\" = \"1\" ] && [ \"$SB\" = \"0\" ]; then echo \"FIRMWARE_EXTRACTABLE\"; else echo \"PROTECTED\"; fi\n'", "target": "10.20.30.1"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "=== MTD partitions ===\n[ 1.234] Kernel command line: console=ttyS0,115200 root=/dev/mtdblock3\n[ 2.101] mtd: partitions: boot(0x00000-0x40000) kernel(0x40000-0x300000) rootfs(0x300000-0xF00000)\n=== Secure boot check ===\n보안 부팅: 미검증(서명 확인 없음)\nFIRMWARE_EXTRACTABLE\n", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "grep -E \"mtd: partitions|mtdblock\""}
+{"event": "stream_token", "token": "**GOAL 충족됨:** 부트 로그에서 MTD 파티션 정보를 확인하고 보안 부팅 검증 여부를 판단하여 펌웨어 추출 가능성을 판정하였다.\n\n---\n\n### 1️⃣ 실행 결과 (★ 코"}
+{"event": "stream_token", "token": "드블록)\n\n```bash\ndocker exec el34-attacker bash -c '\nLOG=/tmp/uart_boot_STU42.log\necho \"=== MTD partiti"}
+{"event": "stream_token", "token": "ons ===\"\ngrep -E \"mtd: partitions|mtdblock\" \"$LOG\"\necho \"=== Secure boot check ===\"\nif grep -Eiq \"Ve"}
+{"event": "stream_token", "token": "rifying Hash|secure boot|signature.*(ok|verified)\" \"$LOG\"; then echo \"보안 부팅: 검증함\"; else echo \"보안 부팅:"}
+{"event": "stream_token", "token": " 미검증(서명 확인 없음)\"; fi\nMTD=0; SB=0\ngrep -Eq \"mtd: partitions|rootfs\" \"$LOG\" && MTD=1\ngrep -Eiq \"Verifyi"}
+{"event": "stream_token", "token": "ng Hash|secure boot\" \"$LOG\" && SB=1\nif [ \"$MTD\" = \"1\" ] && [ \"$SB\" = \"0\" ]; then echo \"FIRMWARE_EXTR"}
+{"event": "stream_token", "token": "ACTABLE\"; else echo \"PROTECTED\"; fi\n'\n```\n\n**stdout**\n\n```\n=== MTD partitions ===\n[ 1.234] Kernel co"}
+{"event": "stream_token", "token": "mmand line: console=ttyS0,115200 root=/dev/mtdblock3\n[ 2.101] mtd: partitions: boot(0x00000-0x40000)"}
+{"event": "stream_token", "token": " kernel(0x40000-0x300000) rootfs(0x300000-0xF00000)\n=== Secure boot check ===\n보안 부팅: 미검증(서명 확인 없음)\nF"}
+{"event": "stream_token", "token": "IRMWARE_EXTRACTABLE\n```\n\n---\n\n### 2️⃣ 취약점/의도 입증\n\n| 단계 | 수행된 명령 | 관찰된 응답 | 성공 기준 |\n|------|----------"}
+{"event": "stream_token", "token": "---|--------------|-----------|\n| **MTD 파티션 열람** | `grep -E \"mtd: partitions|mtdblock\"` | 로그에 `boot`"}
+{"event": "stream_token", "token": ", `kernel`, `rootfs` 파티션 주소가 노출됨 | ✅ 파티션 위치 확인 |\n| **보안 부팅 검증 여부** | `grep -Eiq \"Verifying Hash|secu"}
+{"event": "stream_token", "token": "re boot|signature.*(ok|verified)\"` | “보안 부팅: 미검증” 출력 | ✅ 보안 부팅 비활성화 확인 |\n| **펌웨어 추출 가능성 판단** | 조건식 `"}
+{"event": "stream_token", "token": "MTD=1 && SB=0` → `FIRMWARE_EXTRACTABLE` | 최종 출력 `FIRMWARE_EXTRACTABLE` | ✅ 펌웨어 추출 가능 판정 |\n\n---\n\n### "}
+{"event": "stream_token", "token": "3️⃣ 정량 수치\n\n- **MTD 파티션 라인**: 2 줄 (boot, kernel, rootfs)  \n- **보안 부팅 검증 문자열 매칭**: 0 건 → 미검증  \n- **판정 "}
+{"event": "stream_token", "token": "결과**: 1 건 “FIRMWARE_EXTRACTABLE”\n\n---\n\n### 4️⃣ 표준 매핑\n\n| 분야 | 매핑 코드 |\n|------|-----------|\n| MITRE AT"}
+{"event": "stream_token", "token": "T&CK (IoT) | **T1609 – Firmware Extraction** |\n| CWE (정보 노출) | **CWE‑200 – Information Exposure** |\n"}
+{"event": "stream_token", "token": "| 보안 베스트 프랙티스 | **Secure Boot 활성화 / 콘솔 접근 제한** |\n\n---\n\n### 5️⃣ 결론·권고\n\n1. **Secure Boot 활성화**  \n   - "}
+{"event": "stream_token", "token": "부트 로더에 서명 검증을 적용하고, `Verifying Hash`와 같은 로그가 출력되도록 설정한다.\n\n2. **MTD 파티션 정보 은폐**  \n   - 커널 부팅 옵션에서 `co"}
+{"event": "stream_token", "token": "nsole=ttyS0` 등 직렬 콘솔 출력을 제한하거나, 파티션 레이아웃을 로그에 기록하지 않게 커널/부트 로더 설정을 수정한다.\n\n3. **콘솔 접근 제어 강화**  \n   - "}
+{"event": "stream_token", "token": "UART/시리얼 포트에 대한 물리·네트워크 접근을 방화벽(nftables) 혹은 OS 수준 ACL로 제한하고, 인증된 관리자만 접속하도록 한다.\n\n4. **감사 로깅 및 모니터링*"}
+{"event": "stream_token", "token": "*  \n   - 부팅 시 `secure boot` 검증 실패/비활성화 이벤트를 SIEM (Wazuh) 에 전송해 실시간 알림을 설정한다.\n\n---\n\n**한계·인지**  \n- 현재 "}
+{"event": "stream_token", "token": "확인은 로그 파일(`uart_boot_STU42.log`)에 기반한 정적 분석이며, 실제 하드웨어 접근(예: JTAG) 가능성은 별도 물리 보안 검토가 필요하다.  \n- Secur"}
+{"event": "stream_token", "token": "e Boot 미활성화는 소프트웨어 수준에서 쉽게 재활성화될 수 있으므로, 펌웨어 서명 키 관리와 부트 로더 보호를 함께 적용해야 한다."}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "grep -E \"mtd: partitions|mtdblock\""}
+{"event": "stream_token", "token": "**GOAL 충족됨:** 부트 로그에서 MTD 파티션 정보를 확인하고 보안 부팅 검증 여부를 판단하여 펌웨어 추출 가능성을 판정하였다.\n\n---\n\n### 1️⃣ 실행 결과 (★ 코"}
+{"event": "stream_token", "token": "드블록)\n\n```bash\ndocker exec el34-attacker bash -c '\nLOG=/tmp/uart_boot_STU42.log\necho \"=== MTD partiti"}
+{"event": "stream_token", "token": "ons ===\"\ngrep -E \"mtd: partitions|mtdblock\" \"$LOG\"\necho \"=== Secure boot check ===\"\nif grep -Eiq \"Ve"}
+{"event": "stream_token", "token": "rifying Hash|secure boot|signature.*(ok|verified)\" \"$LOG\"; then echo \"보안 부팅: 검증함\"; else echo \"보안 부팅:"}
+{"event": "stream_token", "token": " 미검증(서명 확인 없음)\"; fi\nMTD=0; SB=0\ngrep -Eq \"mtd: partitions|rootfs\" \"$LOG\" && MTD=1\ngrep -Eiq \"Verifyi"}
+{"event": "stream_token", "token": "ng Hash|secure boot\" \"$LOG\" && SB=1\nif [ \"$MTD\" = \"1\" ] && [ \"$SB\" = \"0\" ]; then echo \"FIRMWARE_EXTR"}
+{"event": "stream_token", "token": "ACTABLE\"; else echo \"PROTECTED\"; fi\n'\n```\n\n**stdout**\n\n```\n=== MTD partitions ===\n[ 1.234] Kernel co"}
+{"event": "stream_token", "token": "mmand line: console=ttyS0,115200 root=/dev/mtdblock3\n[ 2.101] mtd: partitions: boot(0x00000-0x40000)"}
+{"event": "stream_token", "token": " kernel(0x40000-0x300000) rootfs(0x300000-0xF00000)\n=== Secure boot check ===\n보안 부팅: 미검증(서명 확인 없음)\nF"}
+{"event": "stream_token", "token": "IRMWARE_EXTRACTABLE\n```\n\n---\n\n### 2️⃣ 취약점/의도 입증\n\n| 단계 | 수행된 명령 | 관찰된 응답 | 성공 기준 |\n|------|----------"}
+{"event": "stream_token", "token": "---|--------------|-----------|\n| **MTD 파티션 열람** | `grep -E \"mtd: partitions|mtdblock\"` | 로그에 `boot`"}
+{"event": "stream_token", "token": ", `kernel`, `rootfs` 파티션 주소가 노출됨 | ✅ 파티션 위치 확인 |\n| **보안 부팅 검증 여부** | `grep -Eiq \"Verifying Hash|secu"}
+{"event": "stream_token", "token": "re boot|signature.*(ok|verified)\"` | “보안 부팅: 미검증” 출력 | ✅ 보안 부팅 비활성화 확인 |\n| **펌웨어 추출 가능성 판단** | 조건식 `"}
+{"event": "stream_token", "token": "MTD=1 && SB=0` → `FIRMWARE_EXTRACTABLE` | 최종 출력 `FIRMWARE_EXTRACTABLE` | ✅ 펌웨어 추출 가능 판정 |\n\n---\n\n### "}
+{"event": "stream_token", "token": "3️⃣ 정량 수치\n\n- **MTD 파티션 라인**: 2 줄 (boot, kernel, rootfs)  \n- **보안 부팅 검증 문자열 매칭**: 0 건 → 미검증  \n- **판정 "}
+{"event": "stream_token", "token": "결과**: 1 건 “FIRMWARE_EXTRACTABLE”\n\n---\n\n### 4️⃣ 표준 매핑\n\n| 분야 | 매핑 코드 |\n|------|-----------|\n| MITRE AT"}
+{"event": "stream_token", "token": "T&CK (IoT) | **T1609 – Firmware Extraction** |\n| CWE (정보 노출) | **CWE‑200 – Information Exposure** |\n"}
+{"event": "stream_token", "token": "| 보안 베스트 프랙티스 | **Secure Boot 활성화 / 콘솔 접근 제한** |\n\n---\n\n### 5️⃣ 결론·권고\n\n1. **Secure Boot 활성화**  \n   - "}
+{"event": "stream_token", "token": "부트 로더에 서명 검증을 적용하고, `Verifying Hash`와 같은 로그가 출력되도록 설정한다.\n\n2. **MTD 파티션 정보 은폐**  \n   - 커널 부팅 옵션에서 `co"}
+{"event": "stream_token", "token": "nsole=ttyS0` 등 직렬 콘솔 출력을 제한하거나, 파티션 레이아웃을 로그에 기록하지 않게 커널/부트 로더 설정을 수정한다.\n\n3. **콘솔 접근 제어 강화**  \n   - "}
+{"event": "stream_token", "token": "UART/시리얼 포트에 대한 물리·네트워크 접근을 방화벽(nftables) 혹은 OS 수준 ACL로 제한하고, 인증된 관리자만 접속하도록 한다.\n\n4. **감사 로깅 및 모니터링*"}
+{"event": "stream_token", "token": "*  \n   - 부팅 시 `secure boot` 검증 실패/비활성화 이벤트를 SIEM (Wazuh) 에 전송해 실시간 알림을 설정한다.\n\n---\n\n**한계·인지**  \n- 현재 "}
+{"event": "stream_token", "token": "확인은 로그 파일(`uart_boot_STU42.log`)에 기반한 정적 분석이며, 실제 하드웨어 접근(예: JTAG) 가능성은 별도 물리 보안 검토가 필요하다.  \n- Secur"}
+{"event": "stream_token", "token": "e Boot 미활성화는 소프트웨어 수준에서 쉽게 재활성화될 수 있으므로, 펌웨어 서명 키 관리와 부트 로더 보호를 함께 적용해야 한다."}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "grep -E \"mtd: partitions|mtdblock\""}
+{"event": "stream_token", "token": "**GOAL 충족됨:** 부트 로그에서 MTD 파티션 정보를 확인하고 보안 부팅 검증 여부를 판단하여 펌웨어 추출 가능성을 판정하였다.\n\n---\n\n### 1️⃣ 실행 결과 (★ 코"}
+{"event": "stream_token", "token": "드블록)\n\n```bash\ndocker exec el34-attacker bash -c '\nLOG=/tmp/uart_boot_STU42.log\necho \"=== MTD partiti"}
+{"event": "stream_token", "token": "ons ===\"\ngrep -E \"mtd: partitions|mtdblock\" \"$LOG\"\necho \"=== Secure boot check ===\"\nif grep -Eiq \"Ve"}
+{"event": "stream_token", "token": "rifying Hash|secure boot|signature.*(ok|verified)\" \"$LOG\"; then echo \"보안 부팅: 검증함\"; else echo \"보안 부팅:"}
+{"event": "stream_token", "token": " 미검증(서명 확인 없음)\"; fi\nMTD=0; SB=0\ngrep -Eq \"mtd: partitions|rootfs\" \"$LOG\" && MTD=1\ngrep -Eiq \"Verifyi"}
+{"event": "stream_token", "token": "ng Hash|secure boot\" \"$LOG\" && SB=1\nif [ \"$MTD\" = \"1\" ] && [ \"$SB\" = \"0\" ]; then echo \"FIRMWARE_EXTR"}
+{"event": "stream_token", "token": "ACTABLE\"; else echo \"PROTECTED\"; fi\n'\n```\n\n**stdout**\n\n```\n=== MTD partitions ===\n[ 1.234] Kernel co"}
+{"event": "stream_token", "token": "mmand line: console=ttyS0,115200 root=/dev/mtdblock3\n[ 2.101] mtd: partitions: boot(0x00000-0x40000)"}
+{"event": "stream_token", "token": " kernel(0x40000-0x300000) rootfs(0x300000-0xF00000)\n=== Secure boot check ===\n보안 부팅: 미검증(서명 확인 없음)\nF"}
+{"event": "stream_token", "token": "IRMWARE_EXTRACTABLE\n```\n\n---\n\n### 2️⃣ 취약점/의도 입증\n\n| 단계 | 수행된 명령 | 관찰된 응답 | 성공 기준 |\n|------|----------"}
+{"event": "stream_token", "token": "---|--------------|-----------|\n| **MTD 파티션 열람** | `grep -E \"mtd: partitions|mtdblock\"` | 로그에 `boot`"}
+{"event": "stream_token", "token": ", `kernel`, `rootfs` 파티션 주소가 노출됨 | ✅ 파티션 위치 확인 |\n| **보안 부팅 검증 여부** | `grep -Eiq \"Verifying Hash|secu"}
+{"event": "stream_token", "token": "re boot|signature.*(ok|verified)\"` | “보안 부팅: 미검증” 출력 | ✅ 보안 부팅 비활성화 확인 |\n| **펌웨어 추출 가능성 판단** | 조건식 `"}
+{"event": "stream_token", "token": "MTD=1 && SB=0` → `FIRMWARE_EXTRACTABLE` | 최종 출력 `FIRMWARE_EXTRACTABLE` | ✅ 펌웨어 추출 가능 판정 |\n\n---\n\n### "}
+{"event": "stream_token", "token": "3️⃣ 정량 수치\n\n- **MTD 파티션 라인**: 2 줄 (boot, kernel, rootfs)  \n- **보안 부팅 검증 문자열 매칭**: 0 건 → 미검증  \n- **판정 "}
+{"event": "stream_token", "token": "결과**: 1 건 “FIRMWARE_EXTRACTABLE”\n\n---\n\n### 4️⃣ 표준 매핑\n\n| 분야 | 매핑 코드 |\n|------|-----------|\n| MITRE AT"}
+{"event": "stream_token", "token": "T&CK (IoT) | **T1609 – Firmware Extraction** |\n| CWE (정보 노출) | **CWE‑200 – Information Exposure** |\n"}
+{"event": "stream_token", "token": "| 보안 베스트 프랙티스 | **Secure Boot 활성화 / 콘솔 접근 제한** |\n\n---\n\n### 5️⃣ 결론·권고\n\n1. **Secure Boot 활성화**  \n   - "}
+{"event": "stream_token", "token": "부트 로더에 서명 검증을 적용하고, `Verifying Hash`와 같은 로그가 출력되도록 설정한다.\n\n2. **MTD 파티션 정보 은폐**  \n   - 커널 부팅 옵션에서 `co"}
+{"event": "stream_token", "token": "nsole=ttyS0` 등 직렬 콘솔 출력을 제한하거나, 파티션 레이아웃을 로그에 기록하지 않게 커널/부트 로더 설정을 수정한다.\n\n3. **콘솔 접근 제어 강화**  \n   - "}
+{"event": "stream_token", "token": "UART/시리얼 포트에 대한 물리·네트워크 접근을 방화벽(nftables) 혹은 OS 수준 ACL로 제한하고, 인증된 관리자만 접속하도록 한다.\n\n4. **감사 로깅 및 모니터링*"}
+{"event": "stream_token", "token": "*  \n   - 부팅 시 `secure boot` 검증 실패/비활성화 이벤트를 SIEM (Wazuh) 에 전송해 실시간 알림을 설정한다.\n\n---\n\n**한계·인지**  \n- 현재 "}
+{"event": "stream_token", "token": "확인은 로그 파일(`uart_boot_STU42.log`)에 기반한 정적 분석이며, 실제 하드웨어 접근(예: JTAG) 가능성은 별도 물리 보안 검토가 필요하다.  \n- Secur"}
+{"event": "stream_token", "token": "e Boot 미활성화는 소프트웨어 수준에서 쉽게 재활성화될 수 있으므로, 펌웨어 서명 키 관리와 부트 로더 보호를 함께 적용해야 한다."}
+{"event": "precheck_fail", "skill": "shell", "message": "10.20.30.1 unreachable"}
+{"event": "stage", "stage": "validating"}
+{"event": "kg_status", "context": {"used": true, "hits": 3, "took_ms": 158, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-3b04673456cb", "dedup": false, "error": ""}}
