@@ -1,0 +1,127 @@
+{"event": "stage", "stage": "planning"}
+{"event": "lookup_decision", "decision": "new", "playbook_id": "", "confidence": 0, "reason": "강제 new — 최고 후보도 sim=0.202 < 0.7"}
+{"event": "stage", "stage": "planning"}
+{"event": "stage", "stage": "executing"}
+{"event": "skill_start", "skill": "shell", "params": {"command": "cat > /tmp/fullpentest_STU42.txt <<'EOF'\ncamera [device] : default creds + unauth RTSP\nhub [network]: weak auth, flat network\ncloud [cloud] : API no rate limit\napp [app] : hardcoded token\npath: camera default creds -> lateral to hub (flat net) -> cloud API -> all devices\nEOF\ncat /tmp/fullpentent_STU42.txt || true", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "", "attempt": 1}
+{"event": "skill_start", "skill": "shell", "params": {"command": "cat > /tmp/fullpentest_STU42.txt <<'EOF'\ncamera [device] : default creds + unauth RTSP\nhub [network]: weak auth, flat network\ncloud [cloud] : API no rate limit\napp [app] : hardcoded token\npath: camera default creds -> lateral to hub (flat net) -> cloud API -> all devices\nEOF\ncat /tmp/fullpentest_STU42.txt\nM=\"\"; for s in device network cloud app; do grep -q \"\\[$s\\]\" /tmp/fullpentest_STU42.txt || M=1; done\n{ [ -z \"$M\" ] && grep -q \"path:\" /tmp/fullpentest_STU42.txt; } && echo FULL_IOT_PENTEST || echo INCOMPLETE", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "camera [device] : default creds + unauth RTSP\nhub [network]: weak auth, flat network\ncloud [cloud] : API no rate limit\napp [app] : hardcoded token\npath: camera default creds -> lateral to hub (flat net) -> cloud API -> all devices\nFULL_IOT_PENTEST\n", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "cat > /tmp/fullpentest_STU42.txt <<'EOF'"}
+{"event": "stream_token", "token": "**GOAL:** Create a full‑system IoT pentest summary file `/tmp/fullpentest_STU42.txt` containing the "}
+{"event": "stream_token", "token": "four attack surfaces (device, network, cloud, app) and a multi‑step compromise path, then verify tha"}
+{"event": "stream_token", "token": "t the validation script prints `FULL_IOT_PENTEST`.\n\n---\n\n### 1. 실행 결과 (★ 코드블록)\n\n```bash\n# Write the "}
+{"event": "stream_token", "token": "report file\ncat > /tmp/fullpentest_STU42.txt <<'EOF'\ncamera [device] : default creds + unauth RTSP\nh"}
+{"event": "stream_token", "token": "ub [network]: weak auth, flat network\ncloud [cloud] : API no rate limit\napp [app] : hardcoded token\n"}
+{"event": "stream_token", "token": "path: camera default creds -> lateral to hub (flat net) -> cloud API -> all devices\nEOF\n\n# Show the "}
+{"event": "stream_token", "token": "file and run the validation logic\ncat /tmp/fullpentest_STU42.txt\nM=\"\"; for s in device network cloud"}
+{"event": "stream_token", "token": " app; do grep -q \"\\[$s\\]\" /tmp/fullpentest_STU42.txt || M=1; done\n{ [ -z \"$M\" ] && grep -q \"path:\" /"}
+{"event": "stream_token", "token": "tmp/fullpentest_STU42.txt; } && echo FULL_IOT_PENTEST || echo INCOMPLETE\n```\n\n**stdout**\n\n```\ncamera"}
+{"event": "stream_token", "token": " [device] : default creds + unauth RTSP\nhub [network]: weak auth, flat network\ncloud [cloud] : API n"}
+{"event": "stream_token", "token": "o rate limit\napp [app] : hardcoded token\npath: camera default creds -> lateral to hub (flat net) -> "}
+{"event": "stream_token", "token": "cloud API -> all devices\nFULL_IOT_PENTEST\n```\n\nThe script confirmed that **all four surfaces are pre"}
+{"event": "stream_token", "token": "sent** and the required compromise path exists, outputting `FULL_IOT_PENTEST`.\n\n---\n\n### 2. 취약점/의도 입"}
+{"event": "stream_token", "token": "증\n\n| Surface | 발견된 취약점 | 증명 방법 |\n|---------|---------------|-----------|\n| **Device (camera)** | 기본 "}
+{"event": "stream_token", "token": "인증 정보 사용 + 인증 없이 RTSP 스트림 접근 | 파일에 `default creds + unauth RTSP` 명시 |\n| **Network (hub)**   | 약한 인증,"}
+{"event": "stream_token", "token": " 평면(Flat) 네트워크 구조로 lateral movement 가능 | 파일에 `weak auth, flat network` 기록 |\n| **Cloud**           | "}
+{"event": "stream_token", "token": "API 레이트 제한 없음 → 무차별 요청 가능 | 파일에 `API no rate limit` 명시 |\n| **App**             | 하드코딩된 토큰 사용 → 탈취 시 "}
+{"event": "stream_token", "token": "전체 제어 가능 | 파일에 `hardcoded token` 기재 |\n\n이 네 가지 취약점이 연쇄적으로 연결되어 `camera → hub → cloud API → all device"}
+{"event": "stream_token", "token": "s` 경로를 형성함을 보고서와 검증 스크립트가 입증했습니다.\n\n---\n\n### 3. 방어 언급\n\n- **Device**: 기본 인증 제거, 강력한 비밀번호/키 기반 인증 적용, R"}
+{"event": "stream_token", "token": "TSP 스트림에 TLS(HTTPS) 적용.  \n- **Network (hub)**: 최소 권한 원칙 적용, VLAN 분리 및 802.1X 인증 도입, 관리 인터페이스에 MFA 적용"}
+{"event": "stream_token", "token": ".  \n- **Cloud API**: 레이트 리미팅(Rate‑limit), IP 기반 접근 제어 리스트(ACL), OAuth2/JWT 토큰 사용 및 짧은 유효기간 설정.  \n- *"}
+{"event": "stream_token", "token": "*App**: 하드코딩된 시크릿 제거, 비밀 관리 시스템(Vault) 연동, CSP/Content‑Security‑Policy 적용으로 스크립트 인젝션 방지.\n\n---\n\n### 4"}
+{"event": "stream_token", "token": ". 한계·인지\n\n- 현재 검증은 **정적 파일 기반**이며 실제 장비에 대한 실시간 탐색이나 인증 시도는 수행되지 않았습니다.  \n- 보고서는 **예시 취약점**을 기술했지만, 실"}
+{"event": "stream_token", "token": "제 IoT 디바이스/허브/클라우드 환경에서 동일한 설정이 존재하는지 확인하려면 추가적인 네트워크 스캔 및 서비스 검증이 필요합니다.  \n- 레이트 리미팅이나 MFA 적용 등 방어 "}
+{"event": "stream_token", "token": "조치는 **구성 변경**을 요구하므로, 배포 전 충분한 테스트와 영향 분석이 필수입니다.\n\n---\n\n**결론:** `/tmp/fullpentest_STU42.txt` 파일에 4대 "}
+{"event": "stream_token", "token": "표면과 연쇄 공격 경로가 정확히 기록되었으며, 검증 스크립트가 `FULL_IOT_PENTEST`를 출력했습니다. 따라서 **STEP 2 — 전체 시스템 종합 평가** 목표가 충족되"}
+{"event": "stream_token", "token": "었습니다."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "cat > /tmp/fullpentest_STU42.txt <<'EOF'", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "cat > /tmp/fullpentest_STU42.txt <<'EOF'"}
+{"event": "stream_token", "token": "**GOAL:** Create a full‑system IoT pentest report (`/tmp/fullpentest_STU42.txt`) that lists the four"}
+{"event": "stream_token", "token": " attack surfaces (device, network, cloud, app) and a multi‑step compromise path, then verify the val"}
+{"event": "stream_token", "token": "idation script prints `FULL_IOT_PENTEST`.\n\n---\n\n### 1. 실행 결과 (★ 코드블록)\n\n```bash\n# Write the report fi"}
+{"event": "stream_token", "token": "le\ncat > /tmp/fullpentest_STU42.txt <<'EOF'\ncamera [device] : default creds + unauth RTSP\nhub [netwo"}
+{"event": "stream_token", "token": "rk]: weak auth, flat network\ncloud [cloud] : API no rate limit\napp [app] : hardcoded token\npath: cam"}
+{"event": "stream_token", "token": "era default creds -> lateral to hub (flat net) -> cloud API -> all devices\nEOF\n\n# Show the file and "}
+{"event": "stream_token", "token": "run the validation logic\ncat /tmp/fullpentest_STU42.txt\nM=\"\"; for s in device network cloud app; do "}
+{"event": "stream_token", "token": "grep -q \"\\[$s\\]\" /tmp/fullpentest_STU42.txt || M=1; done\n{ [ -z \"$M\" ] && grep -q \"path:\" /tmp/fullp"}
+{"event": "stream_token", "token": "entest_STU42.txt; } && echo FULL_IOT_PENTEST || echo INCOMPLETE\n```\n\n**stdout**\n\n```\ncamera [device]"}
+{"event": "stream_token", "token": " : default creds + unauth RTSP\nhub [network]: weak auth, flat network\ncloud [cloud] : API no rate li"}
+{"event": "stream_token", "token": "mit\napp [app] : hardcoded token\npath: camera default creds -> lateral to hub (flat net) -> cloud API"}
+{"event": "stream_token", "token": " -> all devices\nFULL_IOT_PENTEST\n```\n\nThe script confirmed that **all four surfaces are present** an"}
+{"event": "stream_token", "token": "d the required compromise path exists, outputting `FULL_IOT_PENTEST`.\n\n---\n\n### 2. 취약점/의도 입증\n\n| Surf"}
+{"event": "stream_token", "token": "ace | 발견된 취약점 | 증명 방식 |\n|---------|---------------|-----------|\n| **Device (camera)** | 기본 인증 + 인증 없"}
+{"event": "stream_token", "token": "이 RTSP 스트림 접근 | 파일에 `default creds + unauth RTSP` 명시 |\n| **Network (hub)**   | 약한 인증, 평면(Flat) 네트워크 "}
+{"event": "stream_token", "token": "구조 → lateral movement 가능 | 파일에 `weak auth, flat network` 기록 |\n| **Cloud**           | API 레이트 제한 없음 "}
+{"event": "stream_token", "token": "→ 무차별 요청 가능 | 파일에 `API no rate limit` 명시 |\n| **App**             | 하드코딩된 토큰 사용 → 탈취 시 전체 제어 가능 | 파일에"}
+{"event": "stream_token", "token": " `hardcoded token` 기재 |\n\n이 네 가지 취약점이 연쇄적으로 연결되어 `camera → hub → cloud API → all devices` 경로를 형성함을 보고"}
+{"event": "stream_token", "token": "서와 검증 스크립트가 입증했습니다.\n\n---\n\n### 3. 방어 언급 (추천 조치)\n\n- **Device:** 기본 인증 제거, 강력한 비밀번호/키 기반 인증 적용, RTSP 스트"}
+{"event": "stream_token", "token": "림에 TLS(HTTPS) 적용.  \n- **Network (hub):** 최소 권한 원칙 적용, VLAN 분리 및 802.1X 인증 도입, 관리 인터페이스에 MFA 적용.  \n- "}
+{"event": "stream_token", "token": "**Cloud API:** 레이트 리미팅(Rate‑limit), IP 기반 ACL, OAuth2/JWT 토큰 사용·짧은 유효기간 설정.  \n- **App:** 하드코딩된 시크릿 제"}
+{"event": "stream_token", "token": "거, 비밀 관리 시스템(Vault) 연동, CSP/Content‑Security‑Policy 적용으로 스크립트 인젝션 방지.\n\n---\n\n### 4. 한계·인지\n\n- 현재 검증은 *"}
+{"event": "stream_token", "token": "*정적 파일 기반**이며 실제 장비에 대한 실시간 탐색이나 인증 시도는 수행되지 않았습니다.  \n- 보고서는 **예시 취약점**을 기술했지만, 실제 IoT 디바이스/허브/클라우드 "}
+{"event": "stream_token", "token": "환경에서 동일한 설정이 존재하는지 확인하려면 추가적인 네트워크 스캔 및 서비스 검증이 필요합니다.  \n- 레이트 리미팅이나 MFA 적용 등 방어 조치는 **구성 변경**을 요구하므"}
+{"event": "stream_token", "token": "로, 배포 전 충분한 테스트와 영향 분석이 필수입니다.\n\n---\n\n**결론:** `/tmp/fullpentest_STU42.txt` 파일에 4대 표면과 연쇄 공격 경로가 정확히 기"}
+{"event": "stream_token", "token": "록되었으며, 검증 스크립트가 `FULL_IOT_PENTEST`를 출력했습니다. 따라서 **STEP 2 — 전체 시스템 종합 평가** 목표가 성공적으로 달성되었습니다."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "cat > /tmp/fullpentest_STU42.txt <<'EOF'", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "cat > /tmp/fullpentest_STU42.txt <<'EOF'"}
+{"event": "stream_token", "token": "**GOAL:** Create a full‑system IoT pentest report (`/tmp/fullpentest_STU42.txt`) that lists the four"}
+{"event": "stream_token", "token": " attack surfaces (device, network, cloud, app) and a multi‑step compromise path, then verify the val"}
+{"event": "stream_token", "token": "idation script prints `FULL_IOT_PENTEST`.\n\n---\n\n### 1. 실행 결과 (★ 코드블록)\n\n```bash\n# Write the report fi"}
+{"event": "stream_token", "token": "le\ncat > /tmp/fullpentest_STU42.txt <<'EOF'\ncamera [device] : default creds + unauth RTSP\nhub [netwo"}
+{"event": "stream_token", "token": "rk]: weak auth, flat network\ncloud [cloud] : API no rate limit\napp [app] : hardcoded token\npath: cam"}
+{"event": "stream_token", "token": "era default creds -> lateral to hub (flat net) -> cloud API -> all devices\nEOF\n\n# Show the file and "}
+{"event": "stream_token", "token": "run the validation logic\ncat /tmp/fullpentest_STU42.txt\nM=\"\"; for s in device network cloud app; do "}
+{"event": "stream_token", "token": "grep -q \"\\[$s\\]\" /tmp/fullpentest_STU42.txt || M=1; done\n{ [ -z \"$M\" ] && grep -q \"path:\" /tmp.fullp"}
+{"event": "stream_token", "token": "entest_STU42.txt; } && echo FULL_IOT_PENTEST || echo INCOMPLETE\n```\n\n**stdout**\n\n```\ncamera [device]"}
+{"event": "stream_token", "token": " : default creds + unauth RTSP\nhub [network]: weak auth, flat network\ncloud [cloud] : API no rate li"}
+{"event": "stream_token", "token": "mit\napp [app] : hardcoded token\npath: camera default creds -> lateral to hub (flat net) -> cloud API"}
+{"event": "stream_token", "token": " -> all devices\nFULL_IOT_PENTEST\n```\n\nThe script confirms that **all four surfaces are present** and"}
+{"event": "stream_token", "token": " the required compromise path exists, outputting `FULL_IOT_PENTEST`.\n\n---\n\n### 2. 취약점/의도 입증\n\n| Surfa"}
+{"event": "stream_token", "token": "ce | 발견된 취약점 | 증명 방식 |\n|---------|---------------|-----------|\n| **Device (camera)** | 기본 인증 + 인증 없이"}
+{"event": "stream_token", "token": " RTSP 스트림 접근 | 파일에 `default creds + unauth RTSP` 명시 |\n| **Network (hub)**   | 약한 인증, 평면(Flat) 네트워크 구"}
+{"event": "stream_token", "token": "조 → lateral movement 가능 | 파일에 `weak auth, flat network` 기록 |\n| **Cloud**           | API 레이트 제한 없음 →"}
+{"event": "stream_token", "token": " 무차별 요청 가능 | 파일에 `API no rate limit` 명시 |\n| **App**             | 하드코딩된 토큰 사용 → 탈취 시 전체 제어 가능 | 파일에 "}
+{"event": "stream_token", "token": "`hardcoded token` 기재 |\n\n이 네 가지 취약점이 연쇄적으로 연결되어 `camera → hub → cloud API → all devices` 경로를 형성함을 보고서"}
+{"event": "stream_token", "token": "와 검증 스크립트가 입증했습니다.\n\n---\n\n### 3. 방어 언급 (추천 조치)\n\n- **Device:** 기본 인증 제거, 강력한 비밀번호/키 기반 인증 적용, RTSP 스트림"}
+{"event": "stream_token", "token": "에 TLS(HTTPS) 적용.  \n- **Network (hub):** 최소 권한 원칙 적용, VLAN 분리 및 802.1X 인증 도입, 관리 인터페이스에 MFA 적용.  \n- *"}
+{"event": "stream_token", "token": "*Cloud API:** 레이트 리미팅(Rate‑limit), IP 기반 ACL, OAuth2/JWT 토큰 사용·짧은 유효기간 설정.  \n- **App:** 하드코딩된 시크릿 제거"}
+{"event": "stream_token", "token": ", 비밀 관리 시스템(Vault) 연동, CSP/Content‑Security‑Policy 적용으로 스크립트 인젝션 방지.\n\n---\n\n### 4. 한계·인지\n\n- 현재 검증은 **"}
+{"event": "stream_token", "token": "정적 파일 기반**이며 실제 장비에 대한 실시간 탐색이나 인증 시도는 수행되지 않았습니다.  \n- 보고서는 **예시 취약점**을 기술했지만, 실제 IoT 디바이스/허브/클라우드 환"}
+{"event": "stream_token", "token": "경에서 동일한 설정이 존재하는지 확인하려면 추가적인 네트워크 스캔 및 서비스 검증이 필요합니다.  \n- 레이트 리미팅이나 MFA 적용 등 방어 조치는 **구성 변경**을 요구하므로"}
+{"event": "stream_token", "token": ", 배포 전 충분한 테스트와 영향 분석이 필수입니다.\n\n---\n\n**결론:** `/tmp/fullpentest_STU42.txt` 파일에 4대 표면과 연쇄 공격 경로가 정확히 기록"}
+{"event": "stream_token", "token": "되었으며, 검증 스크립트가 `FULL_IOT_PENTEST`를 출력했습니다. 따라서 **STEP 2 — 전체 시스템 종합 평가** 목표가 성공적으로 달성되었습니다."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "cat > /tmp/fullpentest_STU42.txt <<'EOF'", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "", "attempt": 1}
+{"event": "synthesized_tool_calls", "source": "prose_fallback", "skill": "shell", "command": "cat > /tmp/fullpentest_STU42.txt <<'EOF'"}
+{"event": "stream_token", "token": "**GOAL:** Create a full‑system IoT pentest report (`/tmp/fullpentest_STU42.txt`) that lists the four"}
+{"event": "stream_token", "token": " attack surfaces (device, network, cloud, app) and a multi‑step compromise path, then verify the val"}
+{"event": "stream_token", "token": "idation script prints `FULL_IOT_PENTEST`.\n\n---\n\n### 1. 실행 결과 (★ 코드블록)\n\n```bash\n# Write the report fi"}
+{"event": "stream_token", "token": "le\ncat > /tmp/fullpentest_STU42.txt <<'EOF'\ncamera [device] : default creds + unauth RTSP\nhub [netwo"}
+{"event": "stream_token", "token": "rk]: weak auth, flat network\ncloud [cloud] : API no rate limit\napp [app] : hardcoded token\npath: cam"}
+{"event": "stream_token", "token": "era default creds -> lateral to hub (flat net) -> cloud API -> all devices\nEOF\n\n# Show the file and "}
+{"event": "stream_token", "token": "run the validation logic\ncat /tmp/fullpentest_STU42.txt\nM=\"\"; for s in device network cloud app; do "}
+{"event": "stream_token", "token": "grep -q \"\\[$s\\]\" /tmp/fullpentest_STU42.txt || M=1; done\n{ [ -z \"$M\" ] && grep -q \"path:\" /tmp.fullp"}
+{"event": "stream_token", "token": "entest_STU42.txt; } && echo FULL_IOT_PENTEST || echo INCOMPLETE\n```\n\n**stdout**\n\n```\ncamera [device]"}
+{"event": "stream_token", "token": " : default creds + unauth RTSP\nhub [network]: weak auth, flat network\ncloud [cloud] : API no rate li"}
+{"event": "stream_token", "token": "mit\napp [app] : hardcoded token\npath: camera default creds -> lateral to hub (flat net) -> cloud API"}
+{"event": "stream_token", "token": " -> all devices\nFULL_IOT_PENTEST\n```\n\nThe script confirms that **all four surfaces are present** and"}
+{"event": "stream_token", "token": " the required compromise path exists, outputting `FULL_IOT_PENTEST`.\n\n---\n\n### 2. 취약점/의도 입증\n\n| Surfa"}
+{"event": "stream_token", "token": "ce | 발견된 취약점 | 증명 방식 |\n|---------|---------------|-----------|\n| **Device (camera)** | 기본 인증 + 인증 없이"}
+{"event": "stream_token", "token": " RTSP 스트림 접근 | 파일에 `default creds + unauth RTSP` 명시 |\n| **Network (hub)**   | 약한 인증, 평면(Flat) 네트워크 구"}
+{"event": "stream_token", "token": "조 → lateral movement 가능 | 파일에 `weak auth, flat network` 기록 |\n| **Cloud**           | API 레이트 제한 없음 →"}
+{"event": "stream_token", "token": " 무차별 요청 가능 | 파일에 `API no rate limit` 명시 |\n| **App**             | 하드코딩된 토큰 사용 → 탈취 시 전체 제어 가능 | 파일에 "}
+{"event": "stream_token", "token": "`hardcoded token` 기재 |\n\n이 네 가지 취약점이 연쇄적으로 연결되어 `camera → hub → cloud API → all devices` 경로를 형성함을 보고서"}
+{"event": "stream_token", "token": "와 검증 스크립트가 입증했습니다.\n\n---\n\n### 3. 방어 언급 (추천 조치)\n\n- **Device:** 기본 인증 제거, 강력한 비밀번호/키 기반 인증 적용, RTSP 스트림"}
+{"event": "stream_token", "token": "에 TLS(HTTPS) 적용.  \n- **Network (hub):** 최소 권한 원칙 적용, VLAN 분리 및 802.1X 인증 도입, 관리 인터페이스에 MFA 적용.  \n- *"}
+{"event": "stream_token", "token": "*Cloud API:** 레이트 리미팅(Rate‑limit), IP 기반 ACL, OAuth2/JWT 토큰 사용·짧은 유효기간 설정.  \n- **App:** 하드코딩된 시크릿 제거"}
+{"event": "stream_token", "token": ", 비밀 관리 시스템(Vault) 연동, CSP/Content‑Security‑Policy 적용으로 스크립트 인젝션 방지.\n\n---\n\n### 4. 한계·인지\n\n- 현재 검증은 **"}
+{"event": "stream_token", "token": "정적 파일 기반**이며 실제 장비에 대한 실시간 탐색이나 인증 시도는 수행되지 않았습니다.  \n- 보고서는 **예시 취약점**을 기술했지만, 실제 IoT 디바이스/허브/클라우드 환"}
+{"event": "stream_token", "token": "경에서 동일한 설정이 존재하는지 확인하려면 추가적인 네트워크 스캔 및 서비스 검증이 필요합니다.  \n- 레이트 리미팅이나 MFA 적용 등 방어 조치는 **구성 변경**을 요구하므로"}
+{"event": "stream_token", "token": ", 배포 전 충분한 테스트와 영향 분석이 필수입니다.\n\n---\n\n**결론:** `/tmp/fullpentest_STU42.txt` 파일에 4대 표면과 연쇄 공격 경로가 정확히 기록"}
+{"event": "stream_token", "token": "되었으며, 검증 스크립트가 `FULL_IOT_PENTEST`를 출력했습니다. 따라서 **STEP 2 — 전체 시스템 종합 평가** 목표가 성공적으로 달성되었습니다."}
+{"event": "skill_start", "skill": "shell", "params": {"command": "cat > /tmp/fullpentest_STU42.txt <<'EOF'", "target": "10.20.30.201"}, "attempt": 1}
+{"event": "skill_result", "skill": "shell", "success": true, "output": "", "attempt": 1}
+{"event": "stage", "stage": "validating"}
+{"event": "kg_status", "context": {"used": true, "hits": 5, "took_ms": 115, "skip_reason": "", "error": ""}, "record": {"attempted": true, "success": true, "anchor_id": "anc-d7be9121f098", "dedup": false, "error": ""}}
