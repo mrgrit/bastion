@@ -195,6 +195,15 @@ def main():
             print(f"  [{i+1}/{len(steps)}] {s['id']} 발제…", flush=True)
             nd = issue(s["id"], s["message"]); f.write_text(nd)
         answer = extract_answer(nd)
+        if not answer.strip():                     # 빈 답변 = 일시적(GPU 언로드/bastion) → 확정 안 하고 재시도
+            rc = led.setdefault("retry", {}).get(s["id"], 0) + 1
+            led["retry"][s["id"]] = rc
+            LLED.write_text(json.dumps(led, ensure_ascii=False, indent=2))
+            if rc < 3:
+                f.unlink(missing_ok=True)          # ndjson 삭제 → 다음 패스에서 새로 발제
+                print(f"      → 빈답변, 재시도 {rc}/3 (미확정)", flush=True)
+                continue
+            print(f"      → 빈답변 3회 → UNKNOWN 확정", flush=True)
         verdict, ev = grade(s, answer)
         led["steps"][s["id"]] = {
             "verdict": verdict, "lab_id": s["lab_id"], "course": s["course"],
