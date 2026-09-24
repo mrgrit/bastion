@@ -169,7 +169,7 @@ class KGContextBuilder:
                 ("Asset", "assets"),
             ]:
                 try:
-                    nodes = graph.search_fts(message, type=tier_type, limit=3)
+                    nodes = graph.search(message, type=tier_type, limit=3)
                 except Exception:
                     nodes = []
                 result[key_name] = [self._summarize_node(n) for n in nodes]

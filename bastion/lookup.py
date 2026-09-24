@@ -79,7 +79,8 @@ def collect_candidates(message: str, top_k: int = 3) -> list[dict]:
     query_terms = [t for t in msg_tokens if len(t) >= 3][:8]
     if query_terms:
         try:
-            for n in g.search_fts(" OR ".join(query_terms), type="Playbook", limit=10):
+            # (개선) hybrid 검색 — 임베딩이 있으면 FTS+벡터 RRF, 없으면 FTS 폴백.
+            for n in g.search(message, type="Playbook", limit=10):
                 pb = n.get("content") or {}
                 if not pb.get("playbook_id"):
                     continue

@@ -33,10 +33,60 @@
 from __future__ import annotations
 
 import json
+import math
 import os
+import re
 import sqlite3
 import time
 from typing import Any, Iterable
+
+try:  # numpy 는 선택적 — 있으면 벡터 연산 가속, 없으면 순수 파이썬
+    import numpy as _np
+except Exception:  # pragma: no cover
+    _np = None
+
+
+# ── FTS / 벡터 헬퍼 ────────────────────────────────────────────────
+_FTS_STOP = {"OR", "AND", "NOT", "NEAR"}
+
+
+def _fts_match_query(query: str) -> str:
+    """자유 텍스트 → FTS5 MATCH 식. 토큰을 OR 로 결합(정확구절 매칭 탈피)."""
+    toks = re.findall(r"[0-9A-Za-z가-힣]+", query or "")
+    toks = [t for t in toks if len(t) >= 2 and t.upper() not in _FTS_STOP][:12]
+    return " OR ".join(f'"{t}"' for t in toks)
+
+
+def _pack(vec) -> bytes:
+    v = list(vec)
+    if _np is not None:
+        return _np.asarray(v, dtype=_np.float32).tobytes()
+    import struct
+    return struct.pack(f"<{len(v)}f", *v)
+
+
+def _unpack(blob):
+    if not blob:
+        return None
+    if _np is not None:
+        return _np.frombuffer(blob, dtype=_np.float32)
+    import struct
+    n = len(blob) // 4
+    return list(struct.unpack(f"<{n}f", blob))
+
+
+def _to_vec(v):
+    if v is None:
+        return None
+    return _np.asarray(list(v), dtype=_np.float32) if _np is not None else list(v)
+
+
+def _dot(a, b) -> float:
+    return float(_np.dot(a, b)) if _np is not None else float(sum(x * y for x, y in zip(a, b)))
+
+
+def _norm(a) -> float:
+    return float(_np.linalg.norm(a)) if _np is not None else math.sqrt(sum(x * x for x in a))
 
 
 NODE_TYPES = {
@@ -349,21 +399,190 @@ class KnowledgeGraph:
     # ── 검색 ──────────────────────────────────────────────────────────
 
     def search_fts(self, query: str, type: str | None = None,
-                   limit: int = 20) -> list[dict]:
-        """FTS5 전문 검색 — name + content_text 매칭, BM25 기본 랭킹."""
-        # FTS query 문법 escape (간단 버전)
-        safe = query.replace('"', '""')
-        q = "SELECT n.* FROM nodes_fts f JOIN nodes n ON n.id = f.id " \
-            "WHERE nodes_fts MATCH ?"
-        params: list = [f'"{safe}"']
+                   limit: int = 20, with_score: bool = False) -> list[dict]:
+        """FTS5 전문 검색 — name + content_text, BM25 랭킹.
+
+        (개선) 이전 구현은 질의 전체를 하나의 **정확 구절**("...")로 매칭해
+        다중 단어/한국어 질문의 재현율이 사실상 0이었다. 이제 토큰으로 쪼개
+        OR 로 결합한다(불용 기호 제거). ``with_score`` 면 bm25 점수를
+        ``_fts_score`` 로 첨부한다(hybrid 랭킹용)."""
+        match = _fts_match_query(query)
+        if not match:
+            return []
+        q = "SELECT n.*, bm25(nodes_fts) AS _bm25 FROM nodes_fts f " \
+            "JOIN nodes n ON n.id = f.id WHERE nodes_fts MATCH ?"
+        params: list = [match]
         if type:
             q += " AND n.type = ?"
             params.append(type)
         q += " ORDER BY bm25(nodes_fts) LIMIT ?"
         params.append(limit)
         with self._conn() as c:
+            try:
+                rows = c.execute(q, params).fetchall()
+            except sqlite3.OperationalError:
+                return []
+        out = []
+        for r in rows:
+            n = self._row_to_node(r)
+            if with_score:
+                n["_fts_score"] = -float(r["_bm25"])  # bm25 작을수록 좋음 → 부호 반전
+            out.append(n)
+        return out
+
+    # ── 벡터 검색 (embedding 채워졌을 때) ─────────────────────────────
+
+    def vector_search(self, query_vec, type: str | None = None,
+                      limit: int = 20) -> list[dict]:
+        """노드 임베딩에 대한 코사인 유사도 검색. 임베딩 없으면 빈 결과."""
+        qv = _to_vec(query_vec)
+        if qv is None:
+            return []
+        qn = _norm(qv) or 1.0
+        rows = self._embedded_rows(type)
+        scored = []
+        for nid, blob in rows:
+            v = _unpack(blob)
+            if v is None or len(v) != len(qv):
+                continue
+            sim = _dot(qv, v) / (qn * (_norm(v) or 1.0))
+            scored.append((sim, nid))
+        scored.sort(reverse=True)
+        out = []
+        for sim, nid in scored[:limit]:
+            n = self.get_node(nid)
+            if n:
+                n["_vec_score"] = float(sim)
+                out.append(n)
+        return out
+
+    def _embedded_rows(self, type: str | None):
+        q = "SELECT id, embedding FROM nodes WHERE embedding IS NOT NULL"
+        params: list = []
+        if type:
+            q += " AND type = ?"
+            params.append(type)
+        with self._conn() as c:
+            return [(r["id"], r["embedding"]) for r in c.execute(q, params).fetchall()]
+
+    def has_embeddings(self) -> bool:
+        with self._conn() as c:
+            return c.execute(
+                "SELECT 1 FROM nodes WHERE embedding IS NOT NULL LIMIT 1").fetchone() is not None
+
+    # ── 하이브리드 검색 (FTS + 벡터, Reciprocal Rank Fusion) ──────────
+
+    def hybrid_search(self, query: str, type: str | None = None, limit: int = 20,
+                      embedder=None, k: int = 60, expand: bool = False) -> list[dict]:
+        """FTS(키워드)와 벡터(의미) 랭킹을 RRF(k=60)로 융합.
+
+        Microsoft/Azure 하이브리드 랭킹·LightRAG 이중검색을 참고한 경량 구현.
+        임베딩이나 임베더가 없으면 자동으로 FTS 전용으로 폴백한다.
+        ``expand`` 면 상위 결과의 1-hop 이웃(그래프 확장)을 낮은 가중치로 덧붙인다."""
+        fts = self.search_fts(query, type=type, limit=max(limit * 2, 20), with_score=True)
+        fts_ids = [n["id"] for n in fts]
+
+        vec_ids: list[str] = []
+        vec_nodes: dict[str, dict] = {}
+        if embedder is None:
+            try:
+                from bastion.embed import get_embedder
+                embedder = get_embedder()
+            except Exception:
+                embedder = None
+        if embedder is not None and getattr(embedder, "enabled", False) and self.has_embeddings():
+            qv = embedder.embed(query)
+            if qv:
+                vres = self.vector_search(qv, type=type, limit=max(limit * 2, 20))
+                vec_ids = [n["id"] for n in vres]
+                vec_nodes = {n["id"]: n for n in vres}
+
+        # RRF 융합
+        score: dict[str, float] = {}
+        for ranking in (fts_ids, vec_ids):
+            for rank, nid in enumerate(ranking, 1):
+                score[nid] = score.get(nid, 0.0) + 1.0 / (k + rank)
+        if not score:
+            return []
+
+        by_id = {n["id"]: n for n in fts}
+        by_id.update({nid: vec_nodes[nid] for nid in vec_ids if nid not in by_id})
+
+        ranked = sorted(score.items(), key=lambda x: -x[1])
+        results = []
+        seen = set()
+        for nid, sc in ranked[:limit]:
+            n = by_id.get(nid) or self.get_node(nid)
+            if not n:
+                continue
+            n["_rrf_score"] = round(sc, 5)
+            results.append(n)
+            seen.add(nid)
+
+        if expand and results:
+            for base in results[:3]:
+                for nb in self.neighbors(base["id"], direction="out")[:5]:
+                    oid = nb["other"]
+                    if oid in seen:
+                        continue
+                    nn = self.get_node(oid)
+                    if nn and (not type or nn["type"] == type):
+                        nn["_rrf_score"] = 0.0
+                        nn["_expanded_from"] = base["id"]
+                        results.append(nn)
+                        seen.add(oid)
+        return results[:limit]
+
+    def search(self, query: str, type: str | None = None, limit: int = 20) -> list[dict]:
+        """편의 진입점 — 임베딩이 있으면 hybrid, 없으면 FTS."""
+        if self.has_embeddings():
+            return self.hybrid_search(query, type=type, limit=limit)
+        return self.search_fts(query, type=type, limit=limit)
+
+    # ── 임베딩 채우기 ─────────────────────────────────────────────────
+
+    def set_embedding(self, node_id: str, vec) -> None:
+        blob = _pack(vec)
+        with self._conn() as c:
+            c.execute("UPDATE nodes SET embedding = ? WHERE id = ?", (blob, node_id))
+            c.commit()
+
+    def backfill_embeddings(self, embedder=None, types: list[str] | None = None,
+                            limit: int | None = None, verbose: bool = True) -> dict:
+        """임베딩이 비어있는 노드를 채운다(재개 가능). name + content_text 를 임베딩."""
+        if embedder is None:
+            from bastion.embed import get_embedder
+            embedder = get_embedder()
+        if not getattr(embedder, "enabled", False) or not embedder.available():
+            if verbose:
+                print("  ! 임베딩 서버 사용 불가 — 그래프는 FTS 전용으로 동작합니다.")
+            return {"embedded": 0, "available": False}
+        q = "SELECT n.id, n.name, n.content FROM nodes n WHERE n.embedding IS NULL"
+        params: list = []
+        if types:
+            ph = ",".join("?" * len(types))
+            q += f" AND n.type IN ({ph})"
+            params.extend(types)
+        with self._conn() as c:
             rows = c.execute(q, params).fetchall()
-        return [self._row_to_node(r) for r in rows]
+        if limit:
+            rows = rows[:limit]
+        done = 0
+        for r in rows:
+            try:
+                content = json.loads(r["content"] or "{}")
+            except Exception:
+                content = {}
+            text = self._extract_fts_text(r["name"], content)
+            vec = embedder.embed(text)
+            if vec:
+                self.set_embedding(r["id"], vec)
+                done += 1
+            if verbose and done and done % 25 == 0:
+                print(f"      임베딩 {done}/{len(rows)}")
+        if verbose:
+            print(f"  임베딩 완료: {done}개 (모델 {embedder.model})")
+        return {"embedded": done, "available": True, "total": len(rows)}
 
     # ── 통계 ──────────────────────────────────────────────────────────
 
